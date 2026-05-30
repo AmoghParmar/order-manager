@@ -8,9 +8,9 @@ import type {
 } from '@/types/customerService';
 
 const PRODUCT_STORES = [
-  { id: 'STORE_US', name: 'Hotwax US' },
-  { id: 'STORE_EU', name: 'Hotwax EU' },
-  { id: 'STORE_CA', name: 'Hotwax CA' }
+  { id: 'STORE_US', name: 'HotWax US' },
+  { id: 'STORE_EU', name: 'HotWax EU' },
+  { id: 'STORE_CA', name: 'HotWax CA' }
 ];
 
 const FACILITIES = [

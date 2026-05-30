@@ -23,8 +23,8 @@
         </ion-select>
         <ion-select v-model="searchFilters.carrierPartyId" label="Carrier" label-placement="stacked" interface="popover">
           <ion-select-option value="All">All carriers</ion-select-option>
-          <ion-select-option v-for="carrier in carriers" :key="carrier" :value="carrier">
-            {{ carrier }}
+          <ion-select-option v-for="carrier in carriers" :key="carrier.id" :value="carrier.id">
+            {{ carrier.label }}
           </ion-select-option>
         </ion-select>
         <ion-input v-model="searchFilters.dateFrom" label="Ship date from" label-placement="stacked" type="date" />
@@ -109,14 +109,13 @@ const debounceTimer = ref<ReturnType<typeof setTimeout>>();
 const shipmentSort = ref('-shipDate');
 
 const shipmentStatuses = computed(() => utilStore.getStatusItemsByType('SHIPMENT_STATUS'));
-const carriers = computed(() => {
-  const carrierIds = searchResults.value.map((shipment) => shipment.carrier).filter(Boolean);
-  if (searchFilters.value.carrierPartyId !== 'All') carrierIds.push(searchFilters.value.carrierPartyId);
-  return [...new Set(carrierIds)].sort();
-});
+const carriers = computed(() => utilStore.getCarrierOptions);
 
 onMounted(async () => {
-  await utilStore.fetchStatusItemsByType('SHIPMENT_STATUS');
+  await Promise.allSettled([
+    utilStore.fetchStatusItemsByType('SHIPMENT_STATUS'),
+    utilStore.fetchCarriers()
+  ]);
   await shipmentsStore.runSearch();
 });
 

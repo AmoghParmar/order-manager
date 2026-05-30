@@ -152,6 +152,7 @@ export const useUserStore = defineStore("user", {
         productStoreId: "",
         storeName: "None",
       };
+      await useUtilStore().fetchProductStoreShipmentMethods(this.currentProductStore.productStoreId);
     },
     async setUserTimeZone(tzId: string) {
       if (this.current.timeZone === tzId) return;
@@ -204,7 +205,8 @@ export const useUserStore = defineStore("user", {
         await this.fetchProductStorePreference();
         await Promise.allSettled([
           useUtilStore().fetchEntities(),
-          useUtilStore().fetchStatusFlowTransitions()
+          useUtilStore().fetchStatusFlowTransitions(),
+          useUtilStore().seedSelectableValues(this.currentProductStore.productStoreId)
         ]);
       } catch (error: any) {
         return Promise.reject(error);

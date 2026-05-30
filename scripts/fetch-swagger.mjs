@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fetches the live Swagger specs from dev-maarg and writes them to docs/swagger/.
 // Run after `node scripts/dev-login.mjs --token` if the endpoints require auth;
-// most swagger endpoints on a Hotwax instance are anonymous.
+// most swagger endpoints on a HotWax instance are anonymous.
 //
 // Usage:
 //   node scripts/fetch-swagger.mjs                       # anonymous
@@ -12,7 +12,7 @@ import path from 'node:path';
 import url from 'node:url';
 
 const base = 'https://dev-maarg.hotwax.io/rest/service.swagger';
-// Spec groups exposed by Hotwax Moqui. The user pointed out 5; the others I'm trying
+// Spec groups exposed by HotWax Moqui. The user pointed out 5; the others I'm trying
 // because parties / contact mechs / admin lookups likely live there.
 const specs = [
   'oms/orders', 'oms/returns', 'oms/products', 'moqui', 'poorti',

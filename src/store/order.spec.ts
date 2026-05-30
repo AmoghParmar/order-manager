@@ -114,6 +114,8 @@ function stubOrder(id: string) {
   return {
     id,
     externalId: `#${id}`,
+    orderName: `#${id}`,
+    shopifyOrderId: `shop_${id}`,
     orderDate: '',
     status: 'ORDER_APPROVED' as const,
     customerId: '',

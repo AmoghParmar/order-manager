@@ -37,6 +37,9 @@ export interface OrderActionContext {
 export interface Address {
   label: string;
   lines: string[];
+  contactMechId?: string;
+  contactMechTypeId?: string;
+  contactMechPurposeTypeId?: string;
 }
 
 export interface PostalAddress {
@@ -64,6 +67,25 @@ export interface PaymentPreference {
   amount: number;
   gatewayResponse: string;
   capturedAt?: string;
+  orderItemSeqId?: string;
+  shipGroupSeqId?: string;
+  paymentMethodId?: string;
+  paymentMethodTypeId?: string;
+  paymentMethodTypeDesc?: string;
+  statusDesc?: string;
+  presentmentAmount?: number;
+  presentmentCurrencyUom?: string;
+  manualAuthCode?: string;
+  manualRefNum?: string;
+  parentRefNum?: string;
+  billingPostalCode?: string;
+  createdDate?: string;
+  createdByUserLogin?: string;
+  lastModifiedDate?: string;
+  lastModifiedByUserLogin?: string;
+  requestId?: string;
+  paymentMode?: string;
+  processAttempt?: number;
 }
 
 export interface OrderTerm {
@@ -77,11 +99,14 @@ export interface OrderRole {
   partyId: string;
   roleTypeId: string;
   name: string;
+  fromDate?: string;
+  thruDate?: string;
 }
 
 export interface OrderAttribute {
   name: string;
   value: string;
+  description?: string;
 }
 
 export interface CommunicationEvent {
@@ -124,6 +149,9 @@ export interface OrderStatusChange {
   label: string;
   detail: string;
   itemSeqId?: string;
+  paymentPreferenceId?: string;
+  changeReason?: string;
+  changeReasonEnumId?: string;
 }
 
 export interface OrderNote {
@@ -140,14 +168,40 @@ export interface OrderItem {
   sku: string;
   name: string;
   quantity: number;
+  itemQuantity?: number;
   shippedQuantity?: number;
   cancelledQuantity?: number;
   returnedQuantity?: number;
   status: string;
   facility: string;
+  facilityId?: string;
+  facilityName?: string;
+  facilityExternalId?: string;
+  externalId?: string;
+  productTypeId?: string;
+  orderItemTypeId?: string;
   unitPrice: number;
+  unitListPrice?: number;
+  unitAverageCost?: number;
+  unitRecurringPrice?: number;
   adjustments?: number;
   shipGroupSeqId?: string;
+  orderItemGroupSeqId?: string;
+  isItemGroupPrimary?: boolean;
+  isPromo?: boolean;
+  isDigital?: boolean;
+  isPhysical?: boolean;
+  maySplit?: string;
+  slaShipmentMethodTypeId?: string;
+  statusDatetime?: string;
+  estimatedShipDate?: string;
+  estimatedDeliveryDate?: string;
+  requestedDeliveryDate?: string;
+  requestedDeliveryTime?: string;
+  shipAfterDate?: string;
+  shipBeforeDate?: string;
+  productStoreId?: string;
+  comments?: string;
   imageUrl?: string;
 }
 
@@ -233,9 +287,12 @@ export interface ReturnRecord {
   reason: string;
   requestedDate: string;
   receivedDate?: string;
+  returnDate?: string;
   returnHeaderTypeId?: string;
   fromPartyId?: string;
   toPartyId?: string;
+  destinationFacilityId?: string;
+  destinationFacilityName?: string;
   entryDate?: string;
   currencyUomId?: string;
   createdBy?: string;
@@ -289,9 +346,21 @@ export interface Customer {
   postalAddresses?: ContactMech[];
 }
 
+export interface OrderIdentification {
+  orderIdentificationTypeId: string;
+  idValue: string;
+  fromDate?: string;
+  thruDate?: string;
+  createdStamp?: string;
+  lastUpdatedStamp?: string;
+}
+
 export interface Order {
   id: string;
   externalId: string;
+  orderName?: string;
+  shopifyOrderId?: string;
+  identifications?: OrderIdentification[];
   orderDate: string;
   status: OrderStatus;
   customerId: string;
@@ -322,9 +391,26 @@ export interface Order {
     method: string;
     status: string;
     trackingCode: string;
+    trackingNumber?: string;
     carrier: string;
+    carrierRoleTypeId?: string;
+    carrierService?: string;
+    carrierAccountNumber?: string;
     facilityId: string;
     facilityName: string;
+    facilityTypeId?: string;
+    facilityTypeDescription?: string;
+    parentFacilityTypeId?: string;
+    picklistId?: string;
+    picklistDate?: string;
+    pickerId?: string;
+    pickerName?: string;
+    pickerFirstName?: string;
+    pickerLastName?: string;
+    pickerGroupName?: string;
+    orderFacilityId?: string;
+    supplierPartyId?: string;
+    vendorPartyId?: string;
     shippingInstructions?: string;
     giftMessage?: string;
     maySplit?: string;

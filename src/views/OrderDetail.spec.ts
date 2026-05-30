@@ -87,6 +87,9 @@ describe('order detail actions', () => {
     expect(source).toContain('canUseShipGroupRoutingAction(shipGroup)');
     expect(source).toContain('@ionChange="updateShipGroupRoutingField(shipGroup, \'shipmentMethodTypeId\', $event.detail.value)"');
     expect(source).toContain('@ionChange="updateShipGroupRoutingField(shipGroup, \'carrierPartyId\', $event.detail.value)"');
+    expect(source).toContain('productStoreShipmentMethodOptions');
+    expect(source).toContain('utilStore.getShipmentMethodOptions');
+    expect(source).toContain('utilStore.getCarrierOptions');
     expect(source).not.toContain('@ionChange="updateShipGroupRoutingField(shipGroup, \'facilityId\', $event.detail.value)"');
     expect(source).not.toContain('shipGroupEditorMode === \'routing\'');
     expect(source).toContain('shipGroupEditorMode === \'shipToStore\'');
@@ -98,7 +101,16 @@ describe('order detail actions', () => {
 
     expect(source).toContain('Order timeline');
     expect(source).toContain('orderTimeline');
-    expect(source.match(/statusBadgeColor\(order.status\)/g)).toHaveLength(1);
+    expect(source).toContain('orderTimelineGroups');
+    expect(source).toContain('timelineMinute(entry.at)');
+    expect(source).toContain('group.entries.length');
+    expect(source).toContain('@click="openTimelineGroup(group)"');
+    expect(source).toContain('timelineRecordCountLabel(group)');
+    expect(source).toContain('<ion-modal :is-open="Boolean(selectedTimelineGroup)"');
+    expect(source).toContain('selectedTimelineEntries');
+    expect(source).toContain('timelineEntryTitle(entry)');
+    expect(source).not.toContain('v-for="itemLabel in timelineGroupItemLabels(group)"');
+    expect(source.match(/statusBadgeColor\(order.status\)/g)).toHaveLength(2);
     expect(source).not.toContain('<ion-label>Activity</ion-label>');
     expect(source).not.toContain('<h2>Service context</h2>');
   });
@@ -140,7 +152,7 @@ describe('order detail actions', () => {
   it('shows one count for customer orders in the end slot', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/OrderDetail.vue'), 'utf8');
 
-    expect(source).toContain('<h2>Orders last 30 days</h2>');
+    expect(source).toContain('Orders last 30 days');
     expect(source).toContain('<ion-note slot="end">{{ customerOrdersLast30Days }}</ion-note>');
     expect(source).not.toContain('total order{{ customerOrderTotal === 1 ? \'\' : \'s\' }} found');
   });

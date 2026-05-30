@@ -43,7 +43,7 @@ Inside `buildCustomerSearchParams` (option A) or `buildCustomerLookupPayload` (o
 | All digits (≥ 7) | `contactNumber` (option B) / contact-mech lookup (option A). |
 | Single token | `lastName_op=contains` (most common case) + parallel `groupName_op=contains` for company accounts. |
 | Two-plus tokens | first token → `firstName_op=contains`, last token → `lastName_op=contains`. |
-| Starts with `10` and is all digits (typical Hotwax partyId) | `partyId` (exact). |
+| Starts with `10` and is all digits (typical HotWax partyId) | `partyId` (exact). |
 
 Filter map:
 

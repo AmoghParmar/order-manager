@@ -1,190 +1,62 @@
 import type {
   OperationsSummary,
+  TransactionType,
   TransactionWorkItem,
+  WorkEffortSummary,
   WorkEffortPurpose,
   WorkEffortStatus,
   WorkItemSearchParams
 } from '@/types/operations';
+import type { Order } from '@/types/order';
+import { searchOrders } from './order';
 
-const transactionWorkItems: TransactionWorkItem[] = [
+const sampleSize = 12;
+const taskTemplates = [
   {
-    transactionType: 'ORDER',
-    transactionId: 'M100051',
-    displayId: '#A1001',
-    customerName: 'Maya Chen',
-    channel: 'Shopify',
-    brand: 'Laura Geller',
-    status: 'ORDER_APPROVED',
-    facilityName: 'New Jersey DC',
-    total: 86.5,
-    currency: 'USD',
-    blockingState: 'blocked',
-    activeWorkEfforts: [
-      {
-        workEffortId: 'WE-1001',
-        workEffortName: 'Cancellation grace period',
-        workEffortTypeId: 'ORDER_GRACE_PERIOD',
-        purpose: 'grace-period',
-        statusId: 'open',
-        owner: 'Unassigned',
-        team: 'Order Ops',
-        priority: 'high',
-        dueAt: '2026-05-29T12:30:00+05:30',
-        blocksRelease: true,
-        blocksRefund: false,
-        blocksExport: false,
-        nextStep: 'Wait for the cancellation window to expire, then release or cancel.',
-        activity: [
-          {
-            id: 'WEA-1001-1',
-            at: '2026-05-29T09:00:00+05:30',
-            actor: 'System',
-            event: 'Created',
-            note: 'Grace period started before warehouse release.',
-          },
-          {
-            id: 'WEA-1001-2',
-            at: '2026-05-29T09:05:00+05:30',
-            actor: 'Order Ops',
-            event: 'Assigned team',
-            note: 'Assigned to Order Ops for release review.',
-          },
-        ],
-      },
-    ],
-    completedWorkEfforts: [],
+    workEffortName: 'Cancellation grace period',
+    workEffortTypeId: 'ORDER_GRACE_PERIOD',
+    purpose: 'grace-period',
+    owner: 'Unassigned',
+    team: 'Order Ops',
+    priority: 'high',
+    statusId: 'open',
+    nextStep: 'Review the order before release.',
   },
   {
-    transactionType: 'ORDER',
-    transactionId: 'M100052',
-    displayId: '#A1002',
-    customerName: 'Priya Shah',
-    channel: 'Amazon',
-    brand: 'Julep',
-    status: 'ORDER_CREATED',
-    facilityName: 'Kentucky 3PL',
-    total: 24,
-    currency: 'USD',
-    blockingState: 'blocked',
-    activeWorkEfforts: [
-      {
-        workEffortId: 'WE-1002',
-        workEffortName: 'Fix shipping address',
-        workEffortTypeId: 'ORDER_REPAIR',
-        purpose: 'repair',
-        statusId: 'in-progress',
-        owner: 'Sam Rivera',
-        team: 'CSR',
-        priority: 'critical',
-        dueAt: '2026-05-29T11:30:00+05:30',
-        blocksRelease: true,
-        blocksRefund: false,
-        blocksExport: false,
-        nextStep: 'Collect suite number, normalize address, then requeue the order.',
-        activity: [
-          {
-            id: 'WEA-1002-1',
-            at: '2026-05-29T09:20:00+05:30',
-            actor: 'System',
-            event: 'Created',
-            note: 'Carrier validation failed because suite number is missing.',
-          },
-          {
-            id: 'WEA-1002-2',
-            at: '2026-05-29T09:25:00+05:30',
-            actor: 'Sam Rivera',
-            event: 'Started',
-            note: 'Customer contact attempt started.',
-          },
-        ],
-      },
-    ],
-    completedWorkEfforts: [],
+    workEffortName: 'Repair order data',
+    workEffortTypeId: 'ORDER_REPAIR',
+    purpose: 'repair',
+    owner: 'Sam Rivera',
+    team: 'CSR',
+    priority: 'critical',
+    statusId: 'in-progress',
+    nextStep: 'Fix the customer or order data issue, then requeue.',
   },
   {
-    transactionType: 'ORDER',
-    transactionId: 'M100053',
-    displayId: '#A1003',
-    customerName: 'Olivia Reed',
-    channel: 'Shopify',
-    brand: 'Mally Beauty',
-    status: 'ORDER_APPROVED',
-    facilityName: 'New Jersey DC',
-    total: 59,
-    currency: 'USD',
-    blockingState: 'action-required',
-    activeWorkEfforts: [
-      {
-        workEffortId: 'WE-1003',
-        workEffortName: 'Find inventory for kit component',
-        workEffortTypeId: 'ORDER_INVENTORY_HOLD',
-        purpose: 'inventory',
-        statusId: 'open',
-        owner: 'Inventory Ops',
-        team: 'Inventory',
-        priority: 'high',
-        dueAt: '2026-05-29T14:00:00+05:30',
-        blocksRelease: true,
-        blocksRefund: false,
-        blocksExport: false,
-        nextStep: 'Confirm whether the missing kit component can ship from another facility.',
-        activity: [
-          {
-            id: 'WEA-1003-1',
-            at: '2026-05-29T10:10:00+05:30',
-            actor: 'System',
-            event: 'Created',
-            note: 'Primary facility does not have enough available inventory.',
-          },
-        ],
-      },
-    ],
-    completedWorkEfforts: [],
+    workEffortName: 'Find inventory',
+    workEffortTypeId: 'ORDER_INVENTORY_HOLD',
+    purpose: 'inventory',
+    owner: 'Inventory Ops',
+    team: 'Inventory',
+    priority: 'high',
+    statusId: 'open',
+    nextStep: 'Confirm whether the order can be fulfilled from available inventory.',
   },
   {
-    transactionType: 'ORDER',
-    transactionId: 'M100054',
-    displayId: '#A1004',
-    customerName: 'Nora Patel',
-    channel: 'TikTok Shop',
-    brand: 'Laura Geller',
-    status: 'ORDER_APPROVED',
-    facilityName: 'New Jersey DC',
-    total: 112,
-    currency: 'USD',
-    blockingState: 'action-required',
-    activeWorkEfforts: [
-      {
-        workEffortId: 'WE-1004',
-        workEffortName: 'Supervisor release review',
-        workEffortTypeId: 'ORDER_MANUAL_HOLD',
-        purpose: 'manual',
-        statusId: 'open',
-        owner: 'Order Ops Lead',
-        team: 'Order Ops',
-        priority: 'medium',
-        dueAt: '2026-05-29T15:00:00+05:30',
-        blocksRelease: true,
-        blocksRefund: false,
-        blocksExport: false,
-        nextStep: 'Review customer note and decide whether to release or keep the order paused.',
-        activity: [
-          {
-            id: 'WEA-1004-1',
-            at: '2026-05-29T10:35:00+05:30',
-            actor: 'Taylor Brooks',
-            event: 'Created',
-            note: 'CSR requested a manual pause after customer asked to change the order.',
-          },
-        ],
-      },
-    ],
-    completedWorkEfforts: [],
+    workEffortName: 'Manual release review',
+    workEffortTypeId: 'ORDER_MANUAL_HOLD',
+    purpose: 'manual',
+    owner: 'Order Ops Lead',
+    team: 'Order Ops',
+    priority: 'medium',
+    statusId: 'open',
+    nextStep: 'Review the order and decide whether to release or keep it paused.',
   },
-];
+] as const;
 
 export async function searchTransactionWorkItems(params: WorkItemSearchParams = {}) {
   const query = params.query?.trim().toLowerCase() || '';
+  const transactionWorkItems = await getSampleTransactionWorkItems(params);
 
   return clone(transactionWorkItems)
     .map((item) => filterWorkEfforts(item, params))
@@ -204,6 +76,7 @@ export async function searchTransactionWorkItems(params: WorkItemSearchParams = 
 }
 
 export async function getOperationsSummary(): Promise<OperationsSummary> {
+  const transactionWorkItems = await getSampleTransactionWorkItems({ status: 'active' });
   const activeEfforts = transactionWorkItems.flatMap((item) => item.activeWorkEfforts);
 
   return {
@@ -214,6 +87,75 @@ export async function getOperationsSummary(): Promise<OperationsSummary> {
     inventory: countPurpose(activeEfforts, 'inventory'),
     manual: countPurpose(activeEfforts, 'manual'),
     readyToRelease: transactionWorkItems.filter((item) => item.blockingState === 'ready').length,
+  };
+}
+
+async function getSampleTransactionWorkItems(params: WorkItemSearchParams = {}) {
+  const firstPage = await searchOrders({
+    queryString: params.query,
+    sort: 'orderDate desc',
+    pageSize: 1,
+    pageIndex: 0
+  });
+  const totalPages = Math.max(1, Math.ceil(firstPage.total / sampleSize));
+  const pageIndex = params.query ? 0 : Math.floor(Math.random() * totalPages);
+  const sample = await searchOrders({
+    queryString: params.query,
+    sort: 'orderDate desc',
+    pageSize: sampleSize,
+    pageIndex
+  });
+
+  return sample.orders.map(orderToWorkItem);
+}
+
+function orderToWorkItem(order: Order, index: number): TransactionWorkItem {
+  const template = taskTemplates[index % taskTemplates.length];
+  const workEffort = orderWorkEffort(order, template, index);
+
+  return {
+    transactionType: 'ORDER' as TransactionType,
+    transactionId: order.id,
+    displayId: order.externalId || order.id,
+    customerName: order.customerName || order.customerId || 'Customer unavailable',
+    channel: order.channel || order.productStoreId || 'Channel unavailable',
+    brand: order.productStoreId || 'Brand unavailable',
+    status: order.status,
+    total: order.total,
+    currency: order.currency,
+    blockingState: workEffort.blocksRelease ? 'blocked' : 'action-required',
+    activeWorkEfforts: workEffort.statusId === 'completed' || workEffort.statusId === 'cancelled' ? [] : [workEffort],
+    completedWorkEfforts: workEffort.statusId === 'completed' || workEffort.statusId === 'cancelled' ? [workEffort] : [],
+  };
+}
+
+function orderWorkEffort(order: Order, template: typeof taskTemplates[number], index: number): WorkEffortSummary {
+  const createdAt = order.orderDate || order.entryDate || new Date().toISOString();
+  const dueAt = new Date(Math.max(Date.now(), new Date(createdAt).getTime()) + (index + 1) * 60 * 60 * 1000).toISOString();
+
+  return {
+    workEffortId: `WE-${order.id}-${template.purpose}`,
+    workEffortName: template.workEffortName,
+    workEffortTypeId: template.workEffortTypeId,
+    purpose: template.purpose,
+    statusId: template.statusId,
+    owner: template.owner,
+    team: template.team,
+    priority: template.priority,
+    dueAt,
+    blocksRelease: template.purpose !== 'manual',
+    blocksRefund: template.purpose === 'repair',
+    blocksExport: template.purpose === 'inventory',
+    nextStep: template.nextStep,
+    activity: [
+      {
+        id: `WEA-${order.id}-${template.purpose}-created`,
+        at: createdAt,
+        actor: 'System',
+        event: 'Created',
+        note: `Testing task generated from live order ${order.externalId || order.id}.`,
+      },
+    ],
   };
 }
 

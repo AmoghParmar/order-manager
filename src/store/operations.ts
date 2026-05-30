@@ -9,6 +9,7 @@ import type {
   TransactionWorkItem,
   WorkEffortActivity,
   WorkEffortPurpose,
+  WorkEffortStatus,
   WorkEffortSummary,
   WorkItemSearchParams
 } from '@/types/operations';
@@ -74,6 +75,46 @@ export const useOperationsStore = defineStore('operations', {
         activity: [
           ...workEffort.activity,
           activity('Assigned', owner, `Assigned to ${owner}`),
+        ],
+      }));
+    },
+    updateWorkEffortStatus(workEffortId: string, statusId: WorkEffortStatus) {
+      this.workItems = this.workItems.map((item) => {
+        const workEffort = [...item.activeWorkEfforts, ...item.completedWorkEfforts].find((effort) => effort.workEffortId === workEffortId);
+        if (!workEffort) return item;
+
+        const updatedWorkEffort: WorkEffortSummary = {
+          ...workEffort,
+          statusId,
+          blocksRelease: statusId === 'completed' || statusId === 'cancelled' ? false : workEffort.blocksRelease,
+          blocksRefund: statusId === 'completed' || statusId === 'cancelled' ? false : workEffort.blocksRefund,
+          blocksExport: statusId === 'completed' || statusId === 'cancelled' ? false : workEffort.blocksExport,
+          activity: [
+            ...workEffort.activity,
+            activity('Status updated', workEffort.owner, `Status updated to ${statusId}`),
+          ],
+        };
+        const isCompletedState = statusId === 'completed' || statusId === 'cancelled';
+        const activeWorkEfforts = item.activeWorkEfforts.filter((effort) => effort.workEffortId !== workEffortId);
+        const completedWorkEfforts = item.completedWorkEfforts.filter((effort) => effort.workEffortId !== workEffortId);
+        const nextActiveWorkEfforts = isCompletedState ? activeWorkEfforts : [updatedWorkEffort, ...activeWorkEfforts];
+
+        return {
+          ...item,
+          blockingState: nextActiveWorkEfforts.some((effort) => effort.blocksRelease || effort.blocksRefund || effort.blocksExport) ? item.blockingState : 'ready',
+          activeWorkEfforts: nextActiveWorkEfforts,
+          completedWorkEfforts: isCompletedState ? [updatedWorkEffort, ...completedWorkEfforts] : completedWorkEfforts,
+        };
+      });
+      this.updateSummaryFromWorkItems();
+    },
+    updateWorkEffortDueDate(workEffortId: string, dueAt: string) {
+      this.updateWorkEffort(workEffortId, (workEffort) => ({
+        ...workEffort,
+        dueAt,
+        activity: [
+          ...workEffort.activity,
+          activity('Due date changed', workEffort.owner, `Due date changed to ${dueAt}.`),
         ],
       }));
     },

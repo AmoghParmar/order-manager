@@ -17,71 +17,133 @@
     <ion-content v-if="order" class="order-detail-content">
       <div class="order-detail-shell">
         <section class="order-detail-header">
+          <ion-item lines="none">
+            <ion-icon slot="start" :icon="receiptOutline" />
+            <ion-label>
+              <h1>{{ order.externalId || order.id }}</h1>
+              <p>{{ order.id }}</p>
+            </ion-label>
+            <ion-badge :color="statusBadgeColor(order.status)">
+              {{ readableValue(order.status) || 'Status unavailable' }}
+            </ion-badge>
+          </ion-item>
           <div class="order-detail-header-details">
-          <ion-card>
-        <ion-card-header class="card-header-grid">
-          <ion-card-title>{{ order.externalId || order.id }}</ion-card-title>
-          <ion-card-subtitle>{{ orderContext }}</ion-card-subtitle>
-          <ion-note>{{ money(order.total, order.currency) }}</ion-note>
-        </ion-card-header>
-        <ion-card-content>
-          <ion-list lines="full">
-            <ion-item>
-              <ion-label>
-                <h2>{{ order.id }}</h2>
-                <p>{{ orderDate }}</p>
-              </ion-label>
-            </ion-item>
-            <ion-item>
-              <ion-label>
-                <h2>Fulfillment</h2>
-                <p>{{ fulfillmentSummary }}</p>
-              </ion-label>
-              <ion-note slot="end">{{ fulfillmentStatusSummary }}</ion-note>
-            </ion-item>
-            <ion-item>
-              <ion-label>
-                <h2>Payment</h2>
-                <p>{{ order.payments?.length || 0 }} payment record{{ order.payments?.length === 1 ? '' : 's' }}</p>
-              </ion-label>
-              <ion-note slot="end">{{ readableValue(order.paymentStatus) || 'Unavailable' }}</ion-note>
-            </ion-item>
-            <ion-item>
-              <ion-label>
-                <h2>Returns</h2>
-                <p>Return records</p>
-              </ion-label>
-              <ion-note slot="end">{{ order.returnIds.length || orderReturns.length || 0 }}</ion-note>
-            </ion-item>
-          </ion-list>
-        </ion-card-content>
-      </ion-card>
+            <ion-card>
+              <ion-card-header>
+                <ion-card-title>
+                  {{ customerProfile?.name || order.customerName || order.customerId || 'Customer' }}
+                </ion-card-title>
+                <ion-card-subtitle>{{ order.customerId || 'Customer unavailable' }}</ion-card-subtitle>
+                <p>{{ customerSince }}</p>
+                <ion-button
+                  v-if="order.customerId"
+                  fill="clear"
+                  size="small"
+                  :router-link="`/customers/${order.customerId}`"
+                  aria-label="Open customer details"
+                >
+                  <ion-icon slot="icon-only" :icon="openOutline" />
+                </ion-button>
+              </ion-card-header>
+              <ion-item lines="none">
+                <ion-icon slot="start" :icon="mailOutline" />
+                <ion-label>
+                  {{ orderEmail }}
+                </ion-label>
+              </ion-item>
+              <ion-item lines="none">
+                <ion-icon slot="start" :icon="callOutline" />
+                <ion-label>
+                  {{ orderPhone }}
+                </ion-label>
+              </ion-item>
+              <ion-item lines="full">
+                <ion-icon slot="start" :icon="cashOutline" />
+                <ion-label>
+                  {{ billingAddress }}
+                </ion-label>
+              </ion-item>
+              <ion-item lines="none">
+                <ion-label>
+                  Orders last 30 days
+                </ion-label>
+                <ion-note slot="end">{{ customerOrdersLast30Days }}</ion-note>
+              </ion-item>
+              <ion-item lines="none">
+                <ion-label>
+                  Lifetime value
+                  <p>{{ customerLifetimeOrders }} lifetime order{{ customerLifetimeOrders === 1 ? '' : 's' }}</p>
+                </ion-label>
+                <ion-note slot="end">{{ money(customerLifetimeValue, order.currency) }}</ion-note>
+              </ion-item>
+            </ion-card>
 
+            <ion-card>
+              <ion-card-header>
+                <ion-card-title>
+                  Order identifications
+                </ion-card-title>
+              </ion-card-header>
+              <ion-list lines="full">
+                <ion-item :lines="(!order.orderName && !(order.identifications && order.identifications.length)) ? 'none' : 'full'">
+                  <ion-label>Order external ID</ion-label>
+                  <ion-label slot="end">{{ order.externalId || '-' }}</ion-label>
+                </ion-item>
+                <ion-item v-if="order.orderName" :lines="!(order.identifications && order.identifications.length) ? 'none' : 'full'">
+                  <ion-label>Order name</ion-label>
+                  <ion-label slot="end">{{ order.orderName || '-' }}</ion-label>
+                </ion-item>
+                <ion-item v-for="(ident, index) in (order.identifications || [])" :key="ident.orderIdentificationTypeId" :lines="index === (order.identifications || []).length - 1 ? 'none' : 'full'">
+                  <ion-label>{{ readableIdentificationType(ident.orderIdentificationTypeId) }}</ion-label>
+                  <ion-label slot="end">
+                    <a v-if="ident.orderIdentificationTypeId === 'SHOPIFY_ORD_ID' && shopifyOrderUrl" :href="shopifyOrderUrl" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+                      {{ ident.idValue }}
+                    </a>
+                    <span v-else>
+                      {{ ident.idValue }}
+                    </span>
+                  </ion-label>
+                </ion-item>
+              </ion-list>
+            </ion-card>
           </div>
 
           <aside class="order-detail-timeline">
             <ion-item lines="none">
-              <ion-icon slot="start" :icon="timeOutline" />
               <ion-label>
                 <h2>Order timeline</h2>
-                <p>{{ orderTimeline.length }} event{{ orderTimeline.length === 1 ? '' : 's' }}</p>
               </ion-label>
-              <ion-badge slot="end" :color="statusBadgeColor(order.status)">{{ readableValue(order.status) || 'Status unavailable' }}</ion-badge>
+              <ion-badge :color="statusBadgeColor(order.status)" slot="end">
+                {{ readableValue(order.status) || 'Status unavailable' }}
+              </ion-badge>
             </ion-item>
 
             <ion-list lines="full" class="order-timeline">
               <ion-item v-if="orderStore.detailSectionErrors.activity">
                 <ion-label>{{ orderStore.detailSectionErrors.activity }}</ion-label>
               </ion-item>
-              <ion-item v-for="(entry, index) in orderTimeline" :key="entry.id">
-                <ion-icon :icon="timelineIcon(entry)" slot="start" />
+              <ion-item
+                v-for="(group, index) in orderTimelineGroups"
+                :key="group.id"
+                button
+                @click="openTimelineGroup(group)"
+              >
+                <ion-icon :icon="timelineIcon(group.primary)" slot="start" />
                 <ion-label>
-                  <p>{{ timelineDelta(entry, index) }}</p>
-                  <h2>{{ readableValue(entry.label) || entry.label }}</h2>
-                  <p>{{ entry.detail }}</p>
-                  <p v-if="timelineItemLabel(entry)">{{ timelineItemLabel(entry) }}</p>
+                  <p>{{ timelineGroupDelta(group, index) }}</p>
+                  {{ group.entries.length === 1 && timelineItemLabel(group.primary) ? timelineItemLabel(group.primary) : (readableValue(group.statusId) || group.statusId) }}
+                  <p v-if="group.entries.length === 1 && timelineItemLabel(group.primary)">
+                    {{ readableValue(group.statusId) || group.statusId }}
+                  </p>
+                  <p v-if="group.statusId !== 'Created in Shopify' && group.statusId !== 'Imported into HotWax' && !(group.entries.length === 1 && timelineItemLabel(group.primary))">
+                    {{ group.statusId }}
+                  </p>
+                  <p v-if="group.entries.length === 1 && group.primary.detail && group.primary.detail !== group.statusId && group.statusId !== 'Created in Shopify' && group.statusId !== 'Imported into HotWax'">{{ group.primary.detail }}</p>
                 </ion-label>
-                <ion-note slot="end">{{ formatDateTime(entry.at) }}</ion-note>
+                <ion-note slot="end">
+                  <p>{{ timelineRecordCountLabel(group) }}</p>
+                  <p>{{ formatDateTime(group.at) }}</p>
+                </ion-note>
               </ion-item>
               <ion-item v-if="!orderTimeline.length && !orderStore.detailSectionErrors.activity">
                 <ion-label>No timeline events found</ion-label>
@@ -90,98 +152,63 @@
           </aside>
         </section>
 
-        <section class="order-detail-secondary">
+        <section>
+          <!-- payments -->
           <ion-card>
-        <ion-card-header class="card-header-grid">
-          <ion-card-title>{{ customerProfile?.name || order.customerName || order.customerId || 'Customer' }}</ion-card-title>
-          <ion-card-subtitle>{{ order.customerId || 'Customer unavailable' }}</ion-card-subtitle>
-          <ion-button v-if="order.customerId" fill="clear" size="small" :router-link="`/customers/${order.customerId}`">Open details</ion-button>
-        </ion-card-header>
-        <ion-card-content>
-          <ion-list lines="full">
-            <ion-item>
-              <ion-label>
-                <h2>Orders last 30 days</h2>
-              </ion-label>
-              <ion-note slot="end">{{ customerOrdersLast30Days }}</ion-note>
-            </ion-item>
-            <ion-item>
-              <ion-label>
-                <h2>Lifetime value</h2>
-                <p>{{ customerLifetimeOrders }} lifetime order{{ customerLifetimeOrders === 1 ? '' : 's' }}</p>
-              </ion-label>
-              <ion-note slot="end">{{ money(customerLifetimeValue, order.currency) }}</ion-note>
-            </ion-item>
-            <ion-item v-for="contact in customerContactRows" :key="contact.label">
-              <ion-label>
-                <h2>{{ contact.label }}</h2>
-                <p v-for="line in contact.lines" :key="line">{{ line }}</p>
-              </ion-label>
-            </ion-item>
-            <ion-item v-if="!order.customerId && !customerContactRows.length">
-              <ion-label>No contact information found</ion-label>
-            </ion-item>
-          </ion-list>
-        </ion-card-content>
-      </ion-card>
+            <ion-card-header>
+              <ion-card-title>Payment</ion-card-title>
+            </ion-card-header>
+            <ion-list>
+              <ion-item v-for="payment in order.payments" :key="payment.id || payment.status">
+                <ion-label>
+                  {{ payment.method || 'Payment' }}
+                  <p>{{ money(payment.amount, order.currency) }} · {{ paymentCapturedLabel(payment) }}</p>
+                  <p v-if="payment.gatewayResponse || payment.id">{{ payment.gatewayResponse || payment.id }}</p>
+                </ion-label>
+                <ion-note slot="end">{{ readableValue(payment.status) || payment.status }}</ion-note>
+              </ion-item>
+              <ion-item v-if="!order.payments?.length">
+                <ion-label>No payments found</ion-label>
+              </ion-item>
+              <ion-item-divider v-if="order.terms?.length">
+                <ion-label>Terms</ion-label>
+                <ion-note slot="end">{{ order.terms?.length || 0 }}</ion-note>
+              </ion-item-divider>
+              <ion-item v-for="term in order.terms" :key="term.id || term.type">
+                <ion-label>
+                  {{ term.type || 'Term' }}
+                  <p>{{ term.description || term.value }}</p>
+                </ion-label>
+              </ion-item>
+            </ion-list>
+          </ion-card>
 
-      <ion-card>
-        <ion-card-header>
-          <ion-card-title>Payment, returns, and terms</ion-card-title>
-        </ion-card-header>
-        <ion-card-content>
-          <ion-list lines="full">
-            <ion-item-divider>
-              <ion-label>Payments</ion-label>
-              <ion-note slot="end">{{ order.payments?.length || 0 }}</ion-note>
-            </ion-item-divider>
-            <ion-item v-for="payment in order.payments" :key="payment.id || payment.status">
-              <ion-label>
-                <h2>{{ payment.method || 'Payment' }}</h2>
-                <p>{{ money(payment.amount, order.currency) }} · {{ paymentCapturedLabel(payment) }}</p>
-                <p v-if="payment.gatewayResponse || payment.id">{{ payment.gatewayResponse || payment.id }}</p>
-              </ion-label>
-              <ion-note slot="end">{{ readableValue(payment.status) || payment.status }}</ion-note>
-            </ion-item>
-            <ion-item v-if="!order.payments?.length">
-              <ion-label>No payments found</ion-label>
-            </ion-item>
-            <ion-item-divider>
-              <ion-label>Returns</ion-label>
-              <ion-note slot="end">{{ orderReturns.length }}</ion-note>
-            </ion-item-divider>
-            <ion-item v-if="orderStore.detailSectionErrors.returns">
-              <ion-label>{{ orderStore.detailSectionErrors.returns }}</ion-label>
-            </ion-item>
-            <ion-item v-for="returnRecord in orderReturns" :key="returnRecord.id" :router-link="`/returns/${returnRecord.id}`">
-              <ion-label>
-                <h2>{{ returnRecord.id }}</h2>
-                <p>{{ returnRecord.reason }}</p>
-              </ion-label>
-              <ion-note slot="end">{{ returnRecord.status }}</ion-note>
-            </ion-item>
-            <ion-item v-if="!orderReturns.length && !orderStore.detailSectionErrors.returns">
-              <ion-label>No returns found</ion-label>
-            </ion-item>
-            <ion-item-divider>
-              <ion-label>Terms</ion-label>
-              <ion-note slot="end">{{ order.terms?.length || 0 }}</ion-note>
-            </ion-item-divider>
-            <ion-item v-for="term in order.terms" :key="term.id || term.type">
-              <ion-label>
-                <h2>{{ term.type || 'Term' }}</h2>
-                <p>{{ term.description || term.value }}</p>
-              </ion-label>
-            </ion-item>
-            <ion-item v-if="!order.terms?.length">
-              <ion-label>No terms found</ion-label>
-            </ion-item>
-          </ion-list>
-        </ion-card-content>
-      </ion-card>
+          <!-- returns -->
+          <ion-card v-if="orderReturns.length">
+            <ion-card-header>
+              <ion-card-title>Returns</ion-card-title>
+              <ion-note>{{ orderReturns.length }} return{{ orderReturns.length === 1 ? '' : 's' }}</ion-note>
+            </ion-card-header>
+            <ion-list lines="full">
+              <ion-item v-if="orderStore.detailSectionErrors.returns">
+                <ion-label>{{ orderStore.detailSectionErrors.returns }}</ion-label>
+              </ion-item>
+              <ion-item
+                v-for="returnRecord in orderReturns"
+                :key="returnRecord.id"
+                :router-link="`/returns/${returnRecord.id}`"
+              >
+                <ion-label>
+                  {{ returnFacilityLabel(returnRecord) }}
+                  <p>{{ returnRecord.id }} · {{ readableValue(returnRecord.status) || returnRecord.status }}</p>
+                </ion-label>
+                <ion-note slot="end">{{ returnHappenedAt(returnRecord) }}</ion-note>
+              </ion-item>
+            </ion-list>
+          </ion-card>
         </section>
 
-        <section class="order-detail-wide-section">
+        <section>
           <ion-list v-if="orderStore.detailSectionErrors.shipments" lines="full">
             <ion-item v-if="orderStore.detailSectionErrors.shipments">
               <ion-label>{{ orderStore.detailSectionErrors.shipments }}</ion-label>
@@ -252,7 +279,7 @@
                   <DxpShopifyImg :src="item.imageUrl" size="medium" />
                 </ion-thumbnail>
                 <ion-label>
-                  <h2>{{ item.name }}</h2>
+                  {{ item.name }}
                   <p>{{ item.sku }} · {{ readableValue(item.status) || item.status }}</p>
                   <p>Ordered {{ item.quantity }} · Shipped {{ item.shippedQuantity || 0 }} · Cancelled {{ item.cancelledQuantity || 0 }}</p>
                 </ion-label>
@@ -289,7 +316,7 @@
                 @click="openShipGroupEditor(shipGroup, shipGroupAction.mode)"
               >
                 <ion-label>
-                  <h2>{{ shipGroupAction.label }}</h2>
+                  {{ shipGroupAction.label }}
                   <p>{{ shipGroupAction.description }}</p>
                 </ion-label>
               </ion-item>
@@ -305,7 +332,7 @@
               <ion-list lines="full">
             <ion-item v-for="shipment in orderShipments" :key="shipment.id" :router-link="`/shipments/${shipment.id}`">
               <ion-label>
-                <h2>{{ shipment.id }}</h2>
+                {{ shipment.id }}
                 <p>{{ shipment.carrier }} {{ shipment.trackingCode }}</p>
                 <p>{{ shipment.origin }} to {{ shipment.destination }}</p>
               </ion-label>
@@ -322,7 +349,7 @@
           </ion-list>
         </section>
 
-        <section class="order-detail-secondary">
+        <section>
       <ion-card>
         <ion-card-header>
           <ion-card-title>Notes</ion-card-title>
@@ -338,7 +365,7 @@
             </ion-item>
             <ion-item v-for="note in order.notes" :key="note.id">
               <ion-label>
-                <h2>{{ note.title || note.body || note.id || 'Note' }}</h2>
+                {{ note.title || note.body || note.id || 'Note' }}
                 <p>{{ note.author }}{{ note.createdAt ? ` · ${note.createdAt}` : '' }} · {{ note.internal ? 'Internal' : 'Customer-visible' }}</p>
                 <p v-if="note.title && note.body">{{ note.body }}</p>
                 <p v-else-if="!note.title && !note.body">No note text found</p>
@@ -376,7 +403,7 @@
             </ion-item>
             <ion-item v-for="thread in communicationThreads" :key="thread.id">
               <ion-label>
-                <h2>{{ thread.subject }}</h2>
+                {{ thread.subject }}
                 <p>{{ thread.events.length }} event{{ thread.events.length === 1 ? '' : 's' }} · {{ readableValue(thread.latest.type || thread.latest.typeId) }}</p>
                 <p>{{ communicationPreview(thread.latest) }}</p>
               </ion-label>
@@ -407,7 +434,7 @@
                 </ion-item>
                 <ion-item v-for="role in order.roles" :key="`${role.partyId}-${role.roleTypeId}`">
                   <ion-label>
-                    <h2>{{ role.roleTypeId }}</h2>
+                    {{ role.roleTypeId }}
                     <p>{{ role.name || role.partyId }}</p>
                   </ion-label>
                 </ion-item>
@@ -442,7 +469,7 @@
               <ion-list slot="content">
                 <ion-item v-for="item in itemsWithTransitions" :key="item.item.id">
                   <ion-label>
-                    <h2>{{ item.item.name }}</h2>
+                    {{ item.item.name }}
                     <p>{{ item.item.status }}</p>
                   </ion-label>
                   <ion-buttons v-if="canUpdate" slot="end">
@@ -464,6 +491,48 @@
         </ion-card-content>
       </ion-card>
       </div>
+
+      <ion-modal :is-open="Boolean(selectedTimelineGroup)" @didDismiss="closeTimelineGroupModal">
+        <ion-header>
+          <ion-toolbar>
+            <ion-buttons slot="start">
+              <ion-button @click="closeTimelineGroupModal">
+                <ion-icon slot="icon-only" :icon="closeOutline" />
+              </ion-button>
+            </ion-buttons>
+            <ion-title>{{ selectedTimelineGroup ? readableValue(selectedTimelineGroup.statusId) || selectedTimelineGroup.statusId : 'Timeline records' }}</ion-title>
+          </ion-toolbar>
+        </ion-header>
+
+        <ion-content>
+          <ion-list lines="full">
+            <ion-item v-if="selectedTimelineGroup">
+              <ion-icon :icon="timelineIcon(selectedTimelineGroup.primary)" slot="start" />
+              <ion-label>
+                <p v-if="selectedTimelineGroup.statusId !== 'Created in Shopify' && selectedTimelineGroup.statusId !== 'Imported into HotWax'">{{ selectedTimelineGroup.statusId }}</p>
+                {{ timelineRecordCountLabel(selectedTimelineGroup) }}
+              </ion-label>
+              <ion-note slot="end">{{ formatDateTime(selectedTimelineGroup.at) }}</ion-note>
+            </ion-item>
+
+            <ion-item-divider>
+              <ion-label>Records</ion-label>
+            </ion-item-divider>
+
+            <ion-item v-for="entry in selectedTimelineEntries" :key="entry.id">
+              <ion-icon :icon="timelineIcon(entry)" slot="start" />
+              <ion-label>
+                <p>{{ entry.itemSeqId ? `Item ${entry.itemSeqId}` : 'Order-level status' }}</p>
+                {{ timelineEntryTitle(entry) }}
+                <p v-if="entry.id !== 'orderDate' && entry.id !== 'entryDate'">{{ readableValue(entry.label) || entry.label }}</p>
+                <p v-if="entry.detail && entry.detail !== entry.label && entry.id !== 'orderDate' && entry.id !== 'entryDate'">{{ entry.detail }}</p>
+                <p v-if="entry.id && entry.id !== 'orderDate' && entry.id !== 'entryDate'">Record {{ entry.id }}</p>
+              </ion-label>
+              <ion-note slot="end">{{ formatDateTime(entry.at) }}</ion-note>
+            </ion-item>
+          </ion-list>
+        </ion-content>
+      </ion-modal>
 
       <ion-modal :is-open="Boolean(shipGroupEditorMode)" @didDismiss="closeShipGroupEditor">
         <ion-header>
@@ -729,16 +798,21 @@ import {
 import {
   alertCircleOutline,
   calendarOutline,
+  callOutline,
+  cashOutline,
   checkmarkDoneOutline,
   closeOutline,
   cubeOutline,
   downloadOutline,
   giftOutline,
+  mailOutline,
+  openOutline,
+  receiptOutline,
   saveOutline,
   sunnyOutline,
   timeOutline
 } from 'ionicons/icons';
-import { commonUtil, DxpShopifyImg } from '@common';
+import { api, commonUtil, DxpShopifyImg } from '@common';
 import { useOrderStore } from '@/store/orders';
 import { useCustomerStore } from '@/store/customers';
 import { useUserStore } from '@/store/user';
@@ -751,15 +825,23 @@ import {
 import EmptyState from '@/components/EmptyState.vue';
 import ErrorState from '@/components/ErrorState.vue';
 import { showToast } from '@/utils';
-import type { CommunicationEvent, Order, OrderItem, OrderStatusChange, PaymentPreference, ShipGroupUpdatePayload, Shipment } from '@/types/order';
+import type { CommunicationEvent, Order, OrderItem, OrderStatusChange, PaymentPreference, ReturnRecord, ShipGroupUpdatePayload, Shipment } from '@/types/order';
 import type { CommunicationEventPayload } from '@/services/order';
 
 type DisplayShipGroup = NonNullable<Order['shipGroups']>[number] & { isUnassigned?: boolean };
 type ActionSheetButton = { text: string; role?: string; handler?: () => void };
 type ShipGroupEditorMode = '' | 'instructions' | 'gift' | 'dates' | 'shipToStore';
-type SelectOption = { id: string; label: string };
+type SelectOption = { id: string; label: string; carrierPartyId?: string };
 type CommunicationThread = { id: string; subject: string; latest: CommunicationEvent; events: CommunicationEvent[] };
 type CommunicationIntent = 'log' | 'send' | 'draft';
+type TimelineGroup = {
+  id: string;
+  statusId: string;
+  at: string;
+  minute: number;
+  primary: OrderStatusChange;
+  entries: OrderStatusChange[];
+};
 
 const props = defineProps<{
   orderId: string;
@@ -767,6 +849,20 @@ const props = defineProps<{
 
 const orderStore = useOrderStore();
 const customerStore = useCustomerStore();
+const shopifyShops = ref<any[]>([]);
+
+const shopifyOrderUrl = computed(() => {
+  if (!shopifyShops.value.length || !order.value?.shopifyOrderId) return '';
+  const shopId = shopifyShops.value[0].shopId;
+  return `https://${shopId}/admin/orders/${order.value.shopifyOrderId}`;
+});
+
+function readableIdentificationType(type: string) {
+  if (type === 'SHOPIFY_ORD_ID') return 'Shopify order ID';
+  if (type === 'SHOPIFY_ORD_NAME') return 'Shopify order name';
+  if (type === 'SHOPIFY_ORD_NO') return 'Shopify order number';
+  return readableValue(type);
+}
 const userStore = useUserStore();
 const customerServiceStore = useCustomerServiceStore();
 const utilStore = useUtilStore();
@@ -800,6 +896,7 @@ const communicationRoleFromDraft = ref('ORIGINATOR');
 const communicationRoleToDraft = ref('ADDRESSEE');
 const communicationMessageIdDraft = ref('');
 const communicationExternalIdDraft = ref('');
+const selectedTimelineGroup = ref<TimelineGroup>();
 
 const order = computed(() => orderStore.getOrder(props.orderId));
 const orderShipments = computed(() => orderStore.getOrderShipments(order.value?.id || props.orderId));
@@ -824,9 +921,65 @@ const itemsWithTransitions = computed(() => (order.value?.items || []).map((item
 })).filter((entry) => entry.transitions.length));
 const transitionCount = computed(() => itemsWithTransitions.value.reduce((count, entry) => count + entry.transitions.length, 0));
 const orderDate = computed(() => formatDateTime(order.value?.orderDate || order.value?.entryDate));
-const orderTimeline = computed(() => {
-  return [...(order.value?.history || [])].sort((first, second) => timelineTime(first.at) - timelineTime(second.at));
+const customerSince = computed(() => {
+  const created = customerProfile.value?.createdStamp || customerProfile.value?.lastUpdatedStamp;
+  if (!created) return 'Customer since date unavailable';
+
+  const date = parseDate(created);
+  if (Number.isNaN(date.getTime())) return `Customer since ${created}`;
+
+  return 'Customer since ' + new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium'
+  }).format(date);
 });
+const orderTimeline = computed(() => {
+  const timeline: OrderStatusChange[] = [...(order.value?.history || [])];
+
+  if (order.value?.orderDate) {
+    timeline.push({
+      id: 'orderDate',
+      at: String(order.value.orderDate),
+      label: 'Created in Shopify',
+      detail: ''
+    });
+  }
+
+  if (order.value?.entryDate) {
+    timeline.push({
+      id: 'entryDate',
+      at: String(order.value.entryDate),
+      label: 'Imported into HotWax',
+      detail: ''
+    });
+  }
+
+  return timeline.sort((first, second) => timelineTime(first.at) - timelineTime(second.at));
+});
+const orderTimelineGroups = computed<TimelineGroup[]>(() => {
+  return orderTimeline.value.reduce((groups, entry) => {
+    const minute = timelineMinute(entry.at);
+    const statusId = entry.label || entry.detail;
+    const key = `${statusId}-${minute || entry.at || entry.id}`;
+    const group = groups.find((timelineGroup) => timelineGroup.id === key);
+
+    if (group) {
+      group.entries.push(entry);
+      return groups;
+    }
+
+    groups.push({
+      id: key,
+      statusId,
+      at: entry.at,
+      minute,
+      primary: entry,
+      entries: [entry]
+    });
+
+    return groups;
+  }, [] as TimelineGroup[]);
+});
+const selectedTimelineEntries = computed(() => selectedTimelineGroup.value?.entries || []);
 const displayShipGroups = computed<DisplayShipGroup[]>(() => {
   if (!order.value) return [];
 
@@ -883,15 +1036,40 @@ const orderContext = computed(() => {
 
   return [channel, priority].filter(Boolean).join(' · ');
 });
-const customerContactRows = computed(() => {
-  const rows = customerProfile.value?.addresses?.length ? customerProfile.value.addresses : order.value?.contactInfo || [];
-  const customerName = customerProfile.value?.name || order.value?.customerName || '';
-
-  return rows.filter((contact) => {
-    const meaningfulLines = contact.lines.filter((line) => line && line !== customerName);
-
-    return meaningfulLines.length;
-  });
+const orderEmail = computed(() => {
+  if (customerProfile.value?.email) return customerProfile.value.email;
+  const emailContact = order.value?.contactInfo?.find(
+    (contact) =>
+      contact.label.toLowerCase().includes('email') ||
+      contact.lines.some((line) => line.includes('@'))
+  );
+  return emailContact?.lines[0] || 'No email address';
+});
+const orderPhone = computed(() => {
+  if (customerProfile.value?.phone) return customerProfile.value.phone;
+  const phoneContact = order.value?.contactInfo?.find(
+    (contact) =>
+      contact.label.toLowerCase().includes('phone') ||
+      contact.label.toLowerCase().includes('telecom')
+  );
+  return phoneContact?.lines[0] || 'No phone number';
+});
+const billingAddress = computed(() => {
+  const billingContact = order.value?.contactInfo?.find(
+    (contact) =>
+      contact.label.toLowerCase().includes('billing') ||
+      contact.label.toLowerCase().includes('payment')
+  );
+  if (billingContact) {
+    return billingContact.lines.join(', ');
+  }
+  const postalContact = order.value?.contactInfo?.find(
+    (contact) =>
+      contact.label.toLowerCase().includes('postal') ||
+      contact.label.toLowerCase().includes('shipping') ||
+      contact.label.toLowerCase().includes('location')
+  );
+  return postalContact ? postalContact.lines.join(', ') : 'No address info';
 });
 const customerOrdersLast30Days = computed(() => {
   const startTime = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -912,8 +1090,11 @@ const shipGroupEditorTitle = computed(() => {
   return 'Ship group';
 });
 const todayDate = ref(dateInputValue(new Date().toISOString()));
+const productStoreShipmentMethodOptions = computed(() => utilStore.getProductStoreShipmentMethodOptions(order.value?.productStoreId || ''));
 const shipGroupMethodOptions = computed(() => selectOptions([
   ...(activeShipGroup.value?.shipmentMethodTypeId ? [{ id: activeShipGroup.value.shipmentMethodTypeId, label: activeShipGroup.value.method || activeShipGroup.value.shipmentMethodTypeId }] : []),
+  ...productStoreShipmentMethodOptions.value,
+  ...utilStore.getShipmentMethodOptions,
   ...displayShipGroups.value
     .filter((shipGroup) => shipGroup.shipmentMethodTypeId)
     .map((shipGroup) => ({ id: shipGroup.shipmentMethodTypeId || '', label: shipGroup.method || shipGroup.shipmentMethodTypeId || '' })),
@@ -923,9 +1104,11 @@ const shipGroupMethodOptions = computed(() => selectOptions([
   }))
 ]));
 const shipGroupCarrierOptions = computed(() => selectOptions([
-  ...(activeShipGroup.value?.carrier ? [{ id: activeShipGroup.value.carrier, label: activeShipGroup.value.carrier }] : []),
-  ...displayShipGroups.value.map((shipGroup) => ({ id: shipGroup.carrier, label: shipGroup.carrier })),
-  ...orderShipments.value.map((shipment) => ({ id: shipment.carrier, label: shipment.carrier }))
+  ...(activeShipGroup.value?.carrier ? [carrierOption(activeShipGroup.value.carrier)] : []),
+  ...utilStore.getCarrierOptions,
+  ...productStoreShipmentMethodOptions.value.map((method) => carrierOption(method.carrierPartyId)),
+  ...displayShipGroups.value.map((shipGroup) => carrierOption(shipGroup.carrier)),
+  ...orderShipments.value.map((shipment) => carrierOption(shipment.carrier))
 ]));
 const shipGroupFacilityOptions = computed(() => selectOptions([
   ...(activeShipGroup.value?.facilityId ? [{ id: activeShipGroup.value.facilityId, label: activeShipGroup.value.facilityName || activeShipGroup.value.facilityId }] : []),
@@ -1009,11 +1192,29 @@ watch(communicationEventTypeIdDraft, (typeId) => {
 async function loadOrder() {
   await Promise.allSettled([
     orderStore.loadOrder(props.orderId),
-    utilStore.fetchStatusFlowTransitions()
+    utilStore.fetchStatusFlowTransitions(),
+    utilStore.seedSelectableValues()
   ]);
 
   if (order.value?.customerId) {
     await customerStore.loadCustomer(order.value.customerId).catch(() => undefined);
+  }
+
+  if (order.value?.productStoreId) {
+    await utilStore.fetchProductStoreShipmentMethods(order.value.productStoreId);
+
+    try {
+      const resp = await api({
+        url: 'admin/shopifyShops',
+        method: 'get',
+        params: { productStoreId: order.value.productStoreId }
+      }) as any;
+      if (!commonUtil.hasError(resp)) {
+        shopifyShops.value = resp.data || [];
+      }
+    } catch (err) {
+      console.error('Failed to fetch shopifyShops', err);
+    }
   }
 }
 
@@ -1444,6 +1645,14 @@ function selectOptions(options: SelectOption[]) {
   return [...optionsById.values()].sort((first, second) => first.label.localeCompare(second.label));
 }
 
+function carrierOption(carrierId?: string) {
+  const carrier = utilStore.getCarrierOptions.find((option) => option.id === carrierId);
+  return {
+    id: carrierId || '',
+    label: carrier?.label || carrierId || ''
+  };
+}
+
 function dateInputValue(value?: string) {
   if (!value) return '';
 
@@ -1541,6 +1750,16 @@ function paymentCapturedLabel(payment: PaymentPreference) {
   return payment.capturedAt ? `Captured ${formatDateTime(payment.capturedAt)}` : 'Capture date unavailable';
 }
 
+function returnFacilityLabel(returnRecord: ReturnRecord) {
+  return returnRecord.destinationFacilityName || returnRecord.destinationFacilityId || 'Return facility unavailable';
+}
+
+function returnHappenedAt(returnRecord: ReturnRecord) {
+  const returnDate = returnRecord.returnDate || returnRecord.entryDate || returnRecord.requestedDate;
+
+  return returnDate ? formatDateTime(returnDate) : 'Return date unavailable';
+}
+
 function isItemShipped(item: OrderItem) {
   const shippedQuantity = item.shippedQuantity || 0;
   if (item.quantity > 0 && shippedQuantity >= item.quantity) return true;
@@ -1573,11 +1792,30 @@ function relativeDateLabel(value?: string) {
   return `${elapsedDays}d ago`;
 }
 
+function parseDate(value: any): Date {
+  if (!value) return new Date(NaN);
+
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) {
+    return new Date(numericValue);
+  }
+
+  let strValue = String(value).trim();
+
+  // If string contains space and no T, Z, or timezone offset, replace space with T and append Z
+  if (strValue.includes(' ') && !strValue.includes('T') && !strValue.includes('Z') && !strValue.includes('+') && !strValue.match(/-\d{2}:\d{2}$/)) {
+    strValue = strValue.replace(' ', 'T') + 'Z';
+  } else if (!strValue.includes('T') && !strValue.includes('Z') && !strValue.includes('+') && !strValue.match(/-\d{2}:\d{2}$/) && strValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    strValue = strValue + 'T00:00:00Z';
+  }
+
+  return new Date(strValue);
+}
+
 function formatDateTime(value?: string) {
   if (!value) return 'Order date unavailable';
 
-  const numericValue = Number(value);
-  const date = Number.isFinite(numericValue) ? new Date(numericValue) : new Date(value);
+  const date = parseDate(value);
 
   if (Number.isNaN(date.getTime())) return value;
 
@@ -1590,10 +1828,15 @@ function formatDateTime(value?: string) {
 function timelineTime(value?: string) {
   if (!value) return 0;
 
-  const numericValue = Number(value);
-  const date = Number.isFinite(numericValue) ? new Date(numericValue) : new Date(value);
+  const date = parseDate(value);
 
   return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function timelineMinute(value?: string) {
+  const time = timelineTime(value);
+
+  return time ? Math.floor(time / 60000) : 0;
 }
 
 function timelineIcon(entry: OrderStatusChange) {
@@ -1607,11 +1850,11 @@ function timelineIcon(entry: OrderStatusChange) {
   return timeOutline;
 }
 
-function timelineDelta(entry: OrderStatusChange, index: number) {
-  const previousEvent = orderTimeline.value[index - 1];
-  const baseline = previousEvent?.at || order.value?.orderDate || order.value?.entryDate;
+function timelineGroupDelta(group: TimelineGroup, index: number) {
+  const previousGroup = orderTimelineGroups.value[index - 1];
+  const baseline = previousGroup?.at || order.value?.orderDate || order.value?.entryDate;
   const startTime = timelineTime(baseline);
-  const eventTime = timelineTime(entry.at);
+  const eventTime = timelineTime(group.at);
 
   if (!startTime || !eventTime) return 'Time unavailable';
 
@@ -1628,13 +1871,28 @@ function timelineItemLabel(entry: OrderStatusChange) {
   if (!entry.itemSeqId || !order.value) return '';
 
   const item = order.value.items.find((orderItem) => orderItem.id === entry.itemSeqId);
-  if (!item) return `Item ${entry.itemSeqId}`;
+  return item?.name || `Item ${entry.itemSeqId}`;
+}
 
-  return [item.name || item.sku, item.sku && item.sku !== item.name ? item.sku : ''].filter(Boolean).join(' · ');
+function timelineRecordCountLabel(group: TimelineGroup) {
+  return `${group.entries.length} record${group.entries.length === 1 ? '' : 's'}`;
+}
+
+function timelineEntryTitle(entry: OrderStatusChange) {
+  return timelineItemLabel(entry) || (entry.itemSeqId ? `Item ${entry.itemSeqId}` : readableValue(entry.label) || entry.label);
+}
+
+function openTimelineGroup(group: TimelineGroup) {
+  selectedTimelineGroup.value = group;
+}
+
+function closeTimelineGroupModal() {
+  selectedTimelineGroup.value = undefined;
 }
 
 function readableValue(value?: string) {
   if (!value) return '';
+  if (!value.includes('_')) return value;
 
   return value
     .toLowerCase()
@@ -1660,76 +1918,56 @@ function yesNoValue(value?: string) {
 </script>
 
 <style scoped>
-.card-header-grid {
+ion-card-header {
   display: grid;
   grid-template-columns: 1fr auto;
   grid-template-areas: "title actions" "subtitle actions";
 }
 
-.card-header-grid ion-card-title {
+ion-card-header  ion-card-title {
   grid-area: title;
 }
 
-.card-header-grid ion-card-subtitle {
+ion-card-header  ion-card-subtitle {
   grid-area: subtitle;
 }
 
-.card-header-grid ion-note,
-.card-header-grid ion-button,
-.card-header-grid ion-buttons {
+ion-card-header  ion-note,
+ion-card-header  ion-button,
+ion-card-header  ion-buttons {
   grid-area: actions;
   align-self: center;
 }
 
-.order-detail-content::part(scroll) {
-  padding: 16px;
+.order-detail-header {
+  display: grid;
+  gap: var(--spacer-base);
+  grid-template-columns: 1fr 357px;
+  grid-template-rows: auto 1fr;
 }
 
-.order-detail-shell {
+.order-detail-header>ion-item {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.order-detail-header-details {
+  grid-row: 2;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-inline: auto;
-  max-width: 1280px;
-  padding-bottom: 24px;
+  flex-wrap: wrap;
+  justify-content: start;
 }
 
-.order-detail-header,
-.order-detail-header-details,
-.order-detail-secondary {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: 1fr;
-}
-
-.order-detail-shell ion-card {
-  margin: 0;
-}
-
-.order-detail-shell ion-card-content {
-  padding-inline: 0;
-}
-
-.order-detail-wide-card {
-  width: 100%;
-}
-
-.order-detail-wide-section {
-  display: grid;
-  gap: 16px;
+.order-detail-header-details ion-card {
+  flex: 1 1 300px;
+  max-width: 375px;
 }
 
 .order-detail-timeline {
-  align-self: start;
+  grid-column: 2;
+  grid-row: span 2;
 }
 
-.order-item-thumbnail {
-  --size: 56px;
-}
-
-.order-timeline ion-item {
-  --min-height: 72px;
-}
 
 @media (min-width: 900px) {
   .order-detail-header {
@@ -1742,9 +1980,6 @@ function yesNoValue(value?: string) {
     grid-template-columns: 1fr;
   }
 
-  .order-detail-secondary {
-    align-items: start;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+
 }
 </style>

@@ -48,6 +48,55 @@ describe('customer service', () => {
     });
   });
 
+  it('fetches a customer profile and merges createdStamp from the lookup DataDocument', async () => {
+    vi.mocked(api).mockImplementation(async (config: any) => {
+      if (config.url === 'oms/parties/CUST_1') {
+        return {
+          data: {
+            partyId: 'CUST_1',
+            partyTypeId: 'PERSON',
+            statusId: 'PARTY_ENABLED',
+            firstName: 'Swati',
+            lastName: 'Pandey',
+          }
+        };
+      }
+      if (config.url === 'oms/dataDocumentView' && config.data?.dataDocumentId === 'OrderManagerCustomerLookup') {
+        return {
+          data: {
+            entityValueList: [{
+              partyId: 'CUST_1',
+              createdStamp: 1779343184614,
+              lastUpdatedStamp: 1779443184614
+            }]
+          }
+        };
+      }
+      return { data: {} };
+    });
+
+    const customer = await getCustomer('CUST_1');
+
+    expect(api).toHaveBeenCalledWith({
+      url: 'oms/parties/CUST_1',
+      method: 'get',
+    });
+    expect(api).toHaveBeenCalledWith({
+      url: 'oms/dataDocumentView',
+      method: 'post',
+      data: expect.objectContaining({
+        dataDocumentId: 'OrderManagerCustomerLookup',
+        customParametersMap: {
+          partyId: 'CUST_1',
+          partyid: 'CUST_1'
+        }
+      })
+    });
+    expect(customer.createdStamp).toBe('1779343184614');
+    expect(customer.lastUpdatedStamp).toBe('1779443184614');
+  });
+
+
   it('fetches and groups customer contact mechs from the contact DataDocument', async () => {
     vi.mocked(api).mockResolvedValue({
       data: {

@@ -55,7 +55,7 @@ A user can log in via the standard accxui Login UI and the app holds their profi
 
 ## Done when
 
-- Logging in works against a real Hotwax instance.
+- Logging in works against a real HotWax instance.
 - Refreshing the browser keeps the session (cookies + Pinia persist).
 - Logging out clears everything.
 - Visiting any protected route while logged out redirects to `/login`.

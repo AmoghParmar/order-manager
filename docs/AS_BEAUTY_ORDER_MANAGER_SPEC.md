@@ -58,6 +58,27 @@ The existing app is mostly search/detail oriented. AS Beauty requires
 `order-manager` to become an action workspace for live operational exceptions,
 CSR tasks, order edits, returns, refunds, and financial visibility.
 
+### Order Detail Data Coverage
+
+The order detail store should retain every non-sensitive field already returned
+by `GET oms/orders/{orderId}` so the UI can surface customer, payment,
+fulfillment, and line-item context without extra calls. Do not persist raw
+payment security fields such as `securityCode` or `track2`; keep normalized,
+typed fields only.
+
+Known data gaps that require additional entity reads or DataDocuments:
+
+| Missing data | Entity/data source needed | Why it matters |
+| --- | --- | --- |
+| Item groups | `OrderItemGroup`, `OrderItemGroupMember` | Group bundle, kit, gift-with-purchase, and primary/component line context. |
+| Item associations | `OrderItemAssoc` | Replacement, related-line, exchange, kit, or split lineage between order items. |
+| Raw item entity details | `OrderItem` DataDocument or entity read | Fields beyond `OrderItemShipmentDetail`, including `orderItemGroupSeqId`, item type, promo flags, requested dates, comments, and price variants. |
+| Adjustments | `OrderAdjustment`, `OrderAdjustmentAttribute` | Order-level and line-level discounts, appeasements, tax/shipping adjustments, and explanation text. |
+| Rich order contacts | `OrderContactMech + ContactMech + PostalAddress + TelecomNumber` | Full bill-to/ship-to/contact purpose detail when the service payload is incomplete. |
+| Order content attachments | `OrderContent` plus content/data-resource joins if needed | Shopify/source docs, customer-visible artifacts, or attached operational evidence. |
+| Expanded payment trail | `OrderPaymentPreference` plus payment/gateway entities where available | Authorization, capture, presentment, and allocation context beyond summary status. |
+| Order terms | `OrderTerm` or equivalent term DataDocument if enabled | Payment/tax/shipping terms shown in legacy order detail. |
+
 ## Suite Ownership Boundaries
 
 ### Owned By Order Manager

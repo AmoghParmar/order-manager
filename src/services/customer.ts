@@ -145,12 +145,39 @@ export async function searchCustomers(params: CustomerSearchParams = {}): Promis
 }
 
 export async function getCustomer(partyId: string): Promise<Customer> {
-  const response = await api({
-    url: `oms/parties/${partyId}`,
-    method: 'get'
-  });
+  const [partyRes, lookupRes] = await Promise.all([
+    api({
+      url: `oms/parties/${partyId}`,
+      method: 'get'
+    }),
+    Promise.resolve(api({
+      url: 'oms/dataDocumentView',
+      method: 'post',
+      data: {
+        dataDocumentId: 'OrderManagerCustomerLookup',
+        format: 'json',
+        customParametersMap: {
+          partyId,
+          partyid: partyId
+        },
+        pageSize: 1,
+        pageIndex: 0
+      }
+    })).catch(() => null)
+  ]);
 
-  return normalizeCustomerDoc(response.data, partyId);
+  const doc = partyRes.data;
+
+  if (lookupRes && lookupRes.data) {
+    const lookupDocs = allDocs(lookupRes.data);
+    const lookupDoc = lookupDocs[0];
+    if (lookupDoc) {
+      doc.createdStamp = lookupDoc.createdStamp || lookupDoc.createdstamp;
+      doc.lastUpdatedStamp = lookupDoc.lastUpdatedStamp || lookupDoc.lastupdatedstamp;
+    }
+  }
+
+  return normalizeCustomerDoc(doc, partyId);
 }
 
 export async function getCustomerContactMechs(partyId: string): Promise<CustomerContactMechResult> {

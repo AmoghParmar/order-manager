@@ -318,7 +318,7 @@ export function normalizeOrderStatusDoc(doc: any) {
 
   return {
     id: toStringValue(doc.orderStatusId ?? `${statusId}-${doc.statusDatetime}`),
-    at: toStringValue(doc.statusDatetime),
+    at: toStringValue(doc.statusDatetime ?? doc.statusDateTime),
     label: statusId,
     detail: statusUserLogin ? `Updated by ${statusUserLogin}` : statusId
   };
@@ -367,9 +367,12 @@ export function normalizeReturnDoc(doc: any, fallbackId = ''): ReturnRecord {
     reason: toStringValue(doc.returnReasonId ?? doc.returnHeaderTypeId ?? doc.reason),
     requestedDate: toStringValue(doc.entryDate ?? doc.createdDate),
     receivedDate: toStringValue(doc.receivedDate) || undefined,
+    returnDate: toStringValue(doc.returnDate) || undefined,
     returnHeaderTypeId: toStringValue(doc.returnHeaderTypeId),
     fromPartyId: toStringValue(doc.fromPartyId),
     toPartyId: toStringValue(doc.toPartyId),
+    destinationFacilityId: toStringValue(doc.destinationFacilityId),
+    destinationFacilityName: toStringValue(doc.destinationFacilityName),
     entryDate: toStringValue(doc.entryDate),
     currencyUomId: toStringValue(doc.currencyUomId),
     createdBy: toStringValue(doc.createdBy),

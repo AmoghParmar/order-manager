@@ -1,5 +1,5 @@
 <template>
-  <ion-page>
+  <ion-page class="settings">
     <ion-header>
       <ion-toolbar>
         <ion-menu-button slot="start" />
@@ -54,7 +54,7 @@
             {{ translate("A store represents a company or a unique catalog of products. If your OMS is connected to multiple eCommerce stores selling different collections of products, you may have multiple Product Stores set up in HotWax Commerce.") }}
           </ion-card-content>
           <ion-item lines="none">
-            <ion-select :label="translate('Select store')" interface="popover" :value="currentProductStore.productStoreId" @ionChange="setCurrentProductStore($event)">
+            <ion-select :label="translate('Select store')" label-placement="stacked" interface="popover" :value="currentProductStore.productStoreId" @ionChange="setCurrentProductStore($event)">
               <ion-select-option v-for="store in productStores" :key="store.productStoreId" :value="store.productStoreId">
                 {{ store.storeName || store.productStoreId }}
               </ion-select-option>
@@ -62,8 +62,6 @@
           </ion-item>
         </ion-card>
       </section>
-
-      <hr />
 
       <div class="section-header">
         <div>

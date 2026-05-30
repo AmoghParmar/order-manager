@@ -199,12 +199,30 @@ function escapeSolrValue(value: string) {
 }
 
 export async function getOrder(orderId: string): Promise<Order> {
-  const response = await api({
-    url: `oms/orders/${orderId}`,
-    method: 'get'
-  });
+  const [detailRes, searchRes] = await Promise.all([
+    api({
+      url: `oms/orders/${orderId}`,
+      method: 'get'
+    }),
+    Promise.resolve(api({
+      url: 'oms/orders',
+      method: 'get',
+      params: {
+        orderId
+      }
+    })).catch(() => null)
+  ]);
 
-  return normalizeOrderDetail(response.data?.orderDetail ?? response.data);
+  const detail = detailRes.data?.orderDetail ?? detailRes.data;
+
+  if (searchRes && searchRes.data) {
+    const searchOrder = Array.isArray(searchRes.data) ? searchRes.data[0] : (searchRes.data.orderDetail ?? searchRes.data);
+    if (searchOrder && searchOrder.identifications) {
+      detail.identifications = searchOrder.identifications;
+    }
+  }
+
+  return normalizeOrderDetail(detail);
 }
 
 export async function getOrderStatusHistory(orderId: string): Promise<OrderStatusChange[]> {
@@ -263,17 +281,17 @@ export async function getOrderNotes(orderId: string): Promise<OrderNote[]> {
 
 export async function getOrderRoles(orderId: string): Promise<OrderRole[]> {
   const response = await api({
-    url: 'oms/dataDocumentView',
-    method: 'post',
-    data: buildRelatedDataDocumentPayload(
-      defaultDataDocuments.orderRoleLookup,
-      'orderId',
+    url: 'oms/orders',
+    method: 'get',
+    params: {
       orderId,
-      orderRoleLookupFields
-    )
+      dependentLevels: 1
+    }
   });
 
-  return allDocs(response.data).map(normalizeOrderRole);
+  const docs = responseList(response.data);
+  const orderDoc = docs[0] || {};
+  return responseList(orderDoc.roles).map(normalizeOrderRole);
 }
 
 export async function getOrderCommunicationEvents(orderId: string): Promise<CommunicationEvent[]> {
@@ -329,6 +347,9 @@ export async function getOrderReturns(orderId: string): Promise<ReturnRecord[]> 
       reason: toStringValue(doc.returnReasonId ?? doc.returnHeaderTypeId),
       requestedDate: toStringValue(doc.entryDate ?? doc.createdDate),
       receivedDate: toStringValue(doc.receivedDate) || undefined,
+      returnDate: toStringValue(doc.returnDate) || undefined,
+      destinationFacilityId: toStringValue(doc.destinationFacilityId),
+      destinationFacilityName: toStringValue(doc.destinationFacilityName),
       itemIds: toStringList(doc.orderItemSeqId ?? doc.returnItemSeqId),
       refundTotal: toNumberValue(doc.returnTotal ?? doc.grandTotal)
     })).filter((returnRecord) => returnRecord.id);
@@ -633,10 +654,21 @@ function normalizeOrderDetail(detail: any): Order {
   const contactInfo = normalizeContactInfo(detail);
   const orderId = toStringValue(detail.orderId ?? detail.hcOrderId);
   const customerName = [detail.customerFirstName, detail.customerLastName].map((value) => toStringValue(value)).filter(Boolean).join(' ');
+  const identifications = responseList(detail.identifications).map((ident: any) => ({
+    orderIdentificationTypeId: toStringValue(ident.orderIdentificationTypeId),
+    idValue: toStringValue(ident.idValue),
+    fromDate: toStringValue(ident.fromDate) || undefined,
+    thruDate: toStringValue(ident.thruDate) || undefined,
+    createdStamp: toStringValue(ident.createdStamp) || undefined,
+    lastUpdatedStamp: toStringValue(ident.lastUpdatedStamp) || undefined
+  }));
 
   return {
     id: orderId,
-    externalId: toStringValue(detail.orderName ?? detail.externalId ?? detail.orderExternalId, orderId),
+    externalId: toStringValue(detail.orderExternalId ?? detail.externalId ?? detail.orderName, orderId),
+    orderName: toStringValue(detail.orderName),
+    shopifyOrderId: toStringValue(detail.orderExternalId ?? detail.externalId),
+    identifications,
     orderDate: toStringValue(detail.orderDate ?? detail.orderEntryDate),
     status: toStringValue(detail.orderStatusId ?? detail.statusId ?? detail.orderStatusDesc, 'Created'),
     customerId: selectCustomerIdFromRoles(responseList(detail.roles)) || toStringValue(detail.partyId ?? detail.customerPartyId),
@@ -666,6 +698,8 @@ function normalizeOrderDetail(detail: any): Order {
 }
 
 function normalizeShipGroup(shipGroup: any) {
+  const pickerName = [shipGroup.pickerFirstName, shipGroup.pickerLastName].map((value) => toStringValue(value)).filter(Boolean).join(' ');
+
   return {
     id: toStringValue(shipGroup.shipGroupSeqId),
     shipmentId: toStringValue(shipGroup.shipmentId),
@@ -673,9 +707,26 @@ function normalizeShipGroup(shipGroup: any) {
     method: toStringValue(shipGroup.shipmentMethodTypeDesc ?? shipGroup.shipmentMethodTypeId),
     status: toStringValue(shipGroup.shipmentStatusId ?? shipGroup.statusId),
     trackingCode: toStringValue(shipGroup.trackingCode ?? shipGroup.trackingIdNumber),
+    trackingNumber: toStringValue(shipGroup.trackingNumber),
     carrier: toStringValue(shipGroup.carrierPartyId),
+    carrierRoleTypeId: toStringValue(shipGroup.carrierRoleTypeId),
+    carrierService: toStringValue(shipGroup.carrierService),
+    carrierAccountNumber: toStringValue(shipGroup.carrierAccountNumber),
     facilityId: toStringValue(shipGroup.facilityId),
     facilityName: toStringValue(shipGroup.facilityName),
+    facilityTypeId: toStringValue(shipGroup.facilityTypeId),
+    facilityTypeDescription: toStringValue(shipGroup.facilityTypeDescription ?? shipGroup.facilityTypeDesc),
+    parentFacilityTypeId: toStringValue(shipGroup.parentFacilityTypeId),
+    picklistId: toStringValue(shipGroup.picklistId),
+    picklistDate: toStringValue(shipGroup.picklistDate),
+    pickerId: toStringValue(shipGroup.pickerId),
+    pickerName: pickerName || toStringValue(shipGroup.pickerGroupName),
+    pickerFirstName: toStringValue(shipGroup.pickerFirstName),
+    pickerLastName: toStringValue(shipGroup.pickerLastName),
+    pickerGroupName: toStringValue(shipGroup.pickerGroupName),
+    orderFacilityId: toStringValue(shipGroup.orderFacilityId),
+    supplierPartyId: toStringValue(shipGroup.supplierPartyId),
+    vendorPartyId: toStringValue(shipGroup.vendorPartyId),
     shippingInstructions: toStringValue(shipGroup.shippingInstructions),
     giftMessage: toStringValue(shipGroup.giftMessage),
     maySplit: toStringValue(shipGroup.maySplit),
@@ -690,19 +741,48 @@ function normalizeShipGroup(shipGroup: any) {
 }
 
 function normalizeOrderDetailItem(item: any, shipGroup?: ReturnType<typeof normalizeShipGroup>): OrderItem {
+  const facilityId = toStringValue(item.facilityId ?? shipGroup?.facilityId);
+  const facilityName = toStringValue(item.facilityName ?? shipGroup?.facilityName);
+
   return {
     id: toStringValue(item.orderItemSeqId),
     sku: toStringValue(item.productId),
     name: toStringValue(item.internalName ?? item.itemDescription ?? item.productName ?? item.productId),
     quantity: toNumberValue(item.quantity),
+    itemQuantity: toNumberValue(item.itemQuantity ?? item.quantity),
     shippedQuantity: toNumberValue(item.shippedQuantity, 0),
     cancelledQuantity: toNumberValue(item.cancelQuantity ?? item.cancelledQuantity, 0),
     returnedQuantity: toNumberValue(item.returnedQuantity, 0),
     status: toStringValue(item.itemStatusId ?? item.statusId ?? item.status),
-    facility: toStringValue(item.facilityName ?? item.facilityId ?? shipGroup?.facilityName ?? shipGroup?.facilityId),
+    facility: toStringValue(facilityName || facilityId),
+    facilityId,
+    facilityName,
+    facilityExternalId: toStringValue(item.facilityExternalId),
+    externalId: toStringValue(item.orderItemExternalId ?? item.externalId),
+    productTypeId: toStringValue(item.productTypeId),
+    orderItemTypeId: toStringValue(item.orderItemTypeId),
     unitPrice: toNumberValue(item.unitPrice),
+    unitListPrice: toOptionalNumberValue(item.unitListPrice),
+    unitAverageCost: toOptionalNumberValue(item.unitAverageCost),
+    unitRecurringPrice: toOptionalNumberValue(item.unitRecurringPrice),
     adjustments: toNumberValue(item.adjustments ?? item.adjustmentAmount, 0),
     shipGroupSeqId: toStringValue(item.shipGroupSeqId ?? shipGroup?.id),
+    orderItemGroupSeqId: toStringValue(item.orderItemGroupSeqId),
+    isItemGroupPrimary: toBooleanFlag(item.isItemGroupPrimary),
+    isPromo: toBooleanFlag(item.isPromo),
+    isDigital: toBooleanFlag(item.isDigital),
+    isPhysical: toBooleanFlag(item.isPhysical),
+    maySplit: toStringValue(item.maySplit),
+    slaShipmentMethodTypeId: toStringValue(item.slaShipmentMethodTypeId),
+    statusDatetime: toStringValue(item.statusDatetime),
+    estimatedShipDate: toStringValue(item.estimatedShipDate),
+    estimatedDeliveryDate: toStringValue(item.estimatedDeliveryDate),
+    requestedDeliveryDate: toStringValue(item.requestedDeliveryDate),
+    requestedDeliveryTime: toStringValue(item.requestedDeliveryTime),
+    shipAfterDate: toStringValue(item.shipAfterDate),
+    shipBeforeDate: toStringValue(item.shipBeforeDate),
+    productStoreId: toStringValue(item.productStoreId),
+    comments: toStringValue(item.comments),
     imageUrl: toStringValue(item.mainImageUrl ?? item.mediumImageUrl ?? item.smallImageUrl ?? item.productImageUrl ?? item.imageUrl)
   };
 }
@@ -710,11 +790,30 @@ function normalizeOrderDetailItem(item: any, shipGroup?: ReturnType<typeof norma
 function normalizePaymentPreference(payment: any): PaymentPreference {
   return {
     id: toStringValue(payment.orderPaymentPreferenceId ?? payment.paymentPreferenceId),
-    method: toStringValue(payment.paymentMethodTypeId ?? payment.paymentMethodTypeDesc ?? payment.paymentMethodId),
+    method: toStringValue(payment.paymentMethodTypeDesc ?? payment.paymentMethodTypeId ?? payment.paymentMethodId),
     status: toStringValue(payment.statusId ?? payment.paymentStatusId ?? payment.status),
     amount: toNumberValue(payment.maxAmount ?? payment.amount ?? payment.paymentAmount),
     gatewayResponse: toStringValue(payment.gatewayResponse ?? payment.gatewayCode),
-    capturedAt: toStringValue(payment.captureDate ?? payment.capturedDate ?? payment.paymentDate ?? payment.effectiveDate ?? payment.statusDatetime ?? payment.createdDate)
+    capturedAt: toStringValue(payment.captureDate ?? payment.capturedDate ?? payment.paymentDate ?? payment.effectiveDate ?? payment.statusDatetime ?? payment.createdDate),
+    orderItemSeqId: toStringValue(payment.orderItemSeqId),
+    shipGroupSeqId: toStringValue(payment.shipGroupSeqId),
+    paymentMethodId: toStringValue(payment.paymentMethodId),
+    paymentMethodTypeId: toStringValue(payment.paymentMethodTypeId),
+    paymentMethodTypeDesc: toStringValue(payment.paymentMethodTypeDesc),
+    statusDesc: toStringValue(payment.statusDesc),
+    presentmentAmount: toOptionalNumberValue(payment.presentmentAmount),
+    presentmentCurrencyUom: toStringValue(payment.presentmentCurrencyUom),
+    manualAuthCode: toStringValue(payment.manualAuthCode),
+    manualRefNum: toStringValue(payment.manualRefNum),
+    parentRefNum: toStringValue(payment.parentRefNum),
+    billingPostalCode: toStringValue(payment.billingPostalCode),
+    createdDate: toStringValue(payment.createdDate),
+    createdByUserLogin: toStringValue(payment.createdByUserLogin),
+    lastModifiedDate: toStringValue(payment.lastModifiedDate),
+    lastModifiedByUserLogin: toStringValue(payment.lastModifiedByUserLogin),
+    requestId: toStringValue(payment.requestId),
+    paymentMode: toStringValue(payment.paymentMode),
+    processAttempt: toOptionalNumberValue(payment.processAttempt)
   };
 }
 
@@ -731,14 +830,17 @@ function normalizeOrderRole(role: any): OrderRole {
   return {
     partyId: toStringValue(role.partyId),
     roleTypeId: toStringValue(role.roleTypeId),
-    name: toStringValue(role.partyName) || [role.firstName, role.lastName].map((value) => toStringValue(value)).filter(Boolean).join(' ')
+    name: toStringValue(role.partyName) || [role.firstName, role.lastName].map((value) => toStringValue(value)).filter(Boolean).join(' '),
+    fromDate: toStringValue(role.fromDate) || undefined,
+    thruDate: toStringValue(role.thruDate) || undefined
   };
 }
 
 function normalizeOrderAttribute(attribute: any): OrderAttribute {
   return {
     name: toStringValue(attribute.attrName ?? attribute.attributeName ?? attribute.name),
-    value: toStringValue(attribute.attrValue ?? attribute.attributeValue ?? attribute.value)
+    value: toStringValue(attribute.attrValue ?? attribute.attributeValue ?? attribute.value),
+    description: toStringValue(attribute.attrDescription ?? attribute.description) || undefined
   };
 }
 
@@ -779,9 +881,17 @@ function normalizeCommunicationEvent(event: any): CommunicationEvent {
 }
 
 function normalizeStatusChange(status: any): OrderStatusChange {
+  const normalizedStatus = normalizeOrderStatusDoc(status);
+  const changeReason = toStringValue(status.changeReason);
+
   return {
-    ...normalizeOrderStatusDoc(status),
-    itemSeqId: toStringValue(status.orderItemSeqId) || undefined
+    ...normalizedStatus,
+    at: toStringValue(status.statusDatetime ?? status.statusDateTime, normalizedStatus.at),
+    detail: changeReason || normalizedStatus.detail,
+    itemSeqId: toStringValue(status.orderItemSeqId) || undefined,
+    paymentPreferenceId: toStringValue(status.orderPaymentPreferenceId) || undefined,
+    changeReason: changeReason || undefined,
+    changeReasonEnumId: toStringValue(status.changeReasonEnumId) || undefined
   };
 }
 
@@ -795,18 +905,16 @@ function normalizeNote(note: any): OrderNote {
 }
 
 function normalizeContactInfo(detail: any): Address[] {
-  return responseList(detail.contactMechs ?? detail.contactInfo ?? detail.addresses).map((contact: any) => ({
-    label: toStringValue(contact.contactMechPurposeTypeId ?? contact.purpose ?? contact.label, 'Contact'),
-    lines: [
-      contact.infoString,
-      contact.emailAddress,
-      contact.contactNumber,
-      contact.address1,
-      contact.address2,
-      [contact.city, contact.stateProvinceGeoId, contact.postalCode].map((value) => toStringValue(value)).filter(Boolean).join(', '),
-      contact.countryGeoId
-    ].map((value) => toStringValue(value)).filter(Boolean)
-  })).filter((address) => address.lines.length);
+  return [
+    contactAddress('Billing address', detail.billingAddress),
+    contactAddress('Shipping address', detail.shippingAddress),
+    contactEmail('Billing email', detail.billingEmail),
+    contactEmail('Shipping email', detail.shippingEmail),
+    contactEmail('Order email', detail.orderEmail ?? detail.emailAddress),
+    contactPhone('Billing phone', detail.billingPhone),
+    contactPhone('Shipping phone', detail.shippingPhone),
+    ...responseList(detail.contactMechs ?? detail.contactInfo ?? detail.addresses).map(normalizeContactMech)
+  ].filter((address): address is Address => Boolean(address?.lines.length));
 }
 
 function customerContactInfo(customerName: string, detail: any): Address[] {
@@ -817,6 +925,98 @@ function customerContactInfo(customerName: string, detail: any): Address[] {
   ].map((value) => toStringValue(value)).filter(Boolean);
 
   return lines.length ? [{ label: 'Customer', lines }] : [];
+}
+
+function normalizeContactMech(contact: any): Address {
+  const contactMech = contact.contactMech ?? {};
+  const postalAddress = contact.postalAddress ?? contact.PostalAddress ?? contactMech.postalAddress ?? contactMech.PostalAddress ?? contact;
+  const telecomNumber = contact.telecomNumber ?? contact.TelecomNumber ?? contactMech.telecomNumber ?? contactMech.TelecomNumber ?? contact;
+  const infoString = toStringValue(contact.infoString ?? contact.emailAddress ?? contactMech.infoString);
+  const phoneLine = phoneNumberLine(telecomNumber);
+  const postalLines = postalAddressLines(postalAddress);
+  const lines = [infoString, phoneLine, ...postalLines].filter(Boolean);
+
+  return {
+    label: toStringValue(contact.contactMechPurposeTypeId ?? contact.purpose ?? contact.label, 'Contact'),
+    contactMechId: toStringValue(contact.contactMechId ?? contactMech.contactMechId) || undefined,
+    contactMechTypeId: toStringValue(contact.contactMechTypeId ?? contactMech.contactMechTypeId) || undefined,
+    contactMechPurposeTypeId: toStringValue(contact.contactMechPurposeTypeId) || undefined,
+    lines
+  };
+}
+
+function contactAddress(label: string, address: any): Address | undefined {
+  const lines = postalAddressLines(address);
+  if (!lines.length) return undefined;
+
+  return {
+    label,
+    contactMechId: toStringValue(address?.contactMechId) || undefined,
+    contactMechTypeId: 'POSTAL_ADDRESS',
+    lines
+  };
+}
+
+function contactEmail(label: string, email: any): Address | undefined {
+  const value = toStringValue(email?.infoString ?? email?.emailAddress ?? email);
+  if (!value) return undefined;
+
+  return {
+    label,
+    contactMechId: toStringValue(email?.contactMechId) || undefined,
+    contactMechTypeId: 'EMAIL_ADDRESS',
+    lines: [value]
+  };
+}
+
+function contactPhone(label: string, phone: any): Address | undefined {
+  const value = phoneNumberLine(phone);
+  if (!value) return undefined;
+
+  return {
+    label,
+    contactMechId: toStringValue(phone?.contactMechId) || undefined,
+    contactMechTypeId: 'TELECOM_NUMBER',
+    lines: [value]
+  };
+}
+
+function postalAddressLines(address: any) {
+  if (!address) return [];
+
+  return [
+    address.toName,
+    address.attnName,
+    address.address1,
+    address.address2,
+    [address.city, address.stateProvinceGeoId, address.postalCode].map((value) => toStringValue(value)).filter(Boolean).join(', '),
+    address.countryGeoId
+  ].map((value) => toStringValue(value)).filter(Boolean);
+}
+
+function phoneNumberLine(phone: any) {
+  if (!phone) return '';
+  if (typeof phone === 'string' || typeof phone === 'number') return toStringValue(phone);
+
+  const contactNumber = toStringValue(phone.contactNumber ?? phone.phoneNumber ?? phone.infoString);
+  if (!contactNumber) return '';
+
+  return [phone.countryCode, phone.areaCode, contactNumber].map((value) => toStringValue(value)).filter(Boolean).join(' ');
+}
+
+function toBooleanFlag(value: any): boolean | undefined {
+  const flag = toStringValue(value).toUpperCase();
+  if (flag === 'Y' || flag === 'TRUE') return true;
+  if (flag === 'N' || flag === 'FALSE') return false;
+  return undefined;
+}
+
+function toOptionalNumberValue(value: any): number | undefined {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (candidate === undefined || candidate === null || candidate === '') return undefined;
+
+  const parsed = Number(candidate);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function responseList(data: any) {
