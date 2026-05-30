@@ -99,7 +99,7 @@ describe('order detail actions', () => {
   it('renders a dedicated timeline and keeps activity out of notes', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/views/OrderDetail.vue'), 'utf8');
 
-    expect(source).toContain('Order timeline');
+    expect(source).toContain('<h2>Timeline</h2>');
     expect(source).toContain('orderTimeline');
     expect(source).toContain('orderTimelineGroups');
     expect(source).toContain('timelineMinute(entry.at)');
@@ -110,7 +110,7 @@ describe('order detail actions', () => {
     expect(source).toContain('selectedTimelineEntries');
     expect(source).toContain('timelineEntryTitle(entry)');
     expect(source).not.toContain('v-for="itemLabel in timelineGroupItemLabels(group)"');
-    expect(source.match(/statusBadgeColor\(order.status\)/g)).toHaveLength(2);
+    expect(source.match(/statusBadgeColor\(order.status\)/g)).toHaveLength(1);
     expect(source).not.toContain('<ion-label>Activity</ion-label>');
     expect(source).not.toContain('<h2>Service context</h2>');
   });
