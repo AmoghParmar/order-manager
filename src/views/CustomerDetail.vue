@@ -36,17 +36,20 @@
                 <ion-card-title>Contact</ion-card-title>
               </ion-card-header>
               <ion-list lines="full">
-                <ion-item v-for="section in contactSections" :key="section.key" class="contact-section" lines="none">
-                  <ion-label color="medium">{{ section.label }}</ion-label>
-                  <ion-button slot="end" fill="clear" size="small">
-                    Add
-                    <ion-icon slot="end" :icon="addCircleOutline" />
-                  </ion-button>
-                </ion-item>
-                <template v-for="section in contactSections" :key="`${section.key}-values`">
-                  <ion-item v-for="(value, idx) in section.values" :key="`${section.key}-${idx}`">
-                    <ion-label>{{ value }}</ion-label>
-                    <ion-note slot="end">note</ion-note>
+                <template v-for="section in contactSections" :key="section.key">
+                  <ion-item class="contact-section" lines="none">
+                    <ion-label color="medium">{{ section.label }}</ion-label>
+                    <ion-button slot="end" fill="clear" size="small">
+                      Add
+                      <ion-icon slot="end" :icon="addCircleOutline" />
+                    </ion-button>
+                  </ion-item>
+                  <ion-item v-for="value in section.values" :key="value.contactMechId">
+                    <ion-label>{{ value.display }}</ion-label>
+                    <ion-note slot="end">{{ seed.describe(value.contactMechPurposeTypeId) }}</ion-note>
+                  </ion-item>
+                  <ion-item v-if="!section.values.length" lines="none">
+                    <ion-label color="medium"><em>None on file</em></ion-label>
                   </ion-item>
                 </template>
               </ion-list>
@@ -59,13 +62,18 @@
                   <ion-card-title>Relationships</ion-card-title>
                 </ion-card-header>
                 <ion-list lines="none">
-                  <ion-item>
+                  <ion-item v-for="relationship in personalRelationships" :key="relationship.key">
                     <ion-label>
-                      <p class="overline">Party ID</p>
-                      <h3>Person name</h3>
-                      <p>relationshipTypeDesc</p>
+                      <p class="overline">{{ relationship.relationshipName }}</p>
+                      <h3>{{ relationship.relatedPartyName }}</h3>
+                      <p>{{ relationship.relatedPartyId }}</p>
                     </ion-label>
-                    <ion-button slot="end" fill="outline" size="small">Expire</ion-button>
+                    <ion-button slot="end" fill="outline" size="small" :disabled="!relationship.active" @click="onExpireRelationship(relationship)">
+                      {{ relationship.active ? 'Expire' : 'Expired' }}
+                    </ion-button>
+                  </ion-item>
+                  <ion-item v-if="!personalRelationships.length" lines="none">
+                    <ion-label color="medium"><em>No relationships on file</em></ion-label>
                   </ion-item>
                 </ion-list>
                 <div class="card-actions">
@@ -79,12 +87,18 @@
                 <ion-card-header>
                   <ion-card-title>Merged contacts</ion-card-title>
                 </ion-card-header>
-                <ion-radio-group value="merged-1">
+                <ion-radio-group :value="mergedSelectedKey">
                   <ion-list lines="none">
-                    <ion-item>
-                      <ion-radio slot="start" value="merged-1" />
-                      <ion-label>Item</ion-label>
-                      <ion-note slot="end">note</ion-note>
+                    <ion-item v-for="duplicate in duplicateRelationships" :key="duplicate.key">
+                      <ion-radio slot="start" :value="duplicate.key" />
+                      <ion-label>
+                        {{ duplicate.isCanonical ? duplicate.duplicatePartyName : duplicate.canonicalPartyName }}
+                        <p>{{ duplicate.isCanonical ? 'Duplicate of this record' : 'Canonical record' }}</p>
+                      </ion-label>
+                      <ion-note slot="end">{{ duplicate.active ? '' : 'expired' }}</ion-note>
+                    </ion-item>
+                    <ion-item v-if="!duplicateRelationships.length" lines="none">
+                      <ion-label color="medium"><em>No merged contacts</em></ion-label>
                     </ion-item>
                   </ion-list>
                 </ion-radio-group>
@@ -104,9 +118,14 @@
               <ion-label>Timeline</ion-label>
               <ion-note>{{ createdAtLabel }}</ion-note>
             </ion-list-header>
-            <ion-item lines="full">
+            <ion-item v-for="event in timeline" :key="event.id" lines="full">
               <ion-icon slot="start" :icon="pricetagOutline" color="medium" />
-              <ion-label>Created by {{ customer.id || '<partyId>' }}</ion-label>
+              <ion-label>{{ event.label }}</ion-label>
+              <ion-icon slot="end" :icon="informationCircleOutline" color="medium" />
+            </ion-item>
+            <ion-item v-if="!timeline.length" lines="full">
+              <ion-icon slot="start" :icon="pricetagOutline" color="medium" />
+              <ion-label>Created by {{ customer.id }}</ion-label>
               <ion-icon slot="end" :icon="informationCircleOutline" color="medium" />
             </ion-item>
           </ion-list>
@@ -137,92 +156,62 @@
 
       <!-- ===== Dashboard ===== -->
       <div v-if="selectedSegment === 'dashboard'">
-        <!-- Open tasks -->
+        <!-- Open tasks (placeholder until GET /oms/parties/{partyId}/tasks lands) -->
         <div class="section-header">
           <h2>Open tasks</h2>
           <ion-button fill="outline" size="small">View all</ion-button>
         </div>
 
-        <ion-card class="task-card">
+        <ion-card v-for="task in openTasks" :key="task.workEffortId" class="task-card">
           <ion-item lines="full">
             <ion-checkbox slot="start" />
             <ion-label>
-              <h2>Order name</h2>
-              <p>orderHeader.orderDate</p>
+              <h2>{{ task.orderName || task.orderId || task.workEffortName }}</h2>
+              <p v-if="task.orderDate">{{ formatLongDate(task.orderDate) }}</p>
             </ion-label>
-            <ion-chip slot="end" outline>
-              workEffort.id
-              <ion-icon :icon="copyOutline" />
-            </ion-chip>
-            <ion-note slot="end">$orderHeader.total</ion-note>
+            <ion-chip slot="end" outline>{{ task.workEffortId }}</ion-chip>
+            <ion-note v-if="task.orderTotal != null" slot="end">{{ money(task.orderTotal) }}</ion-note>
           </ion-item>
-
-          <div class="task-contact">
-            <ion-item lines="none">
-              <ion-icon slot="start" :icon="personOutline" color="medium" />
-              <ion-label>Full name</ion-label>
-              <ion-button slot="end" fill="clear" size="small">
-                Copy
-                <ion-icon slot="end" :icon="copyOutline" />
-              </ion-button>
-            </ion-item>
-            <ion-item lines="none">
-              <ion-icon slot="start" :icon="callOutline" color="medium" />
-              <ion-label>413-230-3505</ion-label>
-              <ion-button slot="end" fill="clear" size="small">
-                Copy
-                <ion-icon slot="end" :icon="copyOutline" />
-              </ion-button>
-            </ion-item>
-            <ion-item lines="none">
-              <ion-icon slot="start" :icon="mailOutline" color="medium" />
-              <ion-label>email@example.com</ion-label>
-              <ion-button slot="end" fill="clear" size="small">
-                Copy
-                <ion-icon slot="end" :icon="copyOutline" />
-              </ion-button>
-            </ion-item>
-          </div>
 
           <div class="task-grid">
             <div>
               <p class="overline">Task</p>
-              <h3>workEffort.name</h3>
-              <p>workEffort.purposeType</p>
-              <p class="muted">Due workEffort.dueDate</p>
+              <h3>{{ task.workEffortName }}</h3>
+              <p>{{ seed.describe(task.purposeTypeId || task.workEffortTypeId) }}</p>
+              <p class="muted" v-if="task.dueDate">Due {{ formatLongDate(task.dueDate) }}</p>
             </div>
             <div>
               <p class="overline">Assignee</p>
-              <h3>assignee party person name</h3>
-              <p class="muted">assigned date time</p>
-              <ion-button fill="outline" size="small">Assign</ion-button>
-            </div>
-            <div>
-              <p class="overline">Resolution comment</p>
-              <p>Response</p>
-              <p>Response</p>
-              <p>Response</p>
-            </div>
-          </div>
-
-          <div class="task-grid">
-            <div>
-              <p class="overline">Notes</p>
-              <p>workEffort.notes</p>
+              <h3>{{ task.assignee?.name || 'Unassigned' }}</h3>
+              <p class="muted" v-if="task.assignee?.fromDate">{{ formatLongDate(task.assignee.fromDate) }}</p>
             </div>
             <div>
               <p class="overline">Reporter</p>
-              <p>reporter party person name</p>
+              <h3>{{ task.reporter?.name || '—' }}</h3>
+            </div>
+          </div>
+
+          <div class="task-grid" v-if="task.notes">
+            <div>
+              <p class="overline">Notes</p>
+              <p>{{ task.notes }}</p>
             </div>
           </div>
 
           <div class="card-actions">
             <ion-button fill="clear" size="small">Resolve task</ion-button>
-            <ion-button fill="clear" size="small">View order</ion-button>
+            <ion-button v-if="task.orderId" fill="clear" size="small" :router-link="`/orders/${task.orderId}`">
+              View order
+            </ion-button>
           </div>
         </ion-card>
+        <EmptyState
+          v-if="tasksStatus === 'loaded' && !openTasks.length"
+          title="No open tasks"
+          message="This customer has no open tasks."
+        />
 
-        <!-- Recent orders -->
+        <!-- Recent orders (real when present, placeholder until the Solr orders query lands) -->
         <div class="section-header">
           <h2>Recent orders</h2>
           <ion-button fill="outline" size="small">View all</ion-button>
@@ -232,8 +221,8 @@
           <ion-searchbar placeholder="Search" />
         </div>
 
-        <div class="recent-orders-grid">
-          <ion-card v-for="(order, index) in recentOrders" :key="order.id || `placeholder-${index}`">
+        <div v-if="recentOrders.length" class="recent-orders-grid">
+          <ion-card v-for="order in recentOrders" :key="order.id">
             <ion-item lines="full">
               <ion-label>
                 <h2>{{ order.name }}</h2>
@@ -250,7 +239,6 @@
                 <p class="overline">Order date</p>
                 {{ order.orderDate }}
               </ion-label>
-              <ion-note slot="end">note</ion-note>
             </ion-item>
 
             <ion-list lines="none">
@@ -280,6 +268,11 @@
             </div>
           </ion-card>
         </div>
+        <EmptyState
+          v-else-if="ordersStatus === 'loaded'"
+          title="No recent orders"
+          message="This customer has no orders on file."
+        />
       </div>
 
       <!-- ===== Other segments (placeholder) ===== -->
@@ -346,19 +339,15 @@ import {
   IonTitle,
   IonToolbar
 } from '@ionic/vue';
-import { storeToRefs } from 'pinia';
 import { DateTime } from 'luxon';
 import {
   addCircleOutline,
-  callOutline,
   chevronUp,
-  copyOutline,
   informationCircleOutline,
-  mailOutline,
-  personOutline,
   pricetagOutline
 } from 'ionicons/icons';
-import { useCustomerStore } from '@/store/customer';
+import { useCustomerDetail } from '@/composables/useCustomerDetail';
+import { useSeedStore } from '@/store/seed';
 import EmptyState from '@/components/EmptyState.vue';
 import ErrorState from '@/components/ErrorState.vue';
 
@@ -366,84 +355,52 @@ const props = defineProps<{
   customerId: string;
 }>();
 
-const customerStore = useCustomerStore();
-const { fetchStatus, errors } = storeToRefs(customerStore);
-
 const selectedSegment = ref('dashboard');
+const seed = useSeedStore();
 
-const loading = computed(() => fetchStatus.value.detail === 'pending');
-const error = computed(() => errors.value.detail || '');
-const customer = computed(() => customerStore.getCustomer(props.customerId) || null);
+const {
+  customer,
+  loading,
+  error,
+  contactSections,
+  personalRelationships,
+  duplicateRelationships,
+  timeline,
+  recentOrders: recentOrdersSource,
+  openTasks,
+  ordersStatus,
+  tasksStatus,
+  lifetimeValue: lifetimeValueRaw,
+  lifetimeCurrency,
+  customerSince: customerSinceRaw,
+  load,
+  expireRelationship
+} = useCustomerDetail(() => props.customerId);
 
-const customerSince = computed(() => formatMonthYear(customer.value?.createdStamp));
-const createdAtLabel = computed(() => formatTimestamp(customer.value?.createdStamp));
-const lifetimeValue = computed(() =>
-  customer.value?.lifetimeValue ? money(customer.value.lifetimeValue) : '$0.00'
+const customerSince = computed(() => formatMonthYear(customerSinceRaw.value));
+const createdAtLabel = computed(() => (timeline.value[0]?.at ? formatTimestamp(timeline.value[0].at) : ''));
+const lifetimeValue = computed(() => money(lifetimeValueRaw.value, lifetimeCurrency.value));
+const mergedSelectedKey = computed(() => {
+  const canonical = duplicateRelationships.value.find((duplicate) => duplicate.isCanonical);
+  return canonical?.key || duplicateRelationships.value[0]?.key || '';
+});
+
+// Recent orders: live customer orders from Solr (docType:ORDER, customerPartyId).
+const recentOrders = computed(() =>
+  recentOrdersSource.value.slice(0, 12).map((order) => ({
+    id: order.orderId,
+    name: order.orderName || order.orderId,
+    subtitle: `${order.itemCount} ${order.itemCount === 1 ? 'item' : 'items'} · ${order.unitCount} ${order.unitCount === 1 ? 'unit' : 'units'}`,
+    progressLabel: order.progressLabel || order.statusDesc || 'In progress',
+    progressValue: order.progressValue ?? 0.5,
+    orderDate: formatLongDate(order.orderDate),
+    items: (order.items || []).map((item) => ({
+      name: item.name || item.sku || 'Item',
+      secondary: item.sku || '',
+      imageUrl: item.imageUrl || ''
+    }))
+  }))
 );
-
-// Contact mechs grouped into the Email / Phone / Address sections the design shows.
-// Each section falls back to a single "Item" placeholder row when empty so the
-// template still reads like the mockup before real data lands.
-const contactSections = computed(() => {
-  const cust = customer.value;
-  const toValues = (mechs?: Array<{ infoString?: string }>) =>
-    (mechs || []).map((mech) => mech.infoString).filter(Boolean) as string[];
-  const addressValues = (cust?.postalAddresses || [])
-    .map((mech) => {
-      const address = mech.postalAddress;
-      if (!address) return mech.infoString;
-      return [address.address1, address.city, address.stateProvinceGeoId, address.postalCode]
-        .filter(Boolean)
-        .join(', ');
-    })
-    .filter(Boolean) as string[];
-
-  return [
-    { key: 'email', label: 'Email', values: withPlaceholder(toValues(cust?.emails)) },
-    { key: 'phone', label: 'Phone', values: withPlaceholder(toValues(cust?.phones)) },
-    { key: 'address', label: 'Address', values: withPlaceholder(addressValues) }
-  ];
-});
-
-// Recent orders: real customer orders when present, otherwise three placeholder
-// cards matching the mockup so the section never renders empty.
-const recentOrders = computed(() => {
-  const orders = customerStore.getCustomerOrders(props.customerId) || [];
-
-  if (!orders.length) {
-    return Array.from({ length: 3 }).map(() => ({
-      id: '',
-      name: 'Order name',
-      subtitle: '3 items · 5 units',
-      progressLabel: '80% Complete',
-      progressValue: 0.8,
-      orderDate: 'May 30, 2026',
-      items: Array.from({ length: 3 }).map(() => ({
-        name: 'primary identifier',
-        secondary: 'secondary identifier',
-        imageUrl: ''
-      }))
-    }));
-  }
-
-  return orders.map((order: any) => {
-    const items = order.items || [];
-    const units = items.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0);
-    return {
-      id: order.id,
-      name: order.orderName || order.externalId || order.id,
-      subtitle: `${items.length} ${items.length === 1 ? 'item' : 'items'} · ${units} ${units === 1 ? 'unit' : 'units'}`,
-      progressLabel: order.status || 'In progress',
-      progressValue: 0.5,
-      orderDate: formatLongDate(order.orderDate),
-      items: items.slice(0, 3).map((item: any) => ({
-        name: item.name || item.sku || 'Item',
-        secondary: item.sku || '',
-        imageUrl: item.imageUrl || ''
-      }))
-    };
-  });
-});
 
 const segmentLabel = computed(() => {
   const labels: Record<string, string> = {
@@ -456,21 +413,12 @@ const segmentLabel = computed(() => {
   return labels[selectedSegment.value] || 'Dashboard';
 });
 
-onMounted(() => loadCustomer(props.customerId));
-watch(() => props.customerId, (customerId) => loadCustomer(customerId));
-
-async function loadCustomer(customerId: string) {
-  if (!customerId) return;
-  try {
-    await customerStore.loadCustomer(customerId);
-  } catch {
-    // error surfaced via store errors.detail -> ErrorState
-  }
+async function onExpireRelationship(relationship: { keyFields: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string } }) {
+  await expireRelationship(relationship.keyFields, DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss.SSS'));
 }
 
-function withPlaceholder(values: string[]): string[] {
-  return values.length ? values : ['Item'];
-}
+onMounted(() => load());
+watch(() => props.customerId, () => load());
 
 function money(value: number, currency = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(Number(value || 0));

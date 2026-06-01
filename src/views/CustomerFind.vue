@@ -41,7 +41,7 @@
         >
           <ion-label>
             <h2>{{ customer.name || customer.id }}</h2>
-            <p>{{ customer.id }} · {{ customer.email || customer.phone || 'No contact on file' }}</p>
+            <p>{{ customer.id }}<template v-if="customer.email || customer.phone"> · {{ customer.email || customer.phone }}</template></p>
           </ion-label>
           <ion-note slot="end">{{ customer.partyTypeId === 'PARTY_GROUP' ? 'Company' : 'Person' }}</ion-note>
         </ion-item>
