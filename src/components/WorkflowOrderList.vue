@@ -148,6 +148,7 @@ import { useCustomerServiceStore, BULK_ACTIONS } from '@/store/customerService';
 import type { BulkActionDefinition, WorkflowBucket, WorkflowOrder } from '@/types/customerService';
 import EmptyState from '@/components/EmptyState.vue';
 import SearchFilterCard from '@/components/SearchFilterCard.vue';
+import { commonUtil } from '@common';
 
 const actualOrderIds = ['M100051'];
 const fallbackActualOrderId = actualOrderIds[Math.floor(Math.random() * actualOrderIds.length)];
@@ -271,11 +272,7 @@ function formatDate(iso: string) {
 }
 
 function formatCurrency(amount: number, currency: string) {
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
+  return commonUtil.formatCurrency(amount, currency);
 }
 
 </script>

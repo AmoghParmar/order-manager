@@ -96,6 +96,18 @@
             </ion-button>
           </ion-item>
         </ion-card>
+
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>{{ translate("Language") }}</ion-card-title>
+          </ion-card-header>
+          <ion-item lines="none">
+            <ion-select :label="translate('Select language')" label-placement="stacked" interface="popover" :value="locale" @ionChange="setLocale($event.detail.value)">
+              <ion-select-option value="en-US">English</ion-select-option>
+              <ion-select-option value="es-ES">Español</ion-select-option>
+            </ion-select>
+          </ion-item>
+        </ion-card>
       </section>
 
       <ion-modal ref="timeZoneModal" trigger="time-zone-modal" @didPresent="search()" @didDismiss="clearSearch()">
@@ -165,7 +177,7 @@ import { IonAvatar, IonButton, IonButtons, IonCard, IonCardContent, IonCardHeade
 import { closeOutline, openOutline, saveOutline } from 'ionicons/icons';
 import { DateTime } from 'luxon';
 import { computed, onBeforeMount, ref } from 'vue';
-import { commonUtil, cookieHelper, translate } from '@common';
+import { commonUtil, cookieHelper, i18n, translate } from '@common';
 import { useAuth } from '@common/composables/useAuth';
 import { useUserStore } from '@/store/user';
 
@@ -186,6 +198,13 @@ const userInitials = computed(() => {
   const name = userProfile.value?.userFullName || userProfile.value?.partyId || userProfile.value?.userId || '';
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part: string) => part[0]?.toUpperCase()).join('') || 'OM';
 });
+
+const locale = computed(() => i18n.global.locale.value);
+
+function setLocale(newLocale: string) {
+  i18n.global.locale.value = newLocale;
+  cookieHelper().set('locale', newLocale);
+}
 
 const props = defineProps({
   showBrowserTimeZone: {

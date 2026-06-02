@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { commonUtil } from "@common";
 import logger from "@/logger";
 import { useOrderDetail } from "@/composables/useOrderDetail";
+import { useProductCacheStore } from "./productCache";
 
 type LoadStatus = "idle" | "loading" | "loaded" | "error";
 
@@ -92,6 +93,132 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         totals[seqId] = (totals[seqId] || 0) + Number(item.returnQuantity || 0);
       });
       return totals;
+    },
+
+    /** Maps orderItemSeqId to its orderItemExternalId. */
+    itemExternalIdBySeqId(): Record<string, string> {
+      const map: Record<string, string> = {};
+      const productCache = useProductCacheStore();
+      
+      (this.current?.shipGroups || []).forEach((sg: any) => {
+        (sg.items || []).forEach((item: any) => {
+          const seqId = item.orderItemSeqId;
+          if (seqId) {
+            const product = productCache.getProduct(item.productId);
+            const sku = product?.sku || item.productId;
+            map[seqId] = item.externalId || sku || seqId;
+          }
+        });
+      });
+      return map;
+    },
+
+    /** Adjustments grouped by orderItemExternalId and comment, summing their amounts. */
+    adjustmentsByExternalId(): Record<string, Record<string, number>> {
+      const index: Record<string, Record<string, number>> = {};
+      const seqIdToExtId = this.itemExternalIdBySeqId;
+
+      const recordAdj = (seqId: string, adj: any) => {
+        const extId = seqIdToExtId[seqId] || seqId;
+        if (!extId) return;
+        const comment = adj.comments || adj.comment || adj.description || 'Adjustment';
+        if (!index[extId]) index[extId] = {};
+        index[extId][comment] = (index[extId][comment] || 0) + Number(adj.amount || 0);
+      };
+
+      // 1. Process top-level adjustments (which carry orderItemSeqId)
+      (this.current?.adjustments || []).forEach((adj: any) => {
+        const seqId = adj.orderItemSeqId;
+        if (!seqId || seqId === HEADER_SEQ_ID) return;
+        recordAdj(seqId, adj);
+      });
+
+      // 2. Process nested ship group item adjustments
+      (this.current?.shipGroups || []).forEach((sg: any) => {
+        (sg.items || []).forEach((item: any) => {
+          const seqId = item.orderItemSeqId;
+          if (!seqId) return;
+          (item.adjustments || []).forEach((adj: any) => {
+            recordAdj(seqId, adj);
+          });
+        });
+      });
+
+      return index;
+    },
+
+    /** Rolled up item price totals (sum of unitPrice * quantity) grouped by orderItemExternalId */
+    totalsByExternalId(): Record<string, number> {
+      const totals: Record<string, number> = {};
+      const seqIdToExtId = this.itemExternalIdBySeqId;
+
+      (this.current?.shipGroups || []).forEach((sg: any) => {
+        (sg.items || []).forEach((item: any) => {
+          const seqId = item.orderItemSeqId;
+          const extId = seqIdToExtId[seqId] || seqId;
+          if (!extId) return;
+          const unitPrice = Number(item.unitPrice || 0);
+          const quantity = Number(item.quantity || 0);
+          totals[extId] = (totals[extId] || 0) + (unitPrice * quantity);
+        });
+      });
+
+      return totals;
+    },
+
+    /** Rolled up item quantities grouped by orderItemExternalId */
+    quantitiesByExternalId(): Record<string, number> {
+      const quantities: Record<string, number> = {};
+      const seqIdToExtId = this.itemExternalIdBySeqId;
+
+      (this.current?.shipGroups || []).forEach((sg: any) => {
+        (sg.items || []).forEach((item: any) => {
+          const seqId = item.orderItemSeqId;
+          const extId = seqIdToExtId[seqId] || seqId;
+          if (!extId) return;
+          quantities[extId] = (quantities[extId] || 0) + Number(item.quantity || 0);
+        });
+      });
+
+      return quantities;
+    },
+
+    /** Order totals (subtotal, adjustments grouped by type, total) */
+    totals(): { subtotal: number; adjustments: Record<string, number>; total: number } {
+      if (!this.current) return { subtotal: 0, adjustments: {}, total: 0 };
+
+      let subtotal = 0;
+      (this.current.shipGroups || []).forEach((sg: any) => {
+        (sg.items || []).forEach((item: any) => {
+          subtotal += Number(item.unitPrice || 0) * Number(item.quantity || 0);
+        });
+      });
+
+      const adjustments: Record<string, number> = {};
+      let adjustmentsTotal = 0;
+
+      (this.current.adjustments || []).forEach((adj: any) => {
+        const amount = Number(adj.amount || 0);
+        adjustmentsTotal += amount;
+
+        // Group only order-level adjustments
+        const seqId = adj.orderItemSeqId;
+        if (!seqId || seqId === HEADER_SEQ_ID) {
+          const typeId = adj.orderAdjustmentTypeId || "OTHER_ADJUSTMENT";
+          adjustments[typeId] = (adjustments[typeId] || 0) + amount;
+        }
+      });
+
+      // Filter out zero-sum adjustments
+      Object.keys(adjustments).forEach((key) => {
+        if (adjustments[key] === 0) {
+          delete adjustments[key];
+        }
+      });
+
+      const total = this.current.grandTotal || (subtotal + adjustmentsTotal);
+
+      return { subtotal, adjustments, total };
     },
 
     /** Flat list of all items across ship groups, each carrying its ship group context. */

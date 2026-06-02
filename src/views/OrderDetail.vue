@@ -19,7 +19,7 @@
             {{ order.orderName || 'Order' }}
             <p>{{ order.id }}</p>
           </ion-label>
-          <ion-badge slot="end" color="primary">{{ order.status }}</ion-badge>
+          <ion-badge slot="end" :color="commonUtil.getStatusColor(order.statusId)">{{ order.status }}</ion-badge>
         </ion-item>
 
         <!-- timeline: child matching .order-detail-timeline -->
@@ -173,91 +173,110 @@
         </ion-segment-button>
       </ion-segment>
 
-      <div v-if="selectedSegment === 'holds'">
-        <ion-card v-for="hold in openHolds" :key="hold.id">
-          <ion-item color="warning" lines="none">
-            <ion-label>
-              {{ hold.purpose }}
-              <p>{{ hold.name }}</p>
-              <p v-if="hold.assignee">Assigned to {{ hold.assignee }}</p>
-            </ion-label>
-            <ion-badge slot="end" color="dark">{{ hold.status }}</ion-badge>
-          </ion-item>
-        </ion-card>
-        <ion-list v-if="!openHolds.length">
-          <ion-item lines="none">
-            <ion-label>No open holds on this order</ion-label>
-          </ion-item>
-        </ion-list>
-      </div>
-
       <div v-if="selectedSegment === 'items'">
-        <ion-accordion-group>
-          <ion-accordion v-for="group in groupedItems" :key="group.externalId" :value="group.externalId">
-            <div slot="header" class="list-items">
-              <ion-item class="item-key-header">
-                <ion-checkbox slot="start" v-model="group.selected" @click.stop />
-                <ion-thumbnail slot="start" v-if="group.imageUrl">
-                  <img :src="group.imageUrl" alt="Product Image" />
-                </ion-thumbnail>
-                <ion-label>
-                  {{ group.name }}
-                  <p>SKU: {{ group.sku }} · Ext ID: {{ group.externalId }}</p>
-                </ion-label>
-                <ion-note slot="end" class="ion-text-right">
-                  {{ group.totalQty }} {{ group.totalQty === 1 ? 'unit' : 'units' }}
-                  <p>{{ money(group.unitPrice, order.currency) }}</p>
-                </ion-note>
-                <ion-badge slot="end" color="primary">{{ group.status }}</ion-badge>
-              </ion-item>
-            </div>
-            <div slot="content" class="ion-padding-horizontal">
-              <ion-list lines="none">
-                <ion-item v-for="item in group.items" :key="item.orderItemSeqId">
-                  <ion-checkbox slot="start" v-model="item.selected" />
-                  <ion-label>
-                    Item Seq: {{ item.orderItemSeqId }} (Ship Group #{{ item.shipGroupSeqId }})
-                    <p>Quantity: {{ item.quantity }}</p>
-                  </ion-label>
-                  <ion-chip outline color="secondary">
-                    {{ item.facilityName }}
-                  </ion-chip>
-                  <ion-badge slot="end" color="primary">{{ item.status }}</ion-badge>
 
-                  <ion-buttons slot="end">
-                    <ion-button fill="clear" size="small" color="success">
-                      Complete
-                    </ion-button>
-                    <ion-button fill="clear" size="small" color="danger">
-                      Cancel
-                    </ion-button>
-                    <ion-button
-                      v-if="item.statusId === 'ITEM_COMPLETED' && item.returnableQty > 0"
-                      fill="clear"
-                      size="small"
-                      color="warning"
-                    >
-                      Return
-                    </ion-button>
-
-                    <ion-button fill="clear" size="small" :id="'item-opt-trigger-' + item.orderItemSeqId">
-                      <ion-icon slot="icon-only" :icon="ellipsisVertical" />
-                    </ion-button>
-                    <ion-popover :trigger="'item-opt-trigger-' + item.orderItemSeqId" dismiss-on-select>
-                      <ion-content>
-                        <ion-list>
-                          <ion-item buttonDetail="false" button>Edit Quantity</ion-item>
-                          <ion-item buttonDetail="false" button>Change Facility</ion-item>
-                          <ion-item buttonDetail="false" button color="danger">Cancel Item</ion-item>
-                        </ion-list>
-                      </ion-content>
-                    </ion-popover>
-                  </ion-buttons>
+        <ion-list>
+          <ion-list-header>
+            <ion-label>Items</ion-label>
+          </ion-list-header>
+          <ion-item lines="full" buttonDetail="false" button>
+            <ion-checkbox :checked="areAllSelected" justify="start" label-placement="end" @ionChange="toggleSelectAll($event.detail.checked)">Select all</ion-checkbox>
+            <ion-button slot="end" fill="outline" color="medium" @click.stop>
+              Add items
+            </ion-button>
+          </ion-item>
+          <ion-accordion-group>
+            <ion-accordion v-for="group in groupedItems" :key="group.externalId" :value="group.externalId">
+              <div slot="header" class="list-item order-item-rollup">
+                <ion-item class="item-key-header" lines="none">
+                  <ion-checkbox v-model="group.selected" justify="start" label-placement="end" @click.stop>
+                    <ion-thumbnail v-if="group.imageUrl">
+                      <img :src="group.imageUrl" alt="Product Image" />
+                    </ion-thumbnail>
+                    <ion-label>
+                      {{ group.name }}
+                      <p>SKU: {{ group.sku }}</p>
+                      <p>Ext ID: {{ group.externalId }}</p>
+                    </ion-label>
+                  </ion-checkbox>
                 </ion-item>
-              </ion-list>
-            </div>
-          </ion-accordion>
-        </ion-accordion-group>
+                
+                <ion-label class="tablet">
+                  {{ group.totalQty }} {{ group.totalQty === 1 ? 'unit' : 'units' }}
+                  <p>Qty</p>
+                </ion-label>
+                
+                <ion-label class="tablet">
+                  <ion-badge :color="commonUtil.getStatusColor(group.statusId)">{{ group.status }}</ion-badge>
+                  <p>Status</p>
+                </ion-label>
+                
+                <ion-label class="ion-text-end">
+                  {{ money(group.totalPrice, order.currency) }}
+                  <p v-for="adj in getGroupAdjustments(group)" :key="adj.comment">
+                    {{ adj.comment }}: {{ money(adj.amount, order.currency) }}
+                  </p>
+                </ion-label>
+              </div>
+              <div slot="content">
+                <ion-list lines="none">
+                  <div v-for="item in group.items" :key="item.orderItemSeqId" class="list-item order-item-row">
+                    <ion-item lines="none">
+                      <ion-checkbox v-model="item.selected" justify="start" label-placement="end">
+                        <ion-label>
+                          Item Seq: {{ item.orderItemSeqId }}
+                          <p>Ship Group #{{ item.shipGroupSeqId }}</p>
+                        </ion-label>
+                      </ion-checkbox>
+                    </ion-item>
+                    
+                    <ion-chip class="tablet" outline>
+                      <ion-icon :icon="businessOutline"></ion-icon>
+                      <ion-label>{{ item.facilityName }}</ion-label>
+                    </ion-chip>
+
+                    <ion-chip class="tablet" outline>
+                      <ion-icon :icon="gitBranchOutline"></ion-icon>
+                      <ion-label>{{ item.attributeCount }}</ion-label>
+                    </ion-chip>
+                    
+                    <ion-badge class="tablet" :color="commonUtil.getStatusColor(item.statusId)">{{ item.status }}</ion-badge>
+
+                    <ion-buttons>
+                      <ion-button fill="clear" size="small" color="success">
+                        Complete
+                      </ion-button>
+                      <ion-button fill="clear" size="small" color="danger">
+                        Cancel
+                      </ion-button>
+                      <ion-button
+                        v-if="item.statusId === 'ITEM_COMPLETED' && item.returnableQty > 0"
+                        fill="clear"
+                        size="small"
+                        color="warning"
+                      >
+                        Return
+                      </ion-button>
+
+                      <ion-button fill="clear" size="small" :id="'item-opt-trigger-' + item.orderItemSeqId">
+                        <ion-icon slot="icon-only" :icon="ellipsisVertical" />
+                      </ion-button>
+                      <ion-popover :trigger="'item-opt-trigger-' + item.orderItemSeqId" dismiss-on-select>
+                        <ion-content>
+                          <ion-list>
+                            <ion-item buttonDetail="false" button>Edit Quantity</ion-item>
+                            <ion-item buttonDetail="false" button>Change Facility</ion-item>
+                            <ion-item buttonDetail="false" button color="danger">Cancel Item</ion-item>
+                          </ion-list>
+                        </ion-content>
+                      </ion-popover>
+                    </ion-buttons>
+                  </div>
+                </ion-list>
+              </div>
+            </ion-accordion>
+          </ion-accordion-group>
+        </ion-list>
 
         <!-- Totals Card -->
         <ion-card class="totals">
@@ -267,21 +286,17 @@
           <ion-list lines="none">
             <ion-item>
               <ion-label>Subtotal</ion-label>
-              <ion-note slot="end">{{ money(orderTotals.subtotal, order.currency) }}</ion-note>
+              <ion-label slot="end">{{ money(orderTotals.subtotal, order.currency) }}</ion-label>
             </ion-item>
-            <ion-item>
-              <ion-label>Taxes</ion-label>
-              <ion-note slot="end">{{ money(orderTotals.taxes, order.currency) }}</ion-note>
-            </ion-item>
-            <ion-item>
-              <ion-label>Shipping</ion-label>
-              <ion-note slot="end">{{ money(orderTotals.shipping, order.currency) }}</ion-note>
-            </ion-item>
-            <ion-item class="total-item">
-              <ion-label>Grand Total</ion-label>
-              <ion-note slot="end" color="dark">{{ money(orderTotals.total, order.currency) }}</ion-note>
+            <ion-item v-for="(amount, typeId) in orderTotals.adjustments" :key="typeId">
+              <ion-label>{{ seed.orderAdjustmentTypeDescription(typeId) }}</ion-label>
+              <ion-label slot="end">{{ money(amount, order.currency) }}</ion-label>
             </ion-item>
           </ion-list>
+          <ion-item class="total-item">
+            <ion-label>Grand Total</ion-label>
+            <ion-label slot="end" color="dark">{{ money(orderTotals.total, order.currency) }}</ion-label>
+          </ion-item>
         </ion-card>
       </div>
       <div v-if="selectedSegment === 'ship-groups'">
@@ -395,123 +410,30 @@
           </ion-card>
         </template>
 
-        <!-- Mock / Placeholder card if no ship groups are present -->
         <template v-else>
-          <ion-card>
-            <div class="shipgroup">
-              <ion-item lines="none">
-                <ion-label>
-                  Ship Group #1
-                  <p>Main Warehouse (MC-01)</p>
-                  <p>3 items · 5 units</p>
-                </ion-label>
-                <ion-icon slot="end" :icon="chevronDown" />
-              </ion-item>
-            </div>
-
-            <ion-progress-bar value="0.5" />
-
-            <div class="selectable-attributes ion-padding-horizontal ion-padding-top">
-              <ion-chip outline color="secondary">May Split</ion-chip>
-              <ion-chip outline color="success">Gift</ion-chip>
-              <ion-chip outline color="warning">High Priority</ion-chip>
-            </div>
-            <ion-item color="warning" class="ion-margin-horizontal ion-margin-vertical">
-              <ion-label>
-                Order on hold: Address validation failed
-                <p>Verify shipping address task is open</p>
-              </ion-label>
-              <ion-button slot="end" fill="outline" color="dark" size="small">
-                View task
-              </ion-button>
-            </ion-item>
-            <div class="selected-attributes">
-              <ion-item lines="none">
-                <ion-label>
-                  <p>Gift message</p>
-                  Happy Birthday! Hope you have a great day!
-                </ion-label>
-              </ion-item>
-              <ion-item lines="none">
-                <ion-label>
-                  <p>Shipping instructions</p>
-                  Please leave the package at the back door.
-                </ion-label>
-              </ion-item>
-            </div>
-
-            <div class="lifecycle">
-              <ion-item lines="none">
-                <ion-label>Brokered</ion-label>
-                <ion-note slot="end">2026-05-30 14:00</ion-note>
-              </ion-item>
-              <ion-item lines="none">
-                <ion-label>Pick</ion-label>
-                <ion-note slot="end">2026-05-30 15:30</ion-note>
-              </ion-item>
-              <ion-item lines="none">
-                <ion-label>Pack</ion-label>
-                <ion-note slot="end">2026-05-30 16:15</ion-note>
-              </ion-item>
-              <ion-item lines="none">
-                <ion-label>Ship</ion-label>
-                <ion-note slot="end">2026-05-30 17:00</ion-note>
-              </ion-item>
-            </div>
-
-            <ion-list class="tems">
-              <ion-list-header>
-                <ion-label>Items in Ship Group</ion-label>
-              </ion-list-header>
-              <ion-item>
-                <ion-label>
-                  Special Edition Lip Balm
-                  <p>SKU: LIP-BALM-001</p>
-                </ion-label>
-                <ion-note slot="end">2 units</ion-note>
-              </ion-item>
-              <ion-item>
-                <ion-label>
-                  Hydrating Face Serum
-                  <p>SKU: SERUM-HYD-002</p>
-                </ion-label>
-                <ion-note slot="end">1 unit</ion-note>
-              </ion-item>
-            </ion-list>
-
-            <ion-list class="fulfillment">
-              <ion-list-header>
-                <ion-label>Fulfillment</ion-label>
-              </ion-list-header>
-              <ion-item>
-                <ion-select label="Shipping method" interface="popover" placeholder="Select Shipping Method" value="standard">
-                  <ion-select-option value="standard">Standard Shipping</ion-select-option>
-                  <ion-select-option value="expedited">Expedited Shipping</ion-select-option>
-                  <ion-select-option value="overnight">Overnight Delivery</ion-select-option>
-                </ion-select>
-              </ion-item>
-
-              <ion-item>
-                <ion-select label="Carrier party" interface="popover" placeholder="Select Carrier" value="ups">
-                  <ion-select-option value="ups">UPS (United Parcel Service)</ion-select-option>
-                  <ion-select-option value="fedex">FedEx</ion-select-option>
-                  <ion-select-option value="usps">USPS (United States Postal Service)</ion-select-option>
-                </ion-select>
-              </ion-item>
-              <ion-item>
-                <ion-select label="Shipping address" interface="popover" placeholder="Select Address" value="primary">
-                  <ion-select-option value="primary">125 Market Street, San Francisco, CA 94105</ion-select-option>
-                  <ion-select-option value="secondary">456 Oak Avenue, New York, NY 10001</ion-select-option>
-                </ion-select>
-              </ion-item>
-            </ion-list>
-
-            <div class="actions">
-              <ion-button fill="outline" color="primary">Broker</ion-button>
-              <ion-button fill="outline" color="medium">Park</ion-button>
-            </div>
-          </ion-card>
+          <EmptyState
+            title="No ship groups"
+            message="There are no ship groups defined for this order."
+          />
         </template>
+      </div>
+
+      <div v-if="selectedSegment === 'holds'">
+        <ion-card v-for="hold in openHolds" :key="hold.id">
+          <ion-item color="warning" lines="none">
+            <ion-label>
+              {{ hold.purpose }}
+              <p>{{ hold.name }}</p>
+              <p v-if="hold.assignee">Assigned to {{ hold.assignee }}</p>
+            </ion-label>
+            <ion-badge slot="end" color="dark">{{ hold.status }}</ion-badge>
+          </ion-item>
+        </ion-card>
+        <ion-list v-if="!openHolds.length">
+          <ion-item lines="none">
+            <ion-label>No open holds on this order</ion-label>
+          </ion-item>
+        </ion-list>
       </div>
 
     </ion-content>
@@ -590,13 +512,14 @@ import {
 } from '@ionic/vue';
 import { storeToRefs } from 'pinia';
 import { DateTime } from 'luxon';
-import { chevronDown, ellipsisVertical } from 'ionicons/icons';
+import { businessOutline, chevronDown, ellipsisVertical, gitBranchOutline } from 'ionicons/icons';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useSeedStore } from '@/store/seed';
 import { useProductCacheStore } from '@/store/productCache';
 import { useProductMaster } from '@/composables/useProductMaster';
 import EmptyState from '@/components/EmptyState.vue';
 import ErrorState from '@/components/ErrorState.vue';
+import { commonUtil } from '@common';
 
 const props = defineProps<{
   orderId: string;
@@ -622,6 +545,7 @@ const order = computed(() => {
     id: raw.orderId,
     externalId: raw.externalId,
     status: seed.statusDescription(raw.statusId),
+    statusId: raw.statusId,
     channel: seed.enumDescription(raw.salesChannelEnumId),
     productStoreName: seed.productStoreName(raw.productStoreId),
     currency: raw.currencyUom,
@@ -715,6 +639,7 @@ const groupedItems = computed(() => {
     unitPrice: number;
     currency: string;
     totalQty: number;
+    totalPrice: number;
     status: string;
     selected: boolean;
     items: Array<{
@@ -753,14 +678,14 @@ const groupedItems = computed(() => {
           imageUrl: product?.mainImageUrl || '',
           unitPrice,
           currency: order.value.currency,
-          totalQty: 0,
+          totalQty: orderDetailStore.quantitiesByExternalId[externalId] || 0,
+          totalPrice: orderDetailStore.totalsByExternalId[externalId] || 0,
           status,
+          statusId,
           selected: false,
           items: []
         };
       }
-
-      groups[externalId].totalQty += Number(item.quantity || 0);
       groups[externalId].items.push({
         orderItemSeqId: item.id,
         shipGroupSeqId: sg.id,
@@ -772,7 +697,8 @@ const groupedItems = computed(() => {
         selected: false,
         unitPrice,
         returnedQty,
-        returnableQty
+        returnableQty,
+        attributeCount: rawItem?.orderItemAttributes?.length || rawItem?.attributes?.length || rawItem?.orderItemAttributeList?.length || 0
       });
     });
   });
@@ -780,37 +706,24 @@ const groupedItems = computed(() => {
   return Object.values(groups);
 });
 
-const orderTotals = computed(() => {
-  const raw = orderDetailStore.current;
-  if (!raw) return { subtotal: 0, taxes: 0, shipping: 0, total: 0 };
-
-  let subtotal = 0;
-  let taxes = 0;
-  let shipping = 0;
-
-  (raw.shipGroups || []).forEach((sg: any) => {
-    (sg.items || []).forEach((item: any) => {
-      subtotal += Number(item.unitPrice || 0) * Number(item.quantity || 0);
-    });
-  });
-
-  (raw.adjustments || []).forEach((adj: any) => {
-    const amount = Number(adj.amount || 0);
-    if (adj.orderAdjustmentTypeId === 'SHIPPING_CHARGES') {
-      shipping += amount;
-    } else if (adj.orderAdjustmentTypeId === 'SALES_TAX') {
-      taxes += amount;
-    } else {
-      taxes += amount;
-    }
-  });
-
-  const total = raw.grandTotal || (subtotal + taxes + shipping);
-
-  return { subtotal, taxes, shipping, total };
-});
+const orderTotals = computed(() => orderDetailStore.totals);
 
 const selectedSegment = ref('items');
+
+const areAllSelected = computed(() => {
+  if (!groupedItems.value.length) return false;
+  return groupedItems.value.every(group => group.selected) && 
+         groupedItems.value.every(group => group.items.every(item => item.selected));
+});
+
+function toggleSelectAll(checked: boolean) {
+  groupedItems.value.forEach(group => {
+    group.selected = checked;
+    group.items.forEach(item => {
+      item.selected = checked;
+    });
+  });
+}
 
 onMounted(() => loadOrder(props.orderId));
 watch(() => props.orderId, (orderId) => loadOrder(orderId));
@@ -840,7 +753,7 @@ function addressLines(postalAddress: any): string[] {
 }
 
 function money(value: number, currency = 'USD') {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(Number(value || 0));
+  return commonUtil.formatCurrency(value, currency);
 }
 
 function formatDate(value: string | number | undefined) {
@@ -848,6 +761,13 @@ function formatDate(value: string | number | undefined) {
   const num = Number(value);
   const dt = Number.isFinite(num) && String(value).length >= 10 ? DateTime.fromMillis(num) : DateTime.fromISO(String(value));
   return dt.isValid ? dt.toFormat('yyyy-LL-dd HH:mm') : String(value);
+}
+
+function getGroupAdjustments(group: any) {
+  const adjs = orderDetailStore.adjustmentsByExternalId[group.externalId] || {};
+  return Object.entries(adjs)
+    .map(([comment, amount]) => ({ comment, amount }))
+    .filter(adj => adj.amount !== 0);
 }
 </script>
 
@@ -913,5 +833,16 @@ ion-card-header  ion-buttons {
     align-items: start;
     grid-template-columns: 1fr;
   }
+}
+
+.order-item-rollup {
+  --columns-desktop: 4;
+  --columns-tablet: 4;
+  padding-inline-end: var(--spacer-base);
+}
+
+.order-item-row {
+  --columns-desktop: 5;
+  --columns-tablet: 5;
 }
 </style>

@@ -103,8 +103,8 @@
             <p>{{ order.id }} · {{ order.customerName || order.customerId || 'Unknown customer' }}</p>
             <p>{{ createdDateLabel(order.orderDate) }} · Ship {{ shipTimeLeftLabel(order.orderDate) }}</p>
           </ion-label>
-          <ion-badge :color="commonUtil.getColorByDesc(order.status) || commonUtil.getColorByDesc('default')" slot="end">
-            {{ order.status }}
+          <ion-badge :color="statusColor(order.status)" slot="end">
+            {{ statusDescription(order.status) }}
           </ion-badge>
         </ion-item>
       </ion-list>
@@ -301,6 +301,11 @@ function setStatusFilter(statusId: string, checked: boolean) {
 
 function statusDescription(statusId: string) {
   return seedStore.statusDescription(statusId);
+}
+
+function statusColor(statusId: string) {
+  const label = statusDescription(statusId);
+  return commonUtil.getColorByDesc(label) || commonUtil.getColorByDesc(statusId) || commonUtil.getColorByDesc('default');
 }
 
 function createdDateLabel(value: string) {
