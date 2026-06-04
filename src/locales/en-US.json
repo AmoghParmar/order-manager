@@ -35,5 +35,7 @@
   "This is the name of the OMS you are connected to right now. Make sure that you are connected to the right instance before proceeding.": "This is the name of the OMS you are connected to right now. Make sure that you are connected to the right instance before proceeding.",
   "Timezone": "Timezone",
   "User": "User",
-  "Version": "Version"
+  "Version": "Version",
+  "Create order": "Create order",
+  "Create Order": "Create Order"
 }
