@@ -59,7 +59,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
     async fetchAddressValidationTasks(payload: { viewSize?: any; viewIndex?: any; currentUserPartyId?: string; createdDate_from?: number; createdDate_thru?: number; orderName?: string; orderName_op?: string; salesChannelEnumId?: string } = {}) {
       try {
         const productStoreId = useUserStore().getCurrentProductStore.productStoreId;
-        const listResponse = await api({ url: 'oms/orders/tasks/shipGroupTasks', method: 'GET', params: { ...payload, statusId: 'TASK_CREATED', workEffortTypeId: 'RESOLVE_ONHOLD_ORDER', workEffortPurposeTypeId: 'INVALID_ADDRESS', productStoreId } });
+        const listResponse = await api({ url: 'oms/orders/tasks/shipGroupTasks', method: 'GET', params: { ...payload, statusId: 'TASK_CREATED', productStoreId } });
         const tasks = listResponse.data ?? [];
         const detailedTasks = await Promise.all(
           tasks.map(async (task: any) => {
@@ -205,7 +205,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
         await api({
           url: `oms/orders/${orderId}/shipGroups/${shipGroupSeqId}/park`,
           method: 'POST',
-          data: { facilityId },
+          data: { facilityId, changeReasonEnumId: 'NO_VARIANCE_LOG' },
         });
       } catch (err) {
         console.error('Failed to park the order', err);
@@ -217,7 +217,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
         await api({
           url: `oms/orders/${orderId}/park`,
           method: 'POST',
-          data: { facilityId },
+          data: { facilityId, changeReasonEnumId: 'NO_VARIANCE_LOG' },
         });
       } catch (err) {
         console.error('Failed to park the order', err);
