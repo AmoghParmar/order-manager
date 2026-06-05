@@ -204,7 +204,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
       try {
         await api({
           url: `oms/orders/${orderId}/shipGroups/${shipGroupSeqId}/park`,
-          method: 'PUT',
+          method: 'POST',
           data: { facilityId },
         });
       } catch (err) {
