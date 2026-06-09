@@ -612,9 +612,9 @@
             </div>
 
             <div class="actions ion-padding-horizontal ion-padding-bottom">
-              <ion-button fill="clear" @click="brokerShipGroup(shipGroup.id)">Broker ship group</ion-button>
-              <ion-button fill="clear" :disabled="!selectedItemsForShipGroup(shipGroup.id).length" @click="parkSelectedItems(shipGroup)">{{ translate('Park Items') }}</ion-button>
-              <ion-button fill="clear" :disabled="!selectedItemsForShipGroup(shipGroup.id).length" @click="releaseSelectedItems(shipGroup)">{{ translate('Release') }}</ion-button>
+              <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear" @click="brokerShipGroup(shipGroup.id)">Broker ship group</ion-button>
+              <ion-button fill="clear" :disabled="!selectedItemsForShipGroup(shipGroup.id).length" @click="isVirtualFacility(shipGroup) ? parkSelectedItems(shipGroup) : rejectSelectedItems(shipGroup)">{{ isVirtualFacility(shipGroup) ? translate('Park Items') : translate('Pull back') }}</ion-button>
+              <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear" :disabled="!selectedItemsForShipGroup(shipGroup.id).length" @click="releaseSelectedItems(shipGroup)">{{ translate('Release') }}</ion-button>
               <ion-button fill="clear" @click="openAddItemModal(shipGroup)">{{ translate('Add Items') }}</ion-button>
             </div>
           </ion-card>
@@ -757,6 +757,7 @@ import { useProductMaster } from '@/composables/useProductMaster';
 import EmptyState from '@/components/EmptyState.vue';
 import ErrorState from '@/components/ErrorState.vue';
 import AddItemToOrderModal from '@/components/AddItemToOrderModal.vue';
+import RejectItemsModal from '@/components/RejectItemsModal.vue';
 import FacilityModal from '@/components/FacilityModal.vue';
 import PhysicalFacilityModal from '@/components/PhysicalFacilityModal.vue';
 import RoutingGroupModal from '@/components/RoutingGroupModal.vue';
@@ -815,6 +816,7 @@ const order = computed(() => {
     shipGroups: (raw.shipGroups || []).map((shipGroup: any) => ({
       id: shipGroup.shipGroupSeqId,
       facilityId: shipGroup.facilityId,
+      facilityTypeId: seed.facility(shipGroup.facilityId)?.facilityTypeId,
       facilityParentTypeId: seed.facilityType(seed.facility(shipGroup.facilityId)?.facilityTypeId)?.parentTypeId,
       facilityName: seed.facilityName(shipGroup.facilityId),
       itemSummary: shipGroupItemSummary(shipGroup),
@@ -868,7 +870,11 @@ const billingAddress = computed(() => {
 const timelineByShipGroup = computed(() => orderDetailStore.timelineByShipGroup);
 
 function isVirtualFacility(shipGroup: any): boolean {
-  return shipGroup.facilityParentTypeId === 'VIRTUAL_FACILITY' || !shipGroup.facilityId;
+  if (!shipGroup.facilityId) return true;
+  return (
+    shipGroup.facilityParentTypeId === 'VIRTUAL_FACILITY' ||
+    shipGroup.facilityTypeId === 'VIRTUAL_FACILITY'
+  );
 }
 
 function shipGroupProgress(shipGroup: any): number {
@@ -1471,6 +1477,40 @@ async function parkSelectedItems(shipGroup: any) {
     await loadOrder(orderId);
   } catch {
     await showToast(translate('Failed to park selected items. Please try again.'));
+  }
+}
+
+async function rejectSelectedItems(shipGroup: any) {
+  const itemIds = selectedItemsForShipGroup(shipGroup.id);
+  if (!itemIds.length) return;
+
+  const modal = await modalController.create({ component: RejectItemsModal });
+  await modal.present();
+  const { data, role } = await modal.onWillDismiss();
+  if (role !== 'confirm') return;
+
+  const rejectionReasonId = data?.rejectionReasonId;
+  const orderId = order.value!.id;
+  try {
+    await api({
+      url: `oms/orders/${orderId}/reject`,
+      method: 'POST',
+      data: {
+        orderId,
+        items: itemIds.map((orderItemSeqId) => ({
+          orderItemSeqId,
+          quantity: '1',
+          maySplit: 'N',
+          cascadeRejectByProduct: 'N',
+          rejectionReasonId,
+        })),
+      },
+    });
+    selectedShipGroupItems.value[shipGroup.id] = new Set();
+    await showToast(translate('Selected items rejected successfully.'));
+    await loadOrder(orderId);
+  } catch {
+    await showToast(translate('Failed to reject selected items. Please try again.'));
   }
 }
 
