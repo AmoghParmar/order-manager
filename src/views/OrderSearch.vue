@@ -124,9 +124,9 @@
       <ion-toolbar>
         <ion-title size="small">{{ selectedOrderIds.length }} selected</ion-title>
         <ion-buttons slot="end" class="bulk-action-buttons">
-          <ion-button :disabled="!selectedOrderIds.length">Cancel open items</ion-button>
-          <ion-button :disabled="!selectedOrderIds.length">Edit shipping method</ion-button>
-          <ion-button :disabled="!selectedOrderIds.length">Add task</ion-button>
+          <ion-button :disabled="!selectedOrderIds.length" @click="confirmCancelOrders">Cancel open items</ion-button>
+          <ion-button :disabled="!selectedOrderIds.length" @click="openEditShippingMethodModal">Edit shipping method</ion-button>
+          <ion-button :disabled="!selectedOrderIds.length" @click="openAddTaskModal">Add task</ion-button>
         </ion-buttons>
       </ion-toolbar>
     </ion-footer>
@@ -157,20 +157,27 @@ import {
   IonSelect,
   IonSelectOption,
   IonTitle,
-  IonToolbar
+  IonToolbar,
+  alertController,
+  modalController,
 } from '@ionic/vue';
-import { commonUtil } from '@common';
+import { commonUtil, translate } from '@common';
 import { DateTime } from 'luxon';
 import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useOrderStore } from '@/store/order';
+import { useOrderDetailStore } from '@/store/orderDetail';
 import { useUserStore } from '@/store/user';
 import { useSeedStore } from '@/store/seed';
+import AddOrderTaskModal from '@/components/AddOrderTaskModal.vue';
+import EditShippingMethodModal from '@/components/EditShippingMethodModal.vue';
 import EmptyState from '@/components/EmptyState.vue';
 import ErrorState from '@/components/ErrorState.vue';
 import SearchFilterCard from '@/components/SearchFilterCard.vue';
+import { showToast } from '@/utils';
 
 const orderStore = useOrderStore();
+const orderDetailStore = useOrderDetailStore();
 const userStore = useUserStore();
 const seedStore = useSeedStore();
 const { searchQuery, searchFilters, searchSort, searchResults, searchTotal, loading, error, hasMore } = storeToRefs(orderStore);
@@ -226,6 +233,62 @@ watch(searchResults, () => {
 function scheduleSearch() {
   if (debounceTimer.value) clearTimeout(debounceTimer.value);
   debounceTimer.value = setTimeout(() => orderStore.runSearch(), 300);
+}
+
+async function confirmCancelOrders() {
+  const orderIds = [...selectedOrderIds.value];
+  const alert = await alertController.create({
+    header: translate('Cancel open items'),
+    message: translate('This will cancel all open items for the {count} selected order(s). This action cannot be undone.', { count: orderIds.length }),
+    buttons: [
+      { text: translate('Dismiss'), role: 'cancel' },
+      {
+        text: translate('Confirm'),
+        handler: async () => {
+          try {
+            await orderDetailStore.bulkCancelOrders(orderIds);
+            await showToast(translate('Orders cancelled successfully.'));
+            exitSelectMode();
+            await orderStore.runSearch();
+          } catch {
+            await showToast(translate('Failed to cancel orders. Please try again.'));
+          }
+        },
+      },
+    ],
+  });
+  await alert.present();
+}
+
+async function openAddTaskModal() {
+  const orderIds = [...selectedOrderIds.value];
+  const modal = await modalController.create({ component: AddOrderTaskModal });
+  await modal.present();
+  const { data, role } = await modal.onWillDismiss();
+  if (role !== 'confirm' || !data) return;
+  try {
+    await orderDetailStore.bulkCreateOrderTasks(orderIds, data);
+    await showToast(translate('Tasks created successfully.'));
+    exitSelectMode();
+  } catch {
+    await showToast(translate('Failed to create tasks. Please try again.'));
+  }
+}
+
+async function openEditShippingMethodModal() {
+  const orderIds = [...selectedOrderIds.value];
+  const modal = await modalController.create({ component: EditShippingMethodModal });
+  await modal.present();
+  const { data, role } = await modal.onWillDismiss();
+  if (role !== 'confirm' || !data) return;
+  try {
+    await orderDetailStore.bulkUpdateShippingMethods(orderIds, data.carrierPartyId, data.shipmentMethodTypeId);
+    await showToast(translate('Shipping method updated successfully.'));
+    exitSelectMode();
+    await orderStore.runSearch();
+  } catch {
+    await showToast(translate('Failed to update shipping method. Please try again.'));
+  }
 }
 
 function clearFilters() {

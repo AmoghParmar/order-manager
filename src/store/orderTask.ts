@@ -200,12 +200,12 @@ export const useOrderTaskStore = defineStore('orderTask', {
         console.error('Failed to change the task status', err);
       }
     },
-    async parkOrder(orderId: string, shipGroupSeqId: string, facilityId: string) {
+    async parkOrder(orderId: string, shipGroupSeqId: string, facilityId: string, workEffortId?: string) {
       try {
         await api({
           url: `oms/orders/${orderId}/shipGroups/${shipGroupSeqId}/park`,
           method: 'POST',
-          data: { facilityId, changeReasonEnumId: 'NO_VARIANCE_LOG' },
+          data: { facilityId, changeReasonEnumId: 'NO_VARIANCE_LOG', ...(workEffortId && { workEffortId }) },
         });
       } catch (err) {
         console.error('Failed to park the order', err);
