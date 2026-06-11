@@ -293,6 +293,7 @@ export interface ReturnStatusChange {
 
 export interface Customer {
   id: string;
+  partyId?: string;
   name: string;
   personalTitle?: string;
   partyTypeId?: string;
