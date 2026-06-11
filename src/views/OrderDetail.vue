@@ -257,7 +257,7 @@
         </ion-list>
 
         <!-- Totals Card -->
-        
+
         <div class="order-summary">
           <ion-card>
             <ion-card-header>
@@ -501,7 +501,7 @@
                     <ion-badge class="kit-badge" color="dark" v-if="isKit(item)">{{ translate("Kit") }}</ion-badge>
                   </div>
                 </ion-label>
-                
+
                 <ion-button slot="end" color="medium" fill="clear" size="small" @click.stop="viewInventory(item.productId)">
                   <ion-icon slot="icon-only" :icon="cubeOutline" />
                 </ion-button>
