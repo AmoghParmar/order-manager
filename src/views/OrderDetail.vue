@@ -456,10 +456,7 @@
               :aria-hidden="isShipGroupExpanded(shipGroup.id)"
               :inert="isShipGroupExpanded(shipGroup.id) ? '' : undefined">
               <div class="ship-group-summary-content">
-                <ion-list lines="none">
-                  <ion-list-header>
-                    <ion-label>{{ translate('Items') }}</ion-label>
-                  </ion-list-header>
+                <ion-list lines="none" :aria-label="translate('Items')">
                   <ion-item v-for="item in shipGroupPreviewItems(shipGroup)" :key="item.id">
                     <ion-thumbnail slot="start" v-image-preview="getProduct(item.productId)"
                       :key="getProduct(item.productId)?.mainImageUrl">
@@ -477,10 +474,7 @@
                   </ion-item>
                 </ion-list>
 
-                <ion-list lines="none">
-                  <ion-list-header>
-                    <ion-label>{{ translate('Fulfillment') }}</ion-label>
-                  </ion-list-header>
+                <ion-list lines="none" :aria-label="translate('Fulfillment')">
                   <ion-item lines="full">
                     <ion-label>
                       {{ carrierName(getSelection(shipGroup.id, shipGroup).carrierId) || translate('Carrier name') }} {{
