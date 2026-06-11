@@ -22,6 +22,9 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     byOrderId: {} as Record<string, OrderEntry>,
     currentOrderId: "",
     orderHeaderWorkEfforts: [] as any[],
+    riskAssessmentsByOrderId: {} as Record<string, any[]>,
+    riskAssessmentsStatusByOrderId: {} as Record<string, LoadStatus>,
+    riskAssessmentsErrorByOrderId: {} as Record<string, string>,
     commEvents: [] as any[],
     shippingMethods: [] as any[],
     carrierParties: [] as any[],
@@ -252,6 +255,10 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       return this.openHolds.length > 0;
     },
 
+    riskAssessments: (state): any[] => state.riskAssessmentsByOrderId[state.currentOrderId] || [],
+    riskAssessmentsStatus: (state): LoadStatus => state.riskAssessmentsStatusByOrderId[state.currentOrderId] || "idle",
+    riskAssessmentsError: (state): string => state.riskAssessmentsErrorByOrderId[state.currentOrderId] || "",
+
     /** Shipping methods for a given carrier partyId, derived from the fetched carrierShipmentMethods list. */
     shippingMethodsByCarrier: (state) => (carrierPartyId: string) =>
       state.shippingMethods.filter((m: any) => m.partyId === carrierPartyId || m.carrierPartyId === carrierPartyId),
@@ -316,6 +323,26 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         this.commEvents = Array.isArray(resp.data) ? resp.data : (resp.data?.docs || []);
       } catch (error: any) {
         logger.error("Failed to load communication events", error);
+      }
+    },
+
+    async fetchRiskAssessments(orderId: string, force = false) {
+      if (!orderId) return;
+      if (this.riskAssessmentsStatusByOrderId[orderId] === "loaded" && !force) return;
+      if (this.riskAssessmentsStatusByOrderId[orderId] === "loading") return;
+
+      this.riskAssessmentsStatusByOrderId[orderId] = "loading";
+      this.riskAssessmentsErrorByOrderId[orderId] = "";
+
+      try {
+        const resp = await useOrderDetail().getRiskAssessments(orderId);
+        if (commonUtil.hasError(resp)) throw resp.data;
+        this.riskAssessmentsByOrderId[orderId] = Array.isArray(resp.data) ? resp.data : (resp.data?.docs || []);
+        this.riskAssessmentsStatusByOrderId[orderId] = "loaded";
+      } catch (error: any) {
+        logger.error("Failed to load order risk assessments", error);
+        this.riskAssessmentsStatusByOrderId[orderId] = "error";
+        this.riskAssessmentsErrorByOrderId[orderId] = error?.message || "Failed to load order risk assessments";
       }
     },
 

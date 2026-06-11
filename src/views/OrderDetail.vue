@@ -155,6 +155,24 @@
               </ion-item>
             </ion-list>
           </ion-card>
+
+          <ion-card v-if="riskSummary.hasRiskSignal">
+            <ion-card-header>
+              <ion-card-title>{{ translate('Fraud risk') }}</ion-card-title>
+            </ion-card-header>
+            <ion-list lines="none">
+              <ion-item>
+                <ion-icon slot="start" :icon="shieldCheckmarkOutline" :color="riskLevelColor(order.riskLevelEnumId)" />
+                <ion-label>
+                  <p>{{ translate('Recommendation') }}</p>
+                  {{ riskSummary.recommendation }}
+                </ion-label>
+                <ion-badge slot="end" :color="riskLevelColor(order.riskLevelEnumId)">
+                  {{ riskSummary.level }}
+                </ion-badge>
+              </ion-item>
+            </ion-list>
+          </ion-card>
         </div>
       </div>
 
@@ -167,6 +185,9 @@
         </ion-segment-button>
         <ion-segment-button value="holds">
           <ion-label>{{ translate('Holds') }}</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="risk">
+          <ion-label>{{ translate('Risk') }}</ion-label>
         </ion-segment-button>
         <ion-segment-button value="comms">
           <ion-label>{{ translate('Comms') }}</ion-label>
@@ -186,15 +207,16 @@
             <ion-accordion v-for="group in groupedItems" :key="group.externalId" :value="group.externalId">
               <div slot="header" class="list-item order-item-rollup">
                 <ion-item class="item-key-header" lines="none">
-                  <ion-checkbox slot="start" v-model="group.selected" @click.stop />
-                  <ion-thumbnail slot="start" v-image-preview="getProduct(group.productId)" :key="getProduct(group.productId)?.mainImageUrl">
-                    <DxpShopifyImg :src="getProduct(group.productId)?.mainImageUrl" :key="getProduct(group.productId)?.mainImageUrl" size="small" />
-                  </ion-thumbnail>
-                  <ion-label>
-                    <p class="overline">{{ commonUtil.getProductIdentificationValue(productIdentificationPref.secondaryId, getProduct(group.productId) || {}) }}</p>
-                    {{ commonUtil.getProductIdentificationValue(productIdentificationPref.primaryId, getProduct(group.productId) || {}) || group.name }}
-                    <p>{{ translate('Ext ID') }}: {{ group.externalId }}</p>
-                  </ion-label>
+                  <ion-checkbox v-model="group.selected" justify="start" label-placement="end" @click.stop>
+                    <ion-thumbnail v-if="group.imageUrl">
+                      <img :src="group.imageUrl" alt="Product Image" />
+                    </ion-thumbnail>
+                    <ion-label>
+                      {{ group.name }}
+                      <p>{{ translate('SKU') }}: {{ group.sku }}</p>
+                      <p>{{ translate('Ext ID') }}: {{ group.externalId }}</p>
+                    </ion-label>
+                  </ion-checkbox>
                 </ion-item>
                 
                 <ion-label class="tablet">
@@ -488,17 +510,14 @@
               </ion-list-header>
               <ion-item v-for="item in shipGroup.items" :key="item.id">
                 <ion-checkbox slot="start" :checked="isItemSelected(shipGroup.id, item.id)" @ionChange="toggleItemSelection(shipGroup.id, item.id, $event.detail.checked)" />
-                <ion-thumbnail slot="start" v-image-preview="getProduct(item.productId)" :key="getProduct(item.productId)?.mainImageUrl">
-                    <DxpShopifyImg :src="item?.imageUrl" :key="getProduct(item.productId)?.mainImageUrl" size="small" />
+                <ion-thumbnail slot="start" v-if="item.imageUrl">
+                  <img :src="item.imageUrl" :alt="item.name" />
                 </ion-thumbnail>
                 <ion-label>
-                  <p class="overline">{{ commonUtil.getProductIdentificationValue(productIdentificationPref.secondaryId, getProduct(item.productId)) }}</p>
-                  {{ commonUtil.getProductIdentificationValue(productIdentificationPref.primaryId, getProduct(item.productId)) ? commonUtil.getProductIdentificationValue(productIdentificationPref.primaryId, getProduct(item.productId)) : item.productId }}
+                  {{ item.name }}
+                  <p>{{ translate('SKU') }}: {{ item.sku }}</p>
                 </ion-label>
-                
-                <ion-button slot="end" color="medium" fill="clear" size="small" @click.stop="viewInventory(item.productId)">
-                  <ion-icon slot="icon-only" :icon="cubeOutline" />
-                </ion-button>
+                <ion-note slot="end">{{ item.quantity }} {{ translate('units') }}</ion-note>
               </ion-item>
             </div>
 
@@ -666,6 +685,57 @@
         </ion-list>
       </div>
 
+      <div v-if="selectedSegment === 'risk'">
+        <ion-list>
+          <ion-list-header>
+            <ion-label>{{ translate('Fraud risk') }}</ion-label>
+          </ion-list-header>
+          <ion-item lines="none">
+            <ion-icon slot="start" :icon="shieldCheckmarkOutline" :color="riskLevelColor(order.riskLevelEnumId)" />
+            <ion-label>
+              {{ riskSummary.recommendation }}
+              <p>{{ translate('Recommendation') }}</p>
+            </ion-label>
+            <ion-badge slot="end" :color="riskLevelColor(order.riskLevelEnumId)">{{ riskSummary.level }}</ion-badge>
+          </ion-item>
+        </ion-list>
+
+        <ion-list v-if="riskAssessmentsStatus === 'loading'">
+          <ion-item lines="none">
+            <ion-label>{{ translate('Loading risk assessments...') }}</ion-label>
+          </ion-item>
+        </ion-list>
+
+        <ErrorState
+          v-else-if="riskAssessmentsStatus === 'error'"
+          :title="translate('Risk assessments failed to load')"
+          :message="riskAssessmentsError"
+        />
+
+        <ion-list v-else-if="riskAssessments.length">
+          <ion-list-header>
+            <ion-label>{{ translate('Assessment details') }}</ion-label>
+          </ion-list-header>
+          <ion-item v-for="risk in riskAssessments" :key="risk.providerId">
+            <ion-icon slot="start" :icon="informationCircleOutline" :color="riskLevelColor(risk.riskLevelEnumId)" />
+            <ion-label>
+              {{ risk.providerName || risk.providerId || translate('Risk provider') }}
+              <p>{{ seed.enumDescription(risk.riskLevelEnumId) }}</p>
+              <template v-for="fact in risk.facts || []" :key="fact.factSeqId">
+                <p>{{ fact.description }} · {{ seed.enumDescription(fact.sentimentEnumId) }}</p>
+              </template>
+            </ion-label>
+            <ion-note slot="end">{{ formatDate(risk.createdDate) }}</ion-note>
+          </ion-item>
+        </ion-list>
+
+        <ion-list v-else>
+          <ion-item lines="none">
+            <ion-label>{{ translate('No risk assessments for this order') }}</ion-label>
+          </ion-item>
+        </ion-list>
+      </div>
+
       <div v-if="selectedSegment === 'comms'">
         <div v-if="commEvents.length">
           <div class="list-item comm-event-row" v-for="ev in commEvents" :key="ev.id">
@@ -751,7 +821,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { IonAccordion, IonAccordionGroup, IonBackButton, IonBadge, IonButton, IonButtons, IonCard, IonCardHeader, IonCardTitle, IonCheckbox, IonChip, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonMenuButton, IonModal, IonNote, IonPage, IonPopover, IonProgressBar, IonSegment, IonSegmentButton, IonSelect, IonSelectOption, IonTextarea, IonThumbnail, IonTitle, IonToolbar, alertController, modalController } from '@ionic/vue';
 import { storeToRefs } from 'pinia';
 import { DateTime } from 'luxon';
-import { businessOutline, chevronDown, closeOutline, createOutline, cubeOutline, ellipsisVertical, gitBranchOutline, saveOutline, sendOutline } from 'ionicons/icons';
+import { businessOutline, chevronDown, closeOutline, createOutline, ellipsisVertical, gitBranchOutline, informationCircleOutline, saveOutline, sendOutline, shieldCheckmarkOutline } from 'ionicons/icons';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useSeedStore } from '@/store/seed';
 import { useProductCacheStore } from '@/store/productCache';
@@ -760,16 +830,13 @@ import EmptyState from '@/components/EmptyState.vue';
 import ErrorState from '@/components/ErrorState.vue';
 import AddItemToOrderModal from '@/components/AddItemToOrderModal.vue';
 import RejectItemsModal from '@/components/RejectItemsModal.vue';
-import ProductInventoryModal from '@/components/ProductInventoryModal.vue';
 import FacilityModal from '@/components/FacilityModal.vue';
 import PhysicalFacilityModal from '@/components/PhysicalFacilityModal.vue';
 import RoutingGroupModal from '@/components/RoutingGroupModal.vue';
-import { api, commonUtil, DxpShopifyImg, translate } from '@common';
+import { api, commonUtil, translate } from '@common';
 import { showToast } from '@/utils';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useUserStore } from '@/store/user';
-import { useProductStore } from '@/store/productStore';
-import { useStockStore } from '@/store/stock';
 
 const props = defineProps<{
   orderId: string;
@@ -781,7 +848,6 @@ const productCache = useProductCacheStore();
 
 const { isLoading: loading, error } = storeToRefs(orderDetailStore);
 
-const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);
 /**
  * View model — adapts the raw order master-detail payload to the shape this template
  * already binds, joining IDs to labels through the seed store and product cache. The
@@ -800,6 +866,8 @@ const order = computed(() => {
     channel: seed.enumDescription(raw.salesChannelEnumId),
     productStoreName: seed.productStoreName(raw.productStoreId),
     currency: raw.currencyUom,
+    riskRecommendationEnumId: raw.riskRecommendationEnumId,
+    riskLevelEnumId: raw.riskLevelEnumId,
     customerName: orderDetailStore.customerName,
     history: orderDetailStore.headerStatuses.map((entry: any) => ({
       id: entry.orderStatusId,
@@ -845,7 +913,6 @@ const order = computed(() => {
         // variant ("XS / Blue", ~= itemDescription). Prefer the title, then variant, then id.
         return {
           id: item.orderItemSeqId,
-          productId: item.productId,
           name: product?.parentProductName || product?.productName || item.itemDescription || item.productId,
           sku: product?.sku || item.productId,
           imageUrl: product?.mainImageUrl || '',
@@ -918,9 +985,9 @@ const groupedItems = computed(() => {
 
   const groups: Record<string, {
     externalId: string;
-    productId: string;
     name: string;
     sku: string;
+    imageUrl?: string;
     unitPrice: number;
     currency: string;
     totalQty: number;
@@ -955,11 +1022,12 @@ const groupedItems = computed(() => {
       const returnableQty = Math.max(0, Number(item.quantity || 0) - returnedQty);
 
       if (!groups[externalId]) {
+        const product = productCache.getProduct(rawItem?.productId);
         groups[externalId] = {
           externalId,
-          productId: rawItem?.productId || '',
           name: item.name,
           sku: item.sku,
+          imageUrl: product?.mainImageUrl || '',
           unitPrice,
           currency: order.value.currency,
           totalQty: orderDetailStore.quantitiesByExternalId[externalId] || 0,
@@ -992,11 +1060,38 @@ const groupedItems = computed(() => {
 
 const orderTotals = computed(() => orderDetailStore.totals);
 
+const riskAssessments = computed(() => orderDetailStore.riskAssessments);
+const riskAssessmentsStatus = computed(() => orderDetailStore.riskAssessmentsStatus);
+const riskAssessmentsError = computed(() => orderDetailStore.riskAssessmentsError);
+
+const riskSummary = computed(() => {
+  const recommendationEnumId = order.value?.riskRecommendationEnumId || '';
+  const levelEnumId = order.value?.riskLevelEnumId || '';
+
+  return {
+    hasRiskSignal: Boolean(recommendationEnumId || levelEnumId),
+    recommendation: recommendationEnumId ? seed.enumDescription(recommendationEnumId) : translate('No recommendation'),
+    level: levelEnumId ? seed.enumDescription(levelEnumId) : translate('No risk level')
+  };
+});
+
+function riskLevelColor(riskLevelEnumId: string): string {
+  const map: Record<string, string> = {
+    ORLVL_HIGH: 'danger',
+    ORLVL_MEDIUM: 'warning',
+    ORLVL_LOW: 'success',
+    ORLVL_NONE: 'medium',
+    ORLVL_PENDING: 'medium'
+  };
+  return map[riskLevelEnumId] ?? 'medium';
+}
+
 const selectedSegment = ref('items');
 
 watch(selectedSegment, (segment) => {
   if (!props.orderId) return;
   if (segment === 'holds') orderDetailStore.fetchOrderHeaderWorkEfforts(props.orderId);
+  if (segment === 'risk') orderDetailStore.fetchRiskAssessments(props.orderId);
   if (segment === 'comms') orderDetailStore.fetchCommEvents(props.orderId);
 });
 
@@ -1019,10 +1114,6 @@ function toggleSelectAll(checked: boolean) {
       item.selected = checked;
     });
   });
-}
-
-function getProduct(productId: string) {
-  return useProductCacheStore().getProduct(productId);
 }
 
 onMounted(() => loadOrder(props.orderId));
@@ -1445,14 +1536,6 @@ async function parkFullOrder() {
   } catch {
     await showToast(translate('Failed to park the order. Please try again.'));
   }
-}
-
-async function viewInventory(productId: string) {
-  const modal = await modalController.create({
-    component: ProductInventoryModal,
-    componentProps: { productId }
-  });
-  await modal.present();
 }
 
 async function openAddItemModal(shipGroup: any) {
