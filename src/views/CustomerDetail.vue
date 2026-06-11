@@ -438,7 +438,9 @@
                 <ion-label>
                   <h3>{{ item.productId || '—' }}</h3>
                   <p>Qty {{ item.returnQuantity }}{{ item.receivedQuantity != null ? ` · Received ${item.receivedQuantity}` : '' }}</p>
-                  <p v-if="item.returnReasonId" class="muted">{{ seed.describe(item.returnReasonId) || item.returnReasonId }}</p>
+                  <ion-button v-if="item.returnReasonId" fill="clear" size="small" @click="showReturnReason(item.returnReasonId)">
+                    <ion-icon slot="icon-only" :icon="informationCircleOutline" />
+                  </ion-button>
                 </ion-label>
                 <ion-note slot="end">{{ money(item.returnPrice * item.returnQuantity, ret.currencyUomId) }}</ion-note>
               </ion-item>
@@ -603,7 +605,7 @@ import {
   pencilOutline,
   pricetagOutline
 } from 'ionicons/icons';
-import { DxpShopifyImg } from '@common';
+import { commonUtil, DxpShopifyImg } from '@common';
 import { useCustomerDetail } from '@/composables/useCustomerDetail';
 import { useProductCacheStore } from '@/store/productCache';
 import { useSeedStore } from '@/store/seed';
@@ -773,6 +775,10 @@ async function onEditContact(section: import('@/types/customer').ContactSection)
 
 async function onExpireRelationship(relationship: { keyFields: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string } }) {
   await expireRelationship(relationship.keyFields, DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss.SSS'));
+}
+
+async function showReturnReason(returnReasonId: string) {
+  await commonUtil.showToast((seed as any).describe(returnReasonId));
 }
 
 onMounted(() => load());
