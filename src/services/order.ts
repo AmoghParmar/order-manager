@@ -28,6 +28,7 @@ const orderSolrFields = [
   'orderItemSeqId',
   'shipGroupSeqId',
   'orderItemShipGroupIdentifier',
+  'quantity',
   'orderDate',
   'orderStatusId',
   'orderStatusDesc',
@@ -143,18 +144,36 @@ function normalizeOrderSolrResponse(data: any): OrderSearchResult {
   if (groupedOrders?.groups?.length) {
     return {
       orders: groupedOrders.groups
-        .map((group: any) => group?.doclist?.docs?.[0])
-        .filter(Boolean)
-        .map(normalizeOrderDoc),
+        .map(normalizeGroupedOrder)
+        .filter(Boolean),
       total: Number(groupedOrders.ngroups ?? groupedOrders.matches ?? groupedOrders.groups.length)
     };
   }
 
   const docs = allDocs(data);
   return {
-    orders: docs.map(normalizeOrderDoc),
+    orders: docs.map((doc: any) => normalizeOrderWithParkingUnits([doc])),
     total: Number(data?.response?.numFound ?? docs.length)
   };
+}
+
+function normalizeGroupedOrder(group: any) {
+  const docs = allDocs(group?.doclist);
+  return normalizeOrderWithParkingUnits(docs);
+}
+
+function normalizeOrderWithParkingUnits(docs: any[]) {
+  const primaryDoc = docs[0];
+  if (!primaryDoc) return undefined;
+
+  return {
+    ...normalizeOrderDoc(primaryDoc),
+    parkingUnitCount: sumParkingUnits(docs)
+  };
+}
+
+function sumParkingUnits(docs: any[]) {
+  return docs.reduce((total, doc) => total + toNumberValue(doc.quantity), 0);
 }
 
 function buildOrderSearchQuery(searchTerm: string) {

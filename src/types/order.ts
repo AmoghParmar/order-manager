@@ -341,6 +341,7 @@ export interface Order {
   fulfillmentStatus: string;
   deliveryMethod: string;
   priority: string;
+  parkingUnitCount?: number;
   items: OrderItem[];
   shipmentIds: string[];
   returnIds: string[];

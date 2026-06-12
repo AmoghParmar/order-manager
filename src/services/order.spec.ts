@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildOrderLookupPayload } from './order';
+import { commonUtil, useSolrSearch } from '@common';
+import { buildOrderLookupPayload, searchOrders } from './order';
 
 vi.mock('@common', () => ({
   api: vi.fn(),
@@ -13,6 +14,13 @@ function filtersOf(params: Parameters<typeof buildOrderLookupPayload>[0]) {
 
 function fieldsOf(params: Parameters<typeof buildOrderLookupPayload>[0] = {}) {
   return String(buildOrderLookupPayload(params).json.params.fl).split(' ');
+}
+
+function mockSolrResponse(data: any) {
+  (commonUtil.hasError as any).mockReturnValue(false);
+  (useSolrSearch as any).mockReturnValue({
+    runSolrQuery: vi.fn().mockResolvedValue({ data })
+  });
 }
 
 describe('buildOrderLookupPayload facility filtering', () => {
@@ -60,6 +68,7 @@ describe('buildOrderLookupPayload facility filtering', () => {
       'orderItemSeqId',
       'shipGroupSeqId',
       'orderItemShipGroupIdentifier',
+      'quantity',
       'facilityId',
       'reservationFacilityId',
       'facilityTypeId',
@@ -67,5 +76,41 @@ describe('buildOrderLookupPayload facility filtering', () => {
       'orderFacilityId',
       'orderFacilityName'
     ]));
+  });
+
+  it('sums grouped item quantities as the units in parking for each order', async () => {
+    mockSolrResponse({
+      grouped: {
+        orderId: {
+          ngroups: 1,
+          groups: [{
+            doclist: {
+              docs: [{
+                orderId: 'M100001',
+                orderName: '#100001',
+                orderDate: '2026-06-12T10:00:00Z',
+                orderStatusId: 'ORDER_APPROVED',
+                customerPartyId: 'CUST_1',
+                facilityId: 'UNFILLABLE_PARKING',
+                quantity: 2
+              }, {
+                orderId: 'M100001',
+                orderName: '#100001',
+                orderDate: '2026-06-12T10:00:00Z',
+                orderStatusId: 'ORDER_APPROVED',
+                customerPartyId: 'CUST_1',
+                facilityId: 'UNFILLABLE_PARKING',
+                quantity: '1.5'
+              }]
+            }
+          }]
+        }
+      }
+    });
+
+    const result = await searchOrders({ facilityIds: ['UNFILLABLE_PARKING'] });
+
+    expect(result.orders).toHaveLength(1);
+    expect(result.orders[0].parkingUnitCount).toBe(3.5);
   });
 });
