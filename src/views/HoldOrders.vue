@@ -95,7 +95,7 @@ import {
 } from '@ionic/vue';
 import { translate } from '@common';
 import HoldTaskCard from '@/components/HoldTaskCard.vue';
-import SearchFilterCard from '@/components/SearchFilterCard.vue';
+import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useSeedStore } from '@/store/seed';
 
