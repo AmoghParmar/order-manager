@@ -7,6 +7,11 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>Customer Detail</ion-title>
+        <ion-buttons slot="end">
+          <ion-button @click="onDeleteCustomer" :disabled="deleting || customer?.statusId === 'PARTY_DISABLED'">
+            <ion-icon slot="icon-only" :icon="trashOutline" />
+          </ion-button>
+        </ion-buttons>
       </ion-toolbar>
       <ion-progress-bar v-if="loading" type="indeterminate" />
     </ion-header>
@@ -561,7 +566,7 @@
         message="The selected customer is not available in this workspace."
       />
     </ion-content>
-  </ion-page>
+</ion-page>
 </template>
 
 <script setup lang="ts">
@@ -595,6 +600,7 @@ import {
   IonThumbnail,
   IonTitle,
   IonToolbar,
+  alertController,
   modalController
 } from '@ionic/vue';
 import { DateTime } from 'luxon';
@@ -603,7 +609,8 @@ import {
   chevronUp,
   informationCircleOutline,
   pencilOutline,
-  pricetagOutline
+  pricetagOutline,
+  trashOutline
 } from 'ionicons/icons';
 import { commonUtil, DxpShopifyImg } from '@common';
 import { useCustomerDetail } from '@/composables/useCustomerDetail';
@@ -615,6 +622,8 @@ import AddContactModal from '@/components/AddContactModal.vue';
 import RelationshipHistoryModal from '@/components/RelationshipHistoryModal.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
+import router from '@/router';
+import { deleteCustomerDetails, indexCustomer } from '@/services/customer';
 
 const props = defineProps<{
   customerId: string;
@@ -625,6 +634,7 @@ const seed = useSeedStore();
 const productCache = useProductCacheStore();
 const recentOrdersQuery = ref('');
 const allOrdersQuery = ref('');
+const deleting = ref(false);
 
 const {
   customer,
@@ -715,6 +725,36 @@ const segmentLabel = computed(() => {
   };
   return labels[selectedSegment.value] || 'Dashboard';
 });
+
+async function onDeleteCustomer() {
+  const alert = await alertController.create({
+    header: 'Anonymize customer data',
+    message: `This will permanently anonymize all PII for ${customer.value?.name || 'this customer'}. This cannot be undone.`,
+    buttons: [
+      { text: 'Cancel', role: 'cancel' },
+      {
+        text: 'Anonymize',
+        role: 'confirm',
+        handler: () => {
+          void (async () => {
+            deleting.value = true;
+            try {
+              await deleteCustomerDetails(props.customerId);
+              await indexCustomer(props.customerId);
+              await commonUtil.showToast('Customer data has been anonymized.');
+              router.replace('/customers');
+            } catch {
+              await commonUtil.showToast('Failed to anonymize customer data. Please try again.');
+            } finally {
+              deleting.value = false;
+            }
+          })();
+        }
+      }
+    ]
+  });
+  await alert.present();
+}
 
 // TODO: need to identify roleTypeIdFrom and roleTypeIdTo for the relationship,
 // and ensure PartyRole records exist for both parties before creating.

@@ -136,7 +136,7 @@ export async function searchCustomers(params: CustomerSearchParams = {}): Promis
         defType: 'edismax'
       },
       query: '*:*',
-      filter: 'docType: CUSTOMER'
+      filter: 'docType:CUSTOMER AND -statusId:PARTY_DISABLED'
     }
   };
 
@@ -145,7 +145,7 @@ export async function searchCustomers(params: CustomerSearchParams = {}): Promis
   }
 
   if (params.status && params.status !== 'All') {
-    payload.json.filter += ` AND statusId: ${params.status}`;
+    payload.json.filter += ` AND statusId:${params.status}`;
   }
 
   if (params.partyTypeId && params.partyTypeId !== 'All') {
@@ -942,4 +942,19 @@ export async function getShopifyShops(params: { productStoreId: string }): Promi
     params
   });
   return response.data || [];
+}
+
+export async function deleteCustomerDetails(partyId: string): Promise<void> {
+  await api({
+    url: `oms/customers/${partyId}`,
+    method: 'delete'
+  });
+}
+
+export async function indexCustomer(partyId: string): Promise<void> {
+  await api({
+    url: 'admin/solr/indexCustomer',
+    method: 'post',
+    data: { partyId }
+  });
 }
