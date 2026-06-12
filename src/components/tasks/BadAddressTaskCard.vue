@@ -288,9 +288,9 @@ async function cancelOrder() {
     header: translate('Cancel order'),
     message: translate('Are you sure you want to cancel this order? This action cannot be undone.'),
     buttons: [
-      { text: translate('No'), role: 'cancel' },
+      { text: translate('Cancel'), role: 'cancel' },
       {
-        text: translate('Yes'),
+        text: translate('Cancel order'),
         role: 'confirm',
         handler: async () => {
           await submitCancel();

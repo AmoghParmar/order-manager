@@ -2013,9 +2013,9 @@ async function cancelOrderItems() {
     header: translate('Cancel items'),
     message: translate('Are you sure you want to cancel the {count} selected item(s)? This action cannot be undone.').replace('{count}', String(itemsSnapshot.length)),
     buttons: [
-      { text: translate('No'), role: 'cancel' },
+      { text: translate('Cancel'), role: 'cancel' },
       {
-        text: translate('Yes'),
+        text: translate('Cancel items'),
         role: 'confirm',
         handler: async () => {
           try {
@@ -2096,9 +2096,9 @@ async function cancelSingleItem(item: any) {
     header: translate('Cancel Item'),
     message: translate('Are you sure you want to cancel this item? This action cannot be undone.'),
     buttons: [
-      { text: translate('No'), role: 'cancel' },
+      { text: translate('Cancel'), role: 'cancel' },
       {
-        text: translate('Yes'),
+        text: translate('Cancel item'),
         role: 'confirm',
         handler: async () => {
           try {
@@ -2204,8 +2204,8 @@ async function runOrderStatusAction(action: any) {
       header: translate(action.label),
       message: translate("Are you sure you want to change this order's status?"),
       buttons: [
-        { text: translate('No'), role: 'cancel' },
-        { text: translate('Yes'), role: 'confirm', handler: () => { changeOrderStatus(orderId, action.toStatusId); } }
+        { text: translate('Cancel'), role: 'cancel' },
+        { text: translate(action.label), role: 'confirm', handler: () => { changeOrderStatus(orderId, action.toStatusId); } }
       ]
     });
     await alert.present();

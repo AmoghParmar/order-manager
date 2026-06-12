@@ -166,9 +166,9 @@ async function resolveSelectedTasks() {
     header: translate('Resolve tasks'),
     message: translate('Are you sure you want to resolve {count} selected task(s)?').replace('{count}', String(selected.length)),
     buttons: [
-      { text: translate('No'), role: 'cancel' },
+      { text: translate('Cancel'), role: 'cancel' },
       {
-        text: translate('Yes'),
+        text: translate('Resolve tasks'),
         role: 'confirm',
         handler: async () => {
           await Promise.all(
