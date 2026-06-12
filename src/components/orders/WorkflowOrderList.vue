@@ -157,7 +157,6 @@ import {
   alertController
 } from '@ionic/vue';
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
 import { DateTime } from 'luxon';
 import { useCustomerServiceStore, BULK_ACTIONS } from '@/store/customerService';
 import { useOrderStore } from '@/store/order';
@@ -179,7 +178,6 @@ const props = defineProps<{
 const store = useCustomerServiceStore();
 const orderStore = useOrderStore();
 const seedStore = useSeedStore();
-const route = useRoute();
 const toastMessage = ref('');
 
 const filters = computed({
@@ -231,19 +229,15 @@ const hasMore = computed(() =>
   isApiBucket && orderStore.workflowOrders[apiBucket].length < orderStore.workflowOrdersTotal[apiBucket]
 );
 
-function queryValue(value: unknown) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 function applyRouteFilters() {
-  const facilityId = queryValue(route.query.facilityId);
+  const facilityId = new URLSearchParams(window.location.search).get('facilityId');
 
-  if (typeof facilityId === 'string') {
+  if (facilityId) {
     filters.value.facilityId = facilityId;
   }
 }
 
-watch(() => route.query, applyRouteFilters, { immediate: true });
+applyRouteFilters();
 
 function loadWorkflowOrders() {
   orderStore.fetchWorkflowOrders(props.bucket as 'open' | 'inflight' | 'packed', filters.value);

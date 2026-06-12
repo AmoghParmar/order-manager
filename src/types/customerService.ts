@@ -17,6 +17,7 @@ export interface WorkflowOrder {
   shipGroupSeqId: string;
   shippingMethodTypeId: string;
   shipmentMethodDesc: string;
+  carrierPartyId?: string;
   priority: 'HIGH' | 'NORMAL' | 'LOW';
   facilityId: string | null;
   facilityName: string | null;
@@ -25,6 +26,12 @@ export interface WorkflowOrder {
   pickedDate: string | null;
   receivedAtFacility: boolean;
   shipBeforeDate: string | null;
+  estimatedDeliveryDate?: string | null;
+  shippingAddress1?: string;
+  shippingCity?: string;
+  shippingStateProvinceGeoId?: string;
+  shippingPostalCode?: string;
+  shippingCountryGeoId?: string;
   bucket: WorkflowBucket;
 }
 

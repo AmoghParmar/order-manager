@@ -74,6 +74,11 @@ function updateSearch(event: CustomEvent) {
   min-width: 0;
 }
 
+.search-filter-controls :slotted(.date-filter-select) {
+  flex: 0 0 11rem;
+  max-width: 11rem;
+}
+
 .search-filter-clear {
   flex: 0 0 auto;
 }
@@ -87,6 +92,11 @@ function updateSearch(event: CustomEvent) {
 
   .search-filter-controls :slotted(*) {
     flex-basis: auto;
+  }
+
+  .search-filter-controls :slotted(.date-filter-select) {
+    flex: 1 1 auto;
+    max-width: none;
   }
 
   .search-filter-clear {

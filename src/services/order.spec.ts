@@ -51,15 +51,17 @@ describe('buildOrderLookupPayload facility filtering', () => {
     expect(filters).not.toContain('facilityId:(All OR  OR UNFILLABLE_PARKING)');
   });
 
-  it('combines a facility preset with status and channel filters', () => {
+  it('combines a facility preset with status, sales channel, and shipping method filters', () => {
     const filters = filtersOf({
       facilityIds: ['UNFILLABLE_PARKING'],
       status: ['ORDER_APPROVED'],
-      channel: 'WEB_SALES_CHANNEL'
+      channel: 'WEB_SALES_CHANNEL',
+      shipmentMethodTypeId: 'STOREPICKUP'
     });
     expect(filters).toContain('facilityId:UNFILLABLE_PARKING');
     expect(filters).toContain('orderStatusId:ORDER_APPROVED');
     expect(filters).toContain('salesChannelEnumId:WEB_SALES_CHANNEL');
+    expect(filters).toContain('shipmentMethodTypeId:STOREPICKUP');
   });
 
   it('requests the item and ship-group facility fields used by queue filtering', () => {
@@ -78,6 +80,23 @@ describe('buildOrderLookupPayload facility filtering', () => {
     ]));
   });
 
+  it('requests the address, reason, and delivery fields used by queue list rows', () => {
+    const fields = fieldsOf();
+    expect(fields).toEqual(expect.arrayContaining([
+      'address1',
+      'city',
+      'stateProvinceGeoId',
+      'postalCode',
+      'countryGeoId',
+      'estimatedDeliveryDate',
+      'shipBeforeDate',
+      'rejectionReason',
+      'rejectionReasonDesc',
+      'ruleName',
+      'routingRuleName'
+    ]));
+  });
+
   it('sums grouped item quantities as the units in parking for each order', async () => {
     mockSolrResponse({
       grouped: {
@@ -91,6 +110,15 @@ describe('buildOrderLookupPayload facility filtering', () => {
                 orderDate: '2026-06-12T10:00:00Z',
                 orderStatusId: 'ORDER_APPROVED',
                 customerPartyId: 'CUST_1',
+                customerName: 'Angela Crutchfield',
+                address1: '602 White Oak Dr',
+                city: 'Eufaula',
+                stateProvinceGeoId: 'AL',
+                postalCode: '36027',
+                countryGeoId: 'USA',
+                estimatedDeliveryDate: '2026-06-10T00:00:00Z',
+                rejectionReasonDesc: 'Inventory not available',
+                routingRuleName: 'Rule name',
                 facilityId: 'UNFILLABLE_PARKING',
                 quantity: 2
               }, {
@@ -112,5 +140,16 @@ describe('buildOrderLookupPayload facility filtering', () => {
 
     expect(result.orders).toHaveLength(1);
     expect(result.orders[0].parkingUnitCount).toBe(3.5);
+    expect(result.orders[0]).toMatchObject({
+      customerName: 'Angela Crutchfield',
+      shippingAddress1: '602 White Oak Dr',
+      shippingCity: 'Eufaula',
+      shippingStateProvinceGeoId: 'AL',
+      shippingPostalCode: '36027',
+      shippingCountryGeoId: 'USA',
+      estimatedDeliveryDate: '2026-06-10T00:00:00Z',
+      queueReason: 'Inventory not available',
+      ruleName: 'Rule name'
+    });
   });
 });

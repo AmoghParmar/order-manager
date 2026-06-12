@@ -16,62 +16,32 @@
         @clear="clearFilters"
       >
         <slot name="filters" />
-        <ion-item :id="statusTriggerId" button lines="none">
-          <ion-label>
-            <p>Status</p>
-            <h3>{{ statusFilterLabel }}</h3>
-          </ion-label>
-        </ion-item>
-        <ion-popover :trigger="statusTriggerId" trigger-action="click" :show-backdrop="false">
-          <ion-content>
-            <ion-list>
-              <ion-item lines="none">
-                <ion-checkbox
-                  :checked="!selectedStatusIds.length"
-                  justify="start"
-                  label-placement="end"
-                  @ionChange="setAllStatusesFilter(Boolean($event.detail.checked))"
-                >
-                  {{ translate('All statuses') }}
-                </ion-checkbox>
-              </ion-item>
-              <ion-item v-for="option in orderStatuses" :key="option.statusId" lines="none">
-                <ion-checkbox
-                  :checked="selectedStatusIds.includes(option.statusId)"
-                  justify="start"
-                  label-placement="end"
-                  @ionChange="setStatusFilter(option.statusId, Boolean($event.detail.checked))"
-                >
-                  {{ option.description || option.statusId }}
-                </ion-checkbox>
-              </ion-item>
-            </ion-list>
-          </ion-content>
-        </ion-popover>
-        <ion-input v-model="searchFilters.dateFrom" label="Order date from" label-placement="stacked" type="date" />
-        <ion-input v-model="searchFilters.dateThru" label="Order date thru" label-placement="stacked" type="date" />
         <ion-select
           v-model="searchFilters.channel"
-          label="Channel"
+          label="Sales channel"
           label-placement="stacked"
           interface="popover"
           :interface-options="{ showBackdrop: false }"
         >
-          <ion-select-option value="All">All channels</ion-select-option>
+          <ion-select-option value="All">All sales channels</ion-select-option>
           <ion-select-option v-for="option in salesChannels" :key="option.enumId" :value="option.enumId">
             {{ option.description || option.enumName || option.enumId }}
           </ion-select-option>
         </ion-select>
         <ion-select
-          v-model="searchSort"
-          label="Sort by order date"
+          v-model="searchFilters.shipmentMethodTypeId"
+          label="Shipping method"
           label-placement="stacked"
           interface="popover"
           :interface-options="{ showBackdrop: false }"
         >
-          <ion-select-option value="orderDate desc">{{ translate('Newest first') }}</ion-select-option>
-          <ion-select-option value="orderDate asc">{{ translate('Oldest first') }}</ion-select-option>
+          <ion-select-option value="All">All methods</ion-select-option>
+          <ion-select-option v-for="option in shipmentMethodOptions" :key="option.id" :value="option.id">
+            {{ option.label }}
+          </ion-select-option>
         </ion-select>
+        <DateFilterSelect v-model="searchFilters.dateFrom" :label="translate('Order date from')" />
+        <DateFilterSelect v-model="searchFilters.dateThru" :label="translate('Order date thru')" />
       </SearchFilterCard>
 
       <ion-progress-bar v-if="loading" type="indeterminate" />
@@ -97,30 +67,53 @@
             {{ selectMode ? translate('Done') : translate('Select') }}
           </ion-button>
         </ion-list-header>
-        <ion-item
+        <div
           v-for="order in searchResults"
           :key="order.id"
-          :button="selectMode"
-          :router-link="selectMode ? undefined : `/orders/${order.id}`"
-          @click="toggleOrderSelection(order.id)"
+          class="list-item queue-order-row"
+          :role="selectMode ? 'button' : 'link'"
+          tabindex="0"
+          @click="handleOrderRowClick(order)"
+          @keydown.enter.prevent="handleOrderRowClick(order)"
+          @keydown.space.prevent="handleOrderRowClick(order)"
         >
-          <ion-checkbox
-            v-if="selectMode"
-            slot="start"
-            :checked="selectedOrderIds.includes(order.id)"
-            @click.stop
-            @ionChange="setOrderSelection(order.id, $event.detail.checked)"
-          />
-          <ion-label>
-            <h2>{{ order.externalId || order.id }}</h2>
-            <p>{{ order.id }} · {{ order.customerName || order.customerId || translate('Unknown customer') }}</p>
-            <p>{{ createdDateLabel(order.orderDate) }} · {{ translate('Ship') }} {{ shipTimeLeftLabel(order.orderDate) }}</p>
-            <p v-if="hasParkingUnitCount(order)">{{ parkingUnitCountLabel(order) }}</p>
+          <ion-item lines="none">
+            <ion-checkbox
+              slot="start"
+              :checked="selectedOrderIds.includes(order.id)"
+              @click.stop
+              @keydown.stop
+              @ionChange="setOrderSelection(order.id, $event.detail.checked)"
+            />
+            <ion-label>
+              <p class="overline">{{ order.id }}</p>
+              {{ order.externalId || order.orderName || order.id }}
+              <p>{{ statusDescription(order.status) }}</p>
+            </ion-label>
+          </ion-item>
+
+          <ion-label class="tablet ion-text-start">
+            {{ order.customerName || order.customerId || translate('Unknown customer') }}
+            <p>{{ customerAddressLine(order) }}</p>
+            <p v-if="customerAddressTrailingLine(order)">{{ customerAddressTrailingLine(order) }}</p>
           </ion-label>
-          <ion-badge :color="statusColor(order.status)" slot="end">
-            {{ statusDescription(order.status) }}
-          </ion-badge>
-        </ion-item>
+
+          <ion-label class="tablet ion-text-start">
+            {{ queueReasonLabel(order) }}
+            <p>{{ queueRuleLabel(order) }}</p>
+          </ion-label>
+
+          <ion-label class="tablet">
+            {{ formatDateTime(order.orderDate) }}
+            <p>{{ orderedRelativeLabel(order.orderDate) }}</p>
+          </ion-label>
+
+          <ion-label class="queue-delivery ion-text-end">
+            {{ estimatedDeliveryDateLabel(order) }}
+            <p>{{ translate('Estimated delivery date') }}</p>
+            <p v-if="estimatedDeliveryRelativeLabel(order)">{{ estimatedDeliveryRelativeLabel(order) }}</p>
+          </ion-label>
+        </div>
       </ion-list>
 
       <EmptyState
@@ -138,6 +131,9 @@
       <ion-toolbar>
         <ion-title size="small">{{ selectedOrderIds.length }} {{ translate('selected') }}</ion-title>
         <ion-buttons slot="end" class="bulk-action-buttons">
+          <ion-button v-if="enableBrokerAction" :disabled="!selectedOrderIds.length" @click="openBrokerSelectedModal">
+            {{ translate('Broker selected') }}
+          </ion-button>
           <ion-button :disabled="!selectedOrderIds.length" @click="confirmCancelOrders">{{ translate('Cancel open items') }}</ion-button>
           <ion-button :disabled="!selectedOrderIds.length" @click="openEditShippingMethodModal">{{ translate('Edit shipping method') }}</ion-button>
           <ion-button :disabled="!selectedOrderIds.length" @click="openAddTaskModal">{{ translate('Add task') }}</ion-button>
@@ -147,14 +143,8 @@
   </ion-page>
 </template>
 
-<script lang="ts">
-// Module-scoped so each mounted instance gets a distinct popover trigger id.
-let instanceCounter = 0;
-</script>
-
 <script setup lang="ts">
 import {
-  IonBadge,
   IonButton,
   IonButtons,
   IonCheckbox,
@@ -163,14 +153,12 @@ import {
   IonHeader,
   IonInfiniteScroll,
   IonInfiniteScrollContent,
-  IonInput,
   IonItem,
   IonLabel,
   IonList,
   IonListHeader,
   IonMenuButton,
   IonPage,
-  IonPopover,
   IonProgressBar,
   IonSelect,
   IonSelectOption,
@@ -178,19 +166,23 @@ import {
   IonToolbar,
   alertController,
   modalController,
+  useIonRouter,
 } from '@ionic/vue';
-import { commonUtil, translate } from '@common';
+import { api, translate } from '@common';
 import { DateTime } from 'luxon';
 import { computed, onMounted, ref, watch } from 'vue';
 import { searchOrders } from '@/services/order';
 import { useOrderDetailStore } from '@/store/orderDetail';
+import { useOrderTaskStore } from '@/store/orderTask';
 import { useProductStore } from '@/store/productStore';
 import { useSeedStore } from '@/store/seed';
 import type { Order } from '@/types/order';
 import AddOrderTaskModal from '@/components/tasks/AddOrderTaskModal.vue';
 import EditShippingMethodModal from '@/components/fulfillment/EditShippingMethodModal.vue';
+import RoutingGroupModal from '@/components/fulfillment/RoutingGroupModal.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
+import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 import { showToast } from '@/utils';
 
@@ -201,26 +193,24 @@ const props = defineProps<{
   searchPlaceholder: string;
   emptyTitle: string;
   emptyMessage: string;
+  enableBrokerAction?: boolean;
 }>();
 
 const orderDetailStore = useOrderDetailStore();
+const orderTaskStore = useOrderTaskStore();
 const productStore = useProductStore();
 const seedStore = useSeedStore();
-
-// Unique per instance: this component backs multiple routes that Ionic keeps
-// alive in the DOM at once, so the popover trigger id must not collide.
-const statusTriggerId = `queue-status-filter-trigger-${(instanceCounter += 1)}`;
+const ionRouter = useIonRouter();
 
 const PAGE_SIZE = 50;
 
 const searchQuery = ref('');
 const searchFilters = ref({
-  status: [] as string[],
   channel: 'All',
+  shipmentMethodTypeId: 'All',
   dateFrom: '',
   dateThru: '',
 });
-const searchSort = ref('orderDate desc');
 const searchResults = ref<Order[]>([]);
 const searchTotal = ref(0);
 const pageIndex = ref(0);
@@ -230,18 +220,11 @@ const debounceTimer = ref<ReturnType<typeof setTimeout>>();
 const selectMode = ref(false);
 const selectedOrderIds = ref<string[]>([]);
 
-const orderStatuses = computed(() => seedStore.getStatusItemsByType('ORDER_STATUS'));
 const salesChannels = computed(() => seedStore.getEnumsByType('ORDER_SALES_CHANNEL'));
+const shipmentMethodOptions = computed(() => seedStore.getShipmentMethodOptions);
 const selectedProductStoreId = computed(() => productStore.getCurrentProductStore?.productStoreId || 'All');
 const hasMore = computed(() => searchResults.value.length < searchTotal.value);
 
-const selectedStatusIds = computed(() => searchFilters.value.status);
-const statusFilterLabel = computed(() => {
-  if (!selectedStatusIds.value.length) return translate('All statuses');
-  if (selectedStatusIds.value.length === 1) return statusDescription(selectedStatusIds.value[0]);
-
-  return `${selectedStatusIds.value.length} ${translate('statuses')}`;
-});
 const currentPageOrderIds = computed(() => searchResults.value.map((order) => order.id));
 const allCurrentPageSelected = computed(() => {
   return currentPageOrderIds.value.length > 0 && currentPageOrderIds.value.every((orderId) => selectedOrderIds.value.includes(orderId));
@@ -255,7 +238,6 @@ onMounted(runSearch);
 watch(searchQuery, scheduleSearch);
 watch(() => props.facilityIds, () => runSearch(), { deep: true });
 watch(searchFilters, () => runSearch(), { deep: true });
-watch(searchSort, () => runSearch());
 watch(searchResults, () => {
   const currentOrderIds = new Set(currentPageOrderIds.value);
   selectedOrderIds.value = selectedOrderIds.value.filter((orderId) => currentOrderIds.has(orderId));
@@ -264,13 +246,13 @@ watch(searchResults, () => {
 function toSearchParams(page: number) {
   return {
     queryString: searchQuery.value,
-    status: searchFilters.value.status,
     channel: searchFilters.value.channel,
+    shipmentMethodTypeId: searchFilters.value.shipmentMethodTypeId,
     productStoreId: selectedProductStoreId.value,
     facilityIds: props.facilityIds,
     dateFrom: searchFilters.value.dateFrom,
     dateThru: searchFilters.value.dateThru,
-    sort: searchSort.value,
+    sort: 'orderDate desc',
     pageSize: PAGE_SIZE,
     pageIndex: page,
   };
@@ -367,13 +349,102 @@ async function openEditShippingMethodModal() {
   }
 }
 
+async function openBrokerSelectedModal() {
+  const orderIds = [...selectedOrderIds.value];
+  const productStoreId = productStore.getCurrentProductStore?.productStoreId;
+
+  if (!productStoreId || productStoreId === 'All') {
+    await showToast(translate('Select a product store before brokering orders.'));
+    return;
+  }
+
+  const modal = await modalController.create({ component: RoutingGroupModal, componentProps: { productStoreId } });
+  await modal.present();
+  const { data: routingGroupId } = await modal.onWillDismiss();
+  if (!routingGroupId) return;
+
+  await brokerSelectedOrderShipGroups(orderIds, routingGroupId, productStoreId);
+}
+
+async function brokerSelectedOrderShipGroups(orderIds: string[], routingGroupId: string, productStoreId: string) {
+  loading.value = true;
+  try {
+    const brokerableShipGroups = await brokerableShipGroupsForOrders(orderIds);
+    if (!brokerableShipGroups.length) {
+      await showToast(translate('No brokerable ship groups found for the selected orders.'));
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      brokerableShipGroups.map((shipGroup) =>
+        orderTaskStore.brokerShipGroup({
+          routingGroupId,
+          orderId: shipGroup.orderId,
+          shipGroupSeqId: shipGroup.shipGroupSeqId,
+          productStoreId,
+        })
+      )
+    );
+    const failureCount = results.filter((result) => result.status === 'rejected').length;
+    const successCount = results.length - failureCount;
+
+    if (successCount) {
+      await showToast(translate('{count} ship group(s) brokered successfully.', { count: successCount }));
+      exitSelectMode();
+      await runSearch();
+    }
+    if (failureCount) {
+      await showToast(translate('{count} ship group(s) could not be brokered. Please try again.', { count: failureCount }));
+    }
+  } catch {
+    await showToast(translate('Failed to broker selected orders. Please try again.'));
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function brokerableShipGroupsForOrders(orderIds: string[]) {
+  const shipGroupsByOrder = await Promise.all(
+    orderIds.map(async (orderId) => ({
+      orderId,
+      shipGroups: await fetchOrderShipGroups(orderId),
+    }))
+  );
+
+  return shipGroupsByOrder.flatMap(({ orderId, shipGroups }) =>
+    shipGroups
+      .filter(isVirtualShipGroup)
+      .map((shipGroup) => ({ orderId, shipGroupSeqId: shipGroupSeqId(shipGroup) }))
+      .filter((shipGroup) => shipGroup.shipGroupSeqId)
+  );
+}
+
+async function fetchOrderShipGroups(orderId: string) {
+  const response = await api({ url: `oms/orders/${orderId}/shipGroups`, method: 'GET' });
+  return Array.isArray(response.data) ? response.data : (response.data?.docs || response.data?.shipGroups || []);
+}
+
+function shipGroupSeqId(shipGroup: any) {
+  return shipGroup.shipGroupSeqId || shipGroup.id || '';
+}
+
+function isVirtualShipGroup(shipGroup: any) {
+  const facilityId = shipGroup.facilityId || shipGroup.facility?.facilityId || '';
+  if (!facilityId) return true;
+
+  const facility = seedStore.facility(facilityId);
+  const facilityTypeId = shipGroup.facilityTypeId || shipGroup.facility?.facilityTypeId || facility?.facilityTypeId;
+  const parentTypeId = shipGroup.facilityParentTypeId || shipGroup.parentFacilityTypeId || seedStore.facilityType(facilityTypeId)?.parentTypeId;
+
+  return facilityTypeId === 'VIRTUAL_FACILITY' || parentTypeId === 'VIRTUAL_FACILITY';
+}
+
 function clearFilters() {
   searchQuery.value = '';
-  searchSort.value = 'orderDate desc';
   selectedOrderIds.value = [];
   searchFilters.value = {
-    status: [],
     channel: 'All',
+    shipmentMethodTypeId: 'All',
     dateFrom: '',
     dateThru: '',
   };
@@ -402,35 +473,32 @@ function toggleOrderSelection(orderId: string) {
   setOrderSelection(orderId, !selectedOrderIds.value.includes(orderId));
 }
 
+function handleOrderRowClick(order: Order) {
+  if (selectMode.value) {
+    toggleOrderSelection(order.id);
+    return;
+  }
+
+  ionRouter.push(orderDetailLink(order));
+}
+
 function setOrderSelection(orderId: string, checked: boolean) {
   if (checked) {
     if (!selectedOrderIds.value.includes(orderId)) selectedOrderIds.value = [...selectedOrderIds.value, orderId];
+    selectMode.value = true;
     return;
   }
 
   selectedOrderIds.value = selectedOrderIds.value.filter((selectedOrderId) => selectedOrderId !== orderId);
+  if (!selectedOrderIds.value.length) selectMode.value = false;
 }
 
-function setAllStatusesFilter(checked: boolean) {
-  if (checked) searchFilters.value.status = [];
-}
-
-function setStatusFilter(statusId: string, checked: boolean) {
-  const nextStatusIds = new Set(selectedStatusIds.value);
-
-  if (checked) nextStatusIds.add(statusId);
-  else nextStatusIds.delete(statusId);
-
-  searchFilters.value.status = [...nextStatusIds];
+function orderDetailLink(order: Order) {
+  return `/orders/${order.id}`;
 }
 
 function statusDescription(statusId: string) {
   return seedStore.statusDescription(statusId);
-}
-
-function statusColor(statusId: string) {
-  const label = statusDescription(statusId);
-  return commonUtil.getColorByDesc(label) || commonUtil.getColorByDesc(statusId) || commonUtil.getColorByDesc('default');
 }
 
 function hasParkingUnitCount(order: Order) {
@@ -445,44 +513,72 @@ function parkingUnitCountLabel(order: Order) {
   return `${formattedUnitCount} ${unitLabel} ${translate('in parking')}`;
 }
 
-function createdDateLabel(value: string) {
-  const date = parseOrderDate(value);
-  if (!date?.isValid) return value || 'Date unavailable';
-
-  const now = DateTime.now();
-  if (date.hasSame(now, 'day')) {
-    const hoursAgo = Math.max(0, Math.floor(now.diff(date, 'hours').hours));
-    if (hoursAgo < 1) return 'Created less than 1h ago';
-    return `Created ${hoursAgo}h ago`;
-  }
-
-  return `Created ${date.toLocaleString(DateTime.DATE_MED)}`;
+function customerAddressLine(order: Order) {
+  return order.shippingAddress1 || order.customerId || order.externalId || '';
 }
 
-function shipTimeLeftLabel(value: string) {
-  const date = parseOrderDate(value);
-  if (!date?.isValid) return 'time unavailable';
+function customerAddressTrailingLine(order: Order) {
+  const parts = [
+    order.shippingCity,
+    order.shippingStateProvinceGeoId,
+    order.shippingPostalCode,
+    order.shippingCountryGeoId
+  ].filter(Boolean);
 
-  const shipBy = date.plus({ hours: 24 });
-  const minutesLeft = Math.ceil(shipBy.diffNow('minutes').minutes);
-
-  if (minutesLeft <= 0) return 'overdue';
-  if (minutesLeft < 60) return `in ${minutesLeft}m`;
-
-  const hours = Math.floor(minutesLeft / 60);
-  const minutes = minutesLeft % 60;
-  return minutes ? `in ${hours}h ${minutes}m` : `in ${hours}h`;
+  if (parts.length) return parts.join(' ');
+  return order.shippingAddress1 ? '' : order.externalId;
 }
 
-function parseOrderDate(value: string) {
+function queueReasonLabel(order: Order) {
+  return order.queueReason || order.rejectionReason || translate('Reason unavailable');
+}
+
+function queueRuleLabel(order: Order) {
+  if (order.ruleName) return order.ruleName;
+  if (hasParkingUnitCount(order)) return parkingUnitCountLabel(order);
+
+  return translate('Rule name unavailable');
+}
+
+function estimatedDeliveryValue(order: Order) {
+  return order.estimatedDeliveryDate || order.shipBeforeDate || order.shipByDate || '';
+}
+
+function estimatedDeliveryDateLabel(order: Order) {
+  const date = dateFromValue(estimatedDeliveryValue(order));
+  return date ? date.toFormat('MM-dd-yyyy') : translate('No delivery date');
+}
+
+function estimatedDeliveryRelativeLabel(order: Order) {
+  const date = dateFromValue(estimatedDeliveryValue(order));
+  return date?.toRelative() || '';
+}
+
+function orderedRelativeLabel(orderDateValue: string) {
+  const date = dateFromValue(orderDateValue);
+  const relativeDate = date?.toRelative();
+  return relativeDate ? `${translate('Ordered')} ${relativeDate}` : '';
+}
+
+function formatDateTime(value: string) {
+  const date = dateFromValue(value);
+  return date ? date.toFormat('MM-dd-yyyy hh:mm a') : '';
+}
+
+function dateFromValue(value?: string | null) {
   if (!value) return undefined;
 
-  if (/^\d+$/.test(value)) {
-    const numericValue = Number(value);
-    return DateTime.fromMillis(value.length <= 10 ? numericValue * 1000 : numericValue);
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue) && numericValue > 0) {
+    const numericDate = DateTime.fromMillis(value.length <= 10 ? numericValue * 1000 : numericValue);
+    if (numericDate.isValid) return numericDate;
   }
 
-  return DateTime.fromISO(value);
+  const sqlDate = DateTime.fromSQL(value);
+  if (sqlDate.isValid) return sqlDate;
+
+  const isoDate = DateTime.fromISO(value);
+  return isoDate.isValid ? isoDate : undefined;
 }
 </script>
 
@@ -500,5 +596,25 @@ function parseOrderDate(value: string) {
 
 .bulk-action-buttons {
   overflow-x: auto;
+}
+
+.queue-order-row {
+  --columns-desktop: 5;
+  --columns-tablet: 5;
+  min-height: 5rem;
+  border-block-start: var(--border-medium);
+  padding-inline-end: var(--spacer-sm);
+}
+
+.queue-order-row > ion-label {
+  width: 100%;
+}
+
+.queue-order-row > ion-label.queue-delivery {
+  display: block;
+  justify-self: end;
+  max-width: 10rem;
+  min-width: 10rem;
+  width: 10rem;
 }
 </style>
