@@ -945,4 +945,18 @@ export async function getShopifyShops(): Promise<any[]> {
   return response.data || [];
 }
 
+export interface DeleteCustomerResult {
+  skippedOrderIds: string[];
+}
+
+export async function deleteCustomerDetails(partyId: string): Promise<DeleteCustomerResult> {
+  const response = await api({
+    url: `oms/customers/${partyId}`,
+    method: 'delete'
+  });
+  return {
+    skippedOrderIds: response.data?.skippedOrderIds ?? []
+  };
+}
+
 
