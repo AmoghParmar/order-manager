@@ -137,6 +137,24 @@
               </ion-item>
             </ion-list>
           </ion-card>
+
+          <ion-card v-if="riskSummary.hasRiskSignal">
+            <ion-card-header>
+              <ion-card-title>{{ translate('Fraud risk') }}</ion-card-title>
+            </ion-card-header>
+            <ion-list lines="none">
+              <ion-item button detail @click="selectedSegment = 'risk'">
+                <ion-icon slot="start" :icon="shieldOutline" :color="riskLevelColor(order.riskLevelEnumId)" />
+                <ion-label>
+                  <p>{{ translate('Recommendation') }}</p>
+                  {{ riskSummary.recommendation }}
+                </ion-label>
+                <ion-badge slot="end" :color="riskLevelColor(order.riskLevelEnumId)">
+                  {{ riskSummary.level }}
+                </ion-badge>
+              </ion-item>
+            </ion-list>
+          </ion-card>
         </div>
       </div>
 
@@ -149,6 +167,9 @@
         </ion-segment-button>
         <ion-segment-button value="holds">
           <ion-label>{{ translate('Holds') }}</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="risk">
+          <ion-label>{{ translate('Risk') }}</ion-label>
         </ion-segment-button>
         <ion-segment-button value="comms">
           <ion-label>{{ translate('Comms') }}</ion-label>
@@ -236,7 +257,7 @@
         </ion-list>
 
         <!-- Totals Card -->
-        
+
         <div class="order-summary">
           <ion-card>
             <ion-card-header>
@@ -480,7 +501,7 @@
                     <ion-badge class="kit-badge" color="dark" v-if="isKit(item)">{{ translate("Kit") }}</ion-badge>
                   </div>
                 </ion-label>
-                
+
                 <ion-button slot="end" color="medium" fill="clear" size="small" @click.stop="viewInventory(item.productId)">
                   <ion-icon slot="icon-only" :icon="cubeOutline" />
                 </ion-button>
@@ -653,6 +674,57 @@
         </ion-list>
       </div>
 
+      <div v-if="selectedSegment === 'risk'">
+        <ion-list>
+          <ion-list-header>
+            <ion-label>{{ translate('Fraud risk') }}</ion-label>
+          </ion-list-header>
+          <ion-item lines="none">
+            <ion-icon slot="start" :icon="shieldOutline" :color="riskLevelColor(order.riskLevelEnumId)" />
+            <ion-label>
+              {{ riskSummary.recommendation }}
+              <p>{{ translate('Recommendation') }}</p>
+            </ion-label>
+            <ion-badge slot="end" :color="riskLevelColor(order.riskLevelEnumId)">{{ riskSummary.level }}</ion-badge>
+          </ion-item>
+        </ion-list>
+
+        <ion-list v-if="riskAssessmentsStatus === 'loading'">
+          <ion-item lines="none">
+            <ion-label>{{ translate('Loading risk assessments...') }}</ion-label>
+          </ion-item>
+        </ion-list>
+
+        <ErrorState
+          v-else-if="riskAssessmentsStatus === 'error'"
+          :title="translate('Risk assessments failed to load')"
+          :message="riskAssessmentsError"
+        />
+
+        <ion-list v-else-if="riskAssessments.length">
+          <ion-list-header>
+            <ion-label>{{ translate('Assessment details') }}</ion-label>
+          </ion-list-header>
+          <ion-item v-for="risk in riskAssessments" :key="risk.providerId">
+            <ion-icon slot="start" :icon="informationCircleOutline" :color="riskLevelColor(risk.riskLevelEnumId)" />
+            <ion-label>
+              {{ risk.providerName || risk.providerId || translate('Risk provider') }}
+              <p>{{ seed.enumDescription(risk.riskLevelEnumId) }}</p>
+              <template v-for="fact in risk.facts || []" :key="fact.factSeqId">
+                <p>{{ fact.description }} · {{ seed.enumDescription(fact.sentimentEnumId) }}</p>
+              </template>
+            </ion-label>
+            <ion-note slot="end">{{ formatDate(risk.createdDate) }}</ion-note>
+          </ion-item>
+        </ion-list>
+
+        <ion-list v-else>
+          <ion-item lines="none">
+            <ion-label>{{ translate('No risk assessments for this order') }}</ion-label>
+          </ion-item>
+        </ion-list>
+      </div>
+
       <div v-if="selectedSegment === 'comms'">
         <div v-if="commEvents.length">
           <div class="list-item comm-event-row" v-for="ev in commEvents" :key="ev.id">
@@ -738,7 +810,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { IonAccordion, IonAccordionGroup, IonBackButton, IonBadge, IonButton, IonButtons, IonCard, IonCardHeader, IonCardTitle, IonCheckbox, IonChip, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonMenuButton, IonModal, IonNote, IonPage, IonPopover, IonProgressBar, IonSegment, IonSegmentButton, IonSelect, IonSelectOption, IonTextarea, IonThumbnail, IonTitle, IonToolbar, alertController, modalController } from '@ionic/vue';
 import { storeToRefs } from 'pinia';
 import { DateTime } from 'luxon';
-import { businessOutline, chevronDown, closeOutline, createOutline, cubeOutline, ellipsisVertical, gitBranchOutline, saveOutline, sendOutline } from 'ionicons/icons';
+import { businessOutline, chevronDown, closeOutline, createOutline, cubeOutline, ellipsisVertical, gitBranchOutline, informationCircleOutline, saveOutline, sendOutline, shieldOutline } from 'ionicons/icons';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useSeedStore } from '@/store/seed';
 import { useProductCacheStore } from '@/store/productCache';
@@ -755,7 +827,7 @@ import OrderItemAttributesModal from '@/components/OrderItemAttributesModal.vue'
 import ItemFacilityInventoryModal from '@/components/ItemFacilityInventoryModal.vue';
 import AddOrderTaskModal from '@/components/AddOrderTaskModal.vue';
 import { api, commonUtil, DxpShopifyImg, translate } from '@common';
-import { showToast, isKit } from '@/utils';
+import { showToast, isKit, riskLevelColor } from '@/utils';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useUserStore } from '@/store/user';
 import { useProductStore } from '@/store/productStore';
@@ -789,6 +861,8 @@ const order = computed(() => {
     channel: seed.enumDescription(raw.salesChannelEnumId),
     productStoreName: seed.productStoreName(raw.productStoreId),
     currency: raw.currencyUom,
+    riskRecommendationEnumId: raw.riskRecommendationEnumId,
+    riskLevelEnumId: raw.riskLevelEnumId,
     customerName: orderDetailStore.customerName,
     history: orderDetailStore.headerStatuses.map((entry: any) => ({
       id: entry.orderStatusId,
@@ -986,6 +1060,21 @@ const groupedItems = computed(() => {
 
 const orderTotals = computed(() => orderDetailStore.totals);
 
+const riskAssessments = computed(() => orderDetailStore.riskAssessments);
+const riskAssessmentsStatus = computed(() => orderDetailStore.riskAssessmentsStatus);
+const riskAssessmentsError = computed(() => orderDetailStore.riskAssessmentsError);
+
+const riskSummary = computed(() => {
+  const recommendationEnumId = order.value?.riskRecommendationEnumId || '';
+  const levelEnumId = order.value?.riskLevelEnumId || '';
+
+  return {
+    hasRiskSignal: Boolean(recommendationEnumId || levelEnumId),
+    recommendation: recommendationEnumId ? seed.enumDescription(recommendationEnumId) : translate('No recommendation'),
+    level: levelEnumId ? seed.enumDescription(levelEnumId) : translate('No risk level')
+  };
+});
+
 const selectedSegment = ref('items');
 
 watch(selectedSegment, (segment) => {
@@ -994,6 +1083,7 @@ watch(selectedSegment, (segment) => {
     orderDetailStore.fetchOrderHeaderWorkEfforts(props.orderId);
     seed.loadEnumsByParentType('WorkEffortPurposeType');
   }
+  if (segment === 'risk') orderDetailStore.fetchRiskAssessments(props.orderId);
   if (segment === 'comms') orderDetailStore.fetchCommEvents(props.orderId);
 });
 

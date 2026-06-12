@@ -165,7 +165,7 @@ import { ref, computed, watch } from 'vue';
 import { IonBadge, IonButton, IonButtons, IonCard, IonCardContent, IonCheckbox, IonChip, IonContent, IonFooter, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList, IonListHeader, IonMenuButton, IonNote, IonPage, IonSelect, IonSelectOption, IonThumbnail, IonTitle, IonToolbar, alertController, onIonViewWillEnter } from '@ionic/vue';
 import { callOutline, checkmarkCircleOutline, cubeOutline, hardwareChipOutline, informationCircleOutline, mailOutline, personOutline, pricetagOutline, removeCircleOutline, warningOutline } from 'ionicons/icons';
 import { DxpShopifyImg, translate } from '@common';
-import { showToast } from '@/utils';
+import { showToast, riskLevelColor } from '@/utils';
 import SearchFilterCard from '@/components/SearchFilterCard.vue';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useSeedStore } from '@/store/seed';
@@ -253,18 +253,6 @@ async function loadMoreFraudTasks(event: any) {
 function getProduct(productId: string) {
   return useProductCacheStore().getProduct(productId);
 }
-
-function riskLevelColor(riskLevelEnumId: string): string {
-  const map: Record<string, string> = {
-    ORLVL_HIGH: 'danger',
-    ORLVL_MEDIUM: 'warning',
-    ORLVL_LOW: 'success',
-    ORLVL_NONE: 'medium',
-    ORLVL_PENDING: 'medium',
-  };
-  return map[riskLevelEnumId] ?? 'medium';
-}
-
 
 function sentimentIcon(sentimentEnumId: string): string {
   const map: Record<string, string> = {
