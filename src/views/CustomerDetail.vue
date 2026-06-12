@@ -566,39 +566,6 @@
         message="The selected customer is not available in this workspace."
       />
     </ion-content>
-  <!-- Skipped orders modal -->
-  <ion-modal :is-open="skippedModalOpen" @did-dismiss="skippedModalOpen = false">
-    <ion-header>
-      <ion-toolbar>
-        <ion-title>Partial anonymization</ion-title>
-        <ion-buttons slot="end">
-          <ion-button @click="skippedModalOpen = false">Close</ion-button>
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-header>
-    <ion-content class="ion-padding">
-      <ion-item lines="none">
-        <ion-icon slot="start" :icon="checkmarkCircleOutline" color="success" />
-        <ion-label class="ion-text-wrap">
-          Completed and cancelled orders have been anonymized.
-        </ion-label>
-      </ion-item>
-      <ion-item lines="none">
-        <ion-icon slot="start" :icon="warningOutline" color="warning" />
-        <ion-label class="ion-text-wrap">
-          <strong>{{ skippedOrderIds.length }} active {{ skippedOrderIds.length === 1 ? 'order' : 'orders' }}</strong> could not be anonymized. Party-level data (name and contact details) will be anonymized once all active orders are resolved.
-        </ion-label>
-      </ion-item>
-      <ion-list>
-        <ion-list-header>
-          <ion-label>Active orders</ion-label>
-        </ion-list-header>
-        <ion-item v-for="orderId in skippedOrderIds" :key="orderId" :router-link="`/orders/${orderId}`" @click="skippedModalOpen = false" button detail>
-          <ion-label>{{ orderId }}</ion-label>
-        </ion-item>
-      </ion-list>
-    </ion-content>
-  </ion-modal>
 </ion-page>
 </template>
 
@@ -621,7 +588,6 @@ import {
   IonList,
   IonListHeader,
   IonMenuButton,
-  IonModal,
   IonNote,
   IonPage,
   IonProgressBar,
@@ -640,13 +606,11 @@ import {
 import { DateTime } from 'luxon';
 import {
   addCircleOutline,
-  checkmarkCircleOutline,
   chevronUp,
   informationCircleOutline,
   pencilOutline,
   pricetagOutline,
-  trashOutline,
-  warningOutline
+  trashOutline
 } from 'ionicons/icons';
 import { commonUtil, DxpShopifyImg } from '@common';
 import { useCustomerDetail } from '@/composables/useCustomerDetail';
@@ -658,7 +622,8 @@ import AddContactModal from '@/components/AddContactModal.vue';
 import RelationshipHistoryModal from '@/components/RelationshipHistoryModal.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
-import { deleteCustomerDetails } from '@/services/customer';
+import router from '@/router';
+import { deleteCustomerDetails, indexCustomer } from '@/services/customer';
 
 const props = defineProps<{
   customerId: string;
@@ -670,8 +635,6 @@ const productCache = useProductCacheStore();
 const recentOrdersQuery = ref('');
 const allOrdersQuery = ref('');
 const deleting = ref(false);
-const skippedOrderIds = ref<string[]>([]);
-const skippedModalOpen = ref(false);
 
 const {
   customer,
@@ -776,14 +739,10 @@ async function onDeleteCustomer() {
           void (async () => {
             deleting.value = true;
             try {
-              const result = await deleteCustomerDetails(props.customerId);
-              if (result.skippedOrderIds.length) {
-                skippedOrderIds.value = result.skippedOrderIds;
-                skippedModalOpen.value = true;
-              } else {
-                await commonUtil.showToast('Customer data has been fully anonymized.');
-                load();
-              }
+              await deleteCustomerDetails(props.customerId);
+              await indexCustomer(props.customerId);
+              await commonUtil.showToast('Customer data has been anonymized.');
+              router.replace('/customers');
             } catch {
               await commonUtil.showToast('Failed to anonymize customer data. Please try again.');
             } finally {
