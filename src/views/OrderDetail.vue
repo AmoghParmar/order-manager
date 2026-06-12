@@ -639,35 +639,22 @@
       </div>
 
       <div v-if="selectedSegment === 'holds'">
-        <div v-if="openHolds.length">
-          <div class="list-item work-effort-row" v-for="hold in openHolds" :key="hold.id">
-            <ion-item lines="none">
-              <ion-label>
-                {{ hold.id }}
-                <p>{{ translate("ID") }}</p>
-              </ion-label>
-            </ion-item>
-            <div class="tablet">
-              <ion-label class="ion-text-center">
-                {{ seed.enumDescription(hold.purposeTypeId) || hold.purposeTypeId || '-' }}
-                <p>{{ translate("purpose") }}</p>
-              </ion-label>
-            </div>
-            <div class="tablet">
-              <ion-label class="ion-text-center">
-                {{ hold.description || '-' }}
-                <p>{{ translate("description") }}</p>
-              </ion-label>
-            </div>
-            <div class="tablet">
-              <ion-label class="ion-text-center">
-                <ion-badge :color="commonUtil.getStatusColor(hold.statusId)">{{ seed.statusDescription(hold.statusId) }}</ion-badge>
-                <p>{{ translate("status") }}</p>
-              </ion-label>
-            </div>
-          </div>
+        <ion-list v-if="orderHoldTasksStatus === 'loading'">
+          <ion-item lines="none">
+            <ion-label>{{ translate('Loading') }}</ion-label>
+          </ion-item>
+        </ion-list>
+        <div v-else-if="orderHoldTasks.length">
+          <HoldTaskCard
+            v-for="task in orderHoldTasks"
+            :key="task.workEffortId"
+            :task="task"
+            :selectable="false"
+            :show-view-order="false"
+            @resolve="resolveOrderHoldTask"
+          />
         </div>
-        <ion-list v-if="!openHolds.length">
+        <ion-list v-else>
           <ion-item lines="none">
             <ion-label>{{ translate("No holds on this order") }}</ion-label>
           </ion-item>
@@ -826,6 +813,7 @@ import RoutingGroupModal from '@/components/fulfillment/RoutingGroupModal.vue';
 import OrderItemAttributesModal from '@/components/orders/OrderItemAttributesModal.vue';
 import ItemFacilityInventoryModal from '@/components/fulfillment/ItemFacilityInventoryModal.vue';
 import AddOrderTaskModal from '@/components/tasks/AddOrderTaskModal.vue';
+import HoldTaskCard from '@/components/HoldTaskCard.vue';
 import { api, commonUtil, DxpShopifyImg, translate } from '@common';
 import { showToast, isKit, riskLevelColor } from '@/utils';
 import { useOrderTaskStore } from '@/store/orderTask';
@@ -958,15 +946,8 @@ function shipGroupProgress(shipGroup: any): number {
   return progress;
 }
 
-const openHolds = computed(() => orderDetailStore.orderHeaderWorkEfforts.map((link: any) => {
-  const we = link['org.apache.ofbiz.workeffort.workeffort.WorkEffort'] || link;
-  return {
-    id: link.workEffortId,
-    purposeTypeId: we.workEffortPurposeTypeId || '',
-    statusId: we.statusId || '',
-    description: we.description || ''
-  };
-}));
+const orderHoldTasks = ref<any[]>([]);
+const orderHoldTasksStatus = ref<'idle' | 'loading' | 'loaded' | 'error'>('idle');
 
 const commEvents = computed(() => orderDetailStore.commEvents.map((ev: any) => ({
   id: ev.communicationEventId,
@@ -1080,12 +1061,94 @@ const selectedSegment = ref('items');
 watch(selectedSegment, (segment) => {
   if (!props.orderId) return;
   if (segment === 'holds') {
-    orderDetailStore.fetchOrderHeaderWorkEfforts(props.orderId);
-    seed.loadEnumsByParentType('WorkEffortPurposeType');
+    fetchOrderHoldTasks();
   }
   if (segment === 'risk') orderDetailStore.fetchRiskAssessments(props.orderId);
   if (segment === 'comms') orderDetailStore.fetchCommEvents(props.orderId);
 });
+
+function getLinkedWorkEffort(link: any) {
+  return link['org.apache.ofbiz.workeffort.workeffort.WorkEffort'] || link;
+}
+
+function orderHoldTaskFromLink(link: any, detail: any = {}) {
+  const raw = orderDetailStore.current || {};
+  const we = getLinkedWorkEffort(link);
+  const role = orderDetailStore.placingCustomerRole;
+  const person = role?.person;
+  const customer = {
+    partyId: role?.partyId,
+    firstName: person?.firstName,
+    lastName: person?.lastName,
+    groupName: role?.partyGroup?.groupName,
+  };
+  const billingEmail = orderDetailStore.contactMechsByPurpose['ORDER_EMAIL']?.contactMech?.infoString
+    || orderDetailStore.contactMechsByPurpose['SHIPPING_EMAIL']?.contactMech?.infoString;
+  const telecomMech = (raw.contactMechs || []).find((mech: any) => mech.telecomNumber);
+
+  return {
+    ...detail,
+    orderId: props.orderId,
+    orderName: raw.orderName || props.orderId,
+    orderDate: raw.orderDate,
+    grandTotal: raw.grandTotal,
+    customer,
+    billingEmail,
+    shippingEmail: billingEmail,
+    billingPhone: telecomMech?.telecomNumber,
+    workEffortId: link.workEffortId || detail.workEffortId,
+    workEffortName: detail.workEffortName || we.workEffortName || link.workEffortId,
+    workEffortPurposeTypeId: detail.workEffortPurposeTypeId || we.workEffortPurposeTypeId,
+    purposeDescription: detail.purposeDescription || seed.enumDescription(detail.workEffortPurposeTypeId || we.workEffortPurposeTypeId),
+    estimatedCompletionDate: detail.estimatedCompletionDate || we.estimatedCompletionDate,
+    notes: detail.notes || detail.description || we.description,
+    assignedParties: detail.assignedParties || [],
+  };
+}
+
+async function fetchOrderHoldTasks() {
+  if (!props.orderId) return;
+  orderHoldTasksStatus.value = 'loading';
+  await seed.loadEnumsByParentType('WorkEffortPurposeType');
+  await orderDetailStore.fetchOrderHeaderWorkEfforts(props.orderId);
+
+  try {
+    const tasks = await Promise.all(
+      orderDetailStore.orderHeaderWorkEfforts.map(async (link: any) => {
+        try {
+          const resp = await api({ url: `oms/orders/tasks/${link.workEffortId}`, method: 'GET' });
+          return orderHoldTaskFromLink(link, resp.data?.task || {});
+        } catch {
+          return orderHoldTaskFromLink(link);
+        }
+      })
+    );
+    orderHoldTasks.value = tasks;
+    orderHoldTasksStatus.value = 'loaded';
+  } catch {
+    orderHoldTasks.value = [];
+    orderHoldTasksStatus.value = 'error';
+  }
+}
+
+async function resolveOrderHoldTask(workEffortId: string) {
+  const alert = await alertController.create({
+    header: translate('Resolve task'),
+    message: translate('Are you sure you want to mark this task as resolved?'),
+    buttons: [
+      { text: translate('No'), role: 'cancel' },
+      {
+        text: translate('Yes'),
+        role: 'confirm',
+        handler: async () => {
+          await orderTaskStore.changeTaskStatus(workEffortId, 'TASK_COMPLETED');
+          await fetchOrderHoldTasks();
+        }
+      }
+    ]
+  });
+  await alert.present();
+}
 
 const areAllSelected = computed(() => {
   if (!groupedItems.value.length) return false;
@@ -1118,6 +1181,8 @@ onMounted(() => loadOrder(props.orderId));
 watch(() => props.orderId, (orderId) => loadOrder(orderId));
 
 async function loadOrder(orderId: string, force = false) {
+  orderHoldTasks.value = [];
+  orderHoldTasksStatus.value = 'idle';
   if (force) {
     await orderDetailStore.fetchOrder(orderId, true);
   } else {
@@ -1131,6 +1196,7 @@ async function loadOrder(orderId: string, force = false) {
     orderDetailStore.fetchShippingMethods(),
     orderDetailStore.fetchCarrierParties(),
   ]);
+  if (selectedSegment.value === 'holds') await fetchOrderHoldTasks();
 }
 
 const availableCarriers = computed(() =>
