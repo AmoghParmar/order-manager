@@ -785,6 +785,7 @@
           <ion-button fill="outline" color="danger" v-if="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order.statusId)" :disabled="!selectedItems.length" @click="cancelOrderItems">{{ translate('Cancel') }}</ion-button>
         </ion-buttons>
         <ion-buttons slot="end">
+          <ion-button fill="outline" :disabled="!cloneActionValidation.allowed" @click="openCloneOrderModal">{{ translate('Clone') }}</ion-button>
           <ion-button fill="solid" color="warning">{{ translate('Return') }}</ion-button>
         </ion-buttons>
       </ion-toolbar>
@@ -813,9 +814,11 @@ import RoutingGroupModal from '@/components/fulfillment/RoutingGroupModal.vue';
 import OrderItemAttributesModal from '@/components/orders/OrderItemAttributesModal.vue';
 import ItemFacilityInventoryModal from '@/components/fulfillment/ItemFacilityInventoryModal.vue';
 import AddOrderTaskModal from '@/components/tasks/AddOrderTaskModal.vue';
+import CloneOrderModal from '@/components/orders/CloneOrderModal.vue';
 import HoldTaskCard from '@/components/HoldTaskCard.vue';
 import { api, commonUtil, DxpShopifyImg, translate } from '@common';
 import { showToast, isKit, riskLevelColor } from '@/utils';
+import { OrderActionValidator } from '@/utils/OrderActionValidator';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useUserStore } from '@/store/user';
 import { useProductStore } from '@/store/productStore';
@@ -1708,6 +1711,14 @@ async function viewInventory(productId: string) {
     componentProps: { productId }
   });
   await modal.present();
+}
+
+const cloneActionValidation = computed(() => OrderActionValidator.validateFooterAction(order.value, 'CLONE', []));
+
+async function openCloneOrderModal() {
+  const modal = await modalController.create({ component: CloneOrderModal });
+  await modal.present();
+  await modal.onWillDismiss();
 }
 
 async function openAddTaskModal(shipGroup: any) {
