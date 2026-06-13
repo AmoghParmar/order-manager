@@ -72,7 +72,7 @@
         :key="party.partyId"
         :class="{ 'party-selected': selectedParty?.partyId === party.partyId }"
         button
-        detail="false"
+        :detail="false"
         @click="selectParty(party)"
       >
         <ion-label>
@@ -118,6 +118,40 @@
             :value="type.partyRelationshipTypeId"
           >
             {{ type.partyRelationshipName || type.description || type.partyRelationshipTypeId }}
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-select
+          label="Role (current party)"
+          label-placement="stacked"
+          interface="popover"
+          placeholder="Select role"
+          v-model="roleTypeIdFrom"
+        >
+          <ion-select-option
+            v-for="role in availableRoleTypes"
+            :key="role.roleTypeId"
+            :value="role.roleTypeId"
+          >
+            {{ role.description || role.roleTypeId }}
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-select
+          label="Role (selected party)"
+          label-placement="stacked"
+          interface="popover"
+          placeholder="Select role"
+          v-model="roleTypeIdTo"
+        >
+          <ion-select-option
+            v-for="role in availableRoleTypes"
+            :key="role.roleTypeId"
+            :value="role.roleTypeId"
+          >
+            {{ role.description || role.roleTypeId }}
           </ion-select-option>
         </ion-select>
       </ion-item>
@@ -180,6 +214,8 @@ const results = ref<PartySearchResult[]>([]);
 const searching = ref(false);
 const selectedParty = ref<PartySearchResult | null>(null);
 const partyRelationshipTypeId = ref('');
+const roleTypeIdFrom = ref('');
+const roleTypeIdTo = ref('');
 const comments = ref('');
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -190,13 +226,24 @@ const relationshipTypes = computed(() =>
     .filter(Boolean)
 );
 
+const availableRoleTypes = computed(() =>
+  ((seed as any).roleTypes.ids as string[])
+    .map((id: string) => (seed as any).roleTypes.byId[id])
+    .filter(Boolean)
+);
+
 const hasSearchTerm = computed(() =>
   partyType.value === 'PERSON'
     ? firstName.value.trim().length > 0 || lastName.value.trim().length > 0
     : groupName.value.trim().length > 0
 );
 
-const isValid = computed(() => !!selectedParty.value && !!partyRelationshipTypeId.value);
+const isValid = computed(() =>
+  !!selectedParty.value &&
+  !!partyRelationshipTypeId.value &&
+  !!roleTypeIdFrom.value &&
+  !!roleTypeIdTo.value
+);
 
 function onTypeChange() {
   firstName.value = '';
@@ -246,6 +293,8 @@ function confirm() {
   modalController.dismiss({
     partyId: selectedParty.value!.partyId,
     partyRelationshipTypeId: partyRelationshipTypeId.value,
+    roleTypeIdFrom: roleTypeIdFrom.value,
+    roleTypeIdTo: roleTypeIdTo.value,
     comments: comments.value.trim() || undefined
   }, 'confirm');
 }

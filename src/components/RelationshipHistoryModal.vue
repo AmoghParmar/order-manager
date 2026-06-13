@@ -60,17 +60,23 @@ import {
   modalController
 } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { DateTime } from 'luxon';
 import { useCustomerStore } from '@/store/customer';
 import { useSeedStore } from '@/store/seed';
 
 const props = defineProps<{
   currentPartyId: string;
+  /** 'duplicate' shows only DUPLICATE relationships; 'personal' hides them; omit for all */
+  filterType?: 'duplicate' | 'personal';
 }>();
 
-const store = useCustomerStore();
+const store = useCustomerStore() as any;
 const seed = useSeedStore();
+
+onMounted(() => {
+  store.loadCustomerRelationships(props.currentPartyId, true);
+});
 
 function parseDate(value?: string | number) {
   if (!value) return undefined;
@@ -94,8 +100,8 @@ function sortKey(value?: string | number): number {
 }
 
 const timeline = computed(() => {
-  const personal: any[] = (store as any).personalRelationships(props.currentPartyId);
-  const duplicates: any[] = (store as any).duplicateRelationships(props.currentPartyId);
+  const personal: any[] = store.personalRelationships(props.currentPartyId);
+  const duplicates: any[] = store.duplicateRelationships(props.currentPartyId);
 
   const personalEntries = personal.map((rel: any) => ({
     key: rel.key,
@@ -117,8 +123,13 @@ const timeline = computed(() => {
     active: rel.active
   }));
 
-  return [...personalEntries, ...duplicateEntries]
-    .sort((a, b) => sortKey(a.fromDate) - sortKey(b.fromDate));
+  const all = [...personalEntries, ...duplicateEntries];
+  const filtered = props.filterType === 'duplicate'
+    ? duplicateEntries
+    : props.filterType === 'personal'
+      ? personalEntries
+      : all;
+  return filtered.sort((a, b) => sortKey(a.fromDate) - sortKey(b.fromDate));
 });
 
 function dismiss() {

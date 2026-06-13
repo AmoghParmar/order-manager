@@ -459,6 +459,7 @@ export function normalizeCustomerProfile(doc: any, partyId = ''): CustomerProfil
       partyIdentificationTypeId: toStringValue(identification.partyIdentificationTypeId),
       idValue: toStringValue(identification.idValue)
     })),
+    createdByUserLogin: toStringValue(doc?.createdByUserLogin),
     contactMechs: (doc?.contactMechs || []).map(normalizeCustomerContactMech),
     relationshipsFrom: relationshipsFrom.map(normalizeCustomerRelationship),
     relationshipsTo: relationshipsTo.map(normalizeCustomerRelationship)
@@ -780,7 +781,7 @@ export interface RelationshipInput {
   partyIdTo: string;
   roleTypeIdFrom?: string;
   roleTypeIdTo?: string;
-  fromDate: string;
+  fromDate: number;
   partyRelationshipTypeId: string;
   comments?: string;
 }
@@ -805,7 +806,7 @@ export interface RelationshipKey {
   fromDate: string;
 }
 
-export async function expirePartyRelationship(key: RelationshipKey, thruDate: string): Promise<void> {
+export async function expirePartyRelationship(key: RelationshipKey, thruDate: number): Promise<void> {
   await api({
     url: 'oms/partyRelationships',
     method: 'put',
@@ -942,6 +943,35 @@ export async function getShopifyShops(params: { productStoreId: string }): Promi
     params
   });
   return response.data || [];
+}
+
+export async function findShopifyDuplicateParties(partyId: string, shopifyIdValue: string): Promise<Array<{ partyId: string; name: string }>> {
+  const response = await api({
+    url: 'oms/parties/identifications',
+    method: 'get',
+    params: {
+      partyIdentificationTypeId: 'SHOPIFY_CUST_ID',
+      idValue: shopifyIdValue,
+      partyId,
+      partyId_not: 'Y'
+    }
+  });
+  const partyIds = asList(response.data)
+    .map((item: any) => toStringValue(item.partyId))
+    .filter(Boolean);
+  if (!partyIds.length) return [];
+  const names = await getPartyNames(partyIds);
+  const nameMap: Record<string, string> = {};
+  names.forEach((n) => { if (n.partyId) nameMap[n.partyId] = n.name; });
+  return partyIds.map((id) => ({ partyId: id, name: nameMap[id] || id }));
+}
+
+export async function ensurePartyRole(partyId: string, roleTypeId: string): Promise<void> {
+  await api({
+    url: `oms/parties/${partyId}/roles`,
+    method: 'post',
+    data: { partyId, roleTypeId }
+  });
 }
 
 export async function deleteCustomerDetails(partyId: string): Promise<void> {

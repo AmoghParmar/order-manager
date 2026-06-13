@@ -68,6 +68,7 @@ export interface CustomerProfile {
   contactMechs: CustomerContactMech[];
   relationshipsFrom: CustomerRelationship[];
   relationshipsTo: CustomerRelationship[];
+  createdByUserLogin: string;
 }
 
 export interface CustomerOrderSummary {

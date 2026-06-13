@@ -24,6 +24,7 @@ export function useCustomerDetail(getPartyId: () => string) {
   const openTasks = computed(() => store.openTasks(partyId.value));
   const customerReturns = computed(() => (store as any).returns(partyId.value));
   const customerCommunications = computed(() => (store as any).communications(partyId.value));
+  const mergableDuplicates = computed(() => (store as any).mergableDuplicates(partyId.value) as Array<{ partyId: string; name: string }>);
   const ordersStatus = computed(() => (store as any).sectionStatus(partyId.value, 'recentOrders'));
   const tasksStatus = computed(() => (store as any).sectionStatus(partyId.value, 'tasks'));
   const returnsStatus = computed(() => (store as any).sectionStatus(partyId.value, 'returns'));
@@ -41,11 +42,11 @@ export function useCustomerDetail(getPartyId: () => string) {
     return store.refreshCustomer(partyId.value);
   }
 
-  function expireRelationship(keyFields: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string }, thruDate: string) {
+  function expireRelationship(keyFields: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string }, thruDate: number) {
     return store.expireRelationship(keyFields, thruDate);
   }
 
-  function createRelationship(input: { partyIdFrom: string; partyIdTo: string; partyRelationshipTypeId: string; fromDate: string; comments?: string }) {
+  function createRelationship(input: { partyIdFrom: string; partyIdTo: string; partyRelationshipTypeId: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: number; comments?: string }) {
     return store.createRelationship(input);
   }
 
@@ -69,6 +70,10 @@ export function useCustomerDetail(getPartyId: () => string) {
     return (store as any).loadCustomerCommunications(partyId.value);
   }
 
+  function mergeContact(duplicatePartyId: string) {
+    return (store as any).mergeContact(partyId.value, duplicatePartyId);
+  }
+
   return {
     store,
     customer,
@@ -77,6 +82,7 @@ export function useCustomerDetail(getPartyId: () => string) {
     contactSections,
     personalRelationships,
     duplicateRelationships,
+    mergableDuplicates,
     timeline,
     recentOrders,
     openTasks,
@@ -98,6 +104,7 @@ export function useCustomerDetail(getPartyId: () => string) {
     updateContact,
     expireContact,
     loadReturns,
-    loadCommunications
+    loadCommunications,
+    mergeContact
   };
 }

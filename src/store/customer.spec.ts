@@ -26,7 +26,7 @@ describe('customer detail store', () => {
     vi.mocked(getCustomerTasks).mockReset();
     vi.mocked(getCustomerRelationships).mockReset();
     // Section sources default to empty so dashboard fan-out never rejects.
-    vi.mocked(getCustomerOrdersFromSolr).mockResolvedValue({ orders: [], lifetimeOrders: 0, lifetimeValue: 0, currencyUom: 'USD' });
+    vi.mocked(getCustomerOrdersFromSolr).mockResolvedValue({ orders: [], lifetimeOrders: 0, lifetimeValue: 0, currencyUom: 'USD', firstOrderDate: '' });
     vi.mocked(getCustomerTasks).mockResolvedValue([]);
     vi.mocked(getCustomerRelationships).mockResolvedValue([]);
   });
@@ -34,7 +34,7 @@ describe('customer detail store', () => {
   it('loads the profile source and exposes it via getCustomer', async () => {
     vi.mocked(getCustomerProfile).mockResolvedValue(stubProfile('CUST_1'));
 
-    const store = useCustomerStore();
+    const store = useCustomerStore() as any;
     await store.setCurrentCustomer('CUST_1');
 
     expect(store.getCustomer('CUST_1')?.id).toBe('CUST_1');
@@ -44,7 +44,7 @@ describe('customer detail store', () => {
   it('isolates a profile failure to the profile source', async () => {
     vi.mocked(getCustomerProfile).mockRejectedValue(new Error('boom'));
 
-    const store = useCustomerStore();
+    const store = useCustomerStore() as any;
     await store.loadCustomerProfile('CUST_2');
 
     expect(store.sectionStatus('CUST_2', 'profile')).toBe('error');
@@ -54,9 +54,9 @@ describe('customer detail store', () => {
 
   it('folds Solr order aggregates into the lifetime getters', async () => {
     vi.mocked(getCustomerProfile).mockResolvedValue(stubProfile('CUST_3'));
-    vi.mocked(getCustomerOrdersFromSolr).mockResolvedValue({ orders: [], lifetimeOrders: 4, lifetimeValue: 250.5, currencyUom: 'USD' });
+    vi.mocked(getCustomerOrdersFromSolr).mockResolvedValue({ orders: [], lifetimeOrders: 4, lifetimeValue: 250.5, currencyUom: 'USD', firstOrderDate: '' });
 
-    const store = useCustomerStore();
+    const store = useCustomerStore() as any;
     await store.setCurrentCustomer('CUST_3');
 
     expect(store.lifetimeOrders('CUST_3')).toBe(4);
@@ -75,7 +75,7 @@ describe('customer detail store', () => {
       }
     ]);
 
-    const store = useCustomerStore();
+    const store = useCustomerStore() as any;
     await store.setCurrentCustomer('CUST_4');
 
     const personal = store.personalRelationships('CUST_4');
@@ -98,6 +98,7 @@ function stubProfile(id: string): CustomerProfile {
     roles: [],
     identifications: [],
     contactMechs: [],
+    createdByUserLogin: '',
     relationshipsFrom: [],
     relationshipsTo: []
   };

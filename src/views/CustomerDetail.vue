@@ -25,11 +25,8 @@
             <ion-item lines="none">
               <ion-label>
                 <h1>{{ customer.name || 'First Last' }}</h1>
-                <p>Customer since {{ customerSince || '—' }}</p>
+                <p v-if="customerSince">Customer since {{ customerSince }}</p>
               </ion-label>
-              <!-- TODO: deduct return-related OrderPaymentPreference refund amounts
-                   (returnPaymentPrefs where statusId is PAYMENT_REFUNDED or similar)
-                   from lifetimeValue so the displayed figure reflects net spend. -->
               <div slot="end" class="lifetime-value ion-text-right">
                 <p class="overline">Lifetime value</p>
                 <h2>{{ lifetimeValue }}</h2>
@@ -89,36 +86,51 @@
                   </ion-item>
                 </ion-list>
                 <div class="card-actions">
-                  <ion-button fill="clear" size="small" @click="onViewRelationshipHistory()">View history</ion-button>
-                  <!-- TODO: need to identify roleTypeIdFrom and roleTypeIdTo for the relationship,
-                       and ensure PartyRole records exist for both parties before creating.
-                  <ion-button fill="clear" size="small" @click="onAddRelationship()">Add new</ion-button> -->
+                  <ion-button fill="clear" size="small" @click="onViewRelationshipHistory('personal')">View history</ion-button>
+                  <ion-button fill="clear" size="small" @click="onAddRelationship()">Add new</ion-button>
                 </div>
               </ion-card>
 
               <!-- Merged contacts -->
               <ion-card>
                 <ion-card-header>
-                  <ion-card-title>Merged contacts</ion-card-title>
+                  <ion-card-title>Merged Contacts</ion-card-title>
                 </ion-card-header>
-                <ion-radio-group :value="mergedSelectedKey">
-                  <ion-list lines="none">
-                    <ion-item v-for="duplicate in duplicateRelationships" :key="duplicate.key">
-                      <ion-radio slot="start" :value="duplicate.key" />
+                <ion-list lines="none">
+                  <!-- Already-merged duplicates (active only; expired ones are in View history) -->
+                  <template v-for="duplicate in duplicateRelationships" :key="duplicate.key">
+                    <ion-item v-if="duplicate.active">
                       <ion-label>
-                        {{ duplicate.isCanonical ? duplicate.duplicatePartyName : duplicate.canonicalPartyName }}
-                        <p>{{ duplicate.isCanonical ? 'Duplicate of this record' : 'Canonical record' }}</p>
+                        <p class="overline">{{ duplicate.isCanonical ? 'Duplicate' : 'Canonical' }}</p>
+                        <h3>{{ duplicate.isCanonical ? duplicate.duplicatePartyName : duplicate.canonicalPartyName }}</h3>
+                        <p>{{ duplicate.isCanonical ? duplicate.duplicatePartyId : duplicate.canonicalPartyId }}</p>
                       </ion-label>
-                      <ion-note slot="end">{{ duplicate.active ? '' : 'expired' }}</ion-note>
+                      <ion-button slot="end" fill="outline" size="small" @click="onExpireDuplicateRelationship(duplicate)">
+                        Expire
+                      </ion-button>
                     </ion-item>
-                    <ion-item v-if="!duplicateRelationships.length" lines="none">
-                      <ion-label color="medium"><em>No merged contacts</em></ion-label>
-                    </ion-item>
-                  </ion-list>
-                </ion-radio-group>
+                  </template>
+                  <!-- Unmerged candidates with the same Shopify ID -->
+                  <ion-item v-for="candidate in mergableDuplicates" :key="candidate.partyId">
+                    <ion-label>
+                      <p class="overline">Duplicate candidate</p>
+                      <h3>{{ candidate.name }}</h3>
+                      <p>{{ candidate.partyId }}</p>
+                    </ion-label>
+                    <ion-button slot="end" fill="clear" size="small" :router-link="`/customers/${candidate.partyId}`">
+                      <ion-icon slot="icon-only" :icon="openOutline" />
+                    </ion-button>
+                    <ion-button slot="end" fill="solid" size="small" color="primary" :disabled="mergingIds.includes(candidate.partyId)" @click="onMergeCandidate(candidate.partyId)">
+                      <ion-spinner v-if="mergingIds.includes(candidate.partyId)" name="crescent" slot="icon-only" />
+                      <template v-else>Merge</template>
+                    </ion-button>
+                  </ion-item>
+                  <ion-item v-if="!duplicateRelationships.some((d: { active: boolean }) => d.active) && !mergableDuplicates.length" lines="none">
+                    <ion-label color="medium"><em>No Merged Contacts</em></ion-label>
+                  </ion-item>
+                </ion-list>
                 <div class="card-actions">
-                  <ion-button fill="clear" size="small">View history</ion-button>
-                  <ion-button fill="clear" size="small">Merge more</ion-button>
+                  <ion-button fill="clear" size="small" @click="onViewRelationshipHistory('duplicate')">View history</ion-button>
                 </div>
               </ion-card>
             </div>
@@ -139,7 +151,7 @@
             </ion-item>
             <ion-item v-if="!timeline.length" lines="full">
               <ion-icon slot="start" :icon="pricetagOutline" color="medium" />
-              <ion-label>Created by {{ customer.id }}</ion-label>
+              <ion-label>Created by {{ customer.createdByUserLogin }}</ion-label>
               <ion-icon slot="end" :icon="informationCircleOutline" color="medium" />
             </ion-item>
           </ion-list>
@@ -591,8 +603,6 @@ import {
   IonNote,
   IonPage,
   IonProgressBar,
-  IonRadio,
-  IonRadioGroup,
   IonSearchbar,
   IonSegment,
   IonSegmentButton,
@@ -608,6 +618,7 @@ import {
   addCircleOutline,
   chevronUp,
   informationCircleOutline,
+  openOutline,
   pencilOutline,
   pricetagOutline,
   trashOutline
@@ -618,7 +629,7 @@ import { useProductCacheStore } from '@/store/productCache';
 import { useSeedStore } from '@/store/seed';
 import type { CustomerOrderSummary } from '@/types/customer';
 import AddContactModal from '@/components/AddContactModal.vue';
-// import AddRelationshipModal from '@/components/AddRelationshipModal.vue';
+import AddRelationshipModal from '@/components/AddRelationshipModal.vue';
 import RelationshipHistoryModal from '@/components/RelationshipHistoryModal.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
@@ -643,6 +654,7 @@ const {
   contactSections,
   personalRelationships,
   duplicateRelationships,
+  mergableDuplicates,
   timeline,
   recentOrders: recentOrdersSource,
   openTasks,
@@ -659,11 +671,14 @@ const {
   loadReturns,
   loadCommunications,
   expireRelationship,
-  // createRelationship, // TODO: re-enable when roleTypeId handling is ready
+  mergeContact,
+  createRelationship,
   addContact,
   updateContact,
   expireContact
 } = useCustomerDetail(() => props.customerId);
+
+const mergingIds = ref<string[]>([]);
 
 const customerReturns = computed(() => customerReturnsSource.value as import('@/types/customer').CustomerReturnSummary[]);
 const customerCommunications = computed(() => customerCommunicationsSource.value as import('@/types/customer').CustomerCommunicationSummary[]);
@@ -671,10 +686,6 @@ const customerCommunications = computed(() => customerCommunicationsSource.value
 const customerSince = computed(() => formatMonthYear(customerSinceRaw.value));
 const createdAtLabel = computed(() => (timeline.value[0]?.at ? formatTimestamp(timeline.value[0].at) : ''));
 const lifetimeValue = computed(() => money(lifetimeValueRaw.value, lifetimeCurrency.value));
-const mergedSelectedKey = computed(() => {
-  const canonical = duplicateRelationships.value.find((duplicate) => duplicate.isCanonical);
-  return canonical?.key || duplicateRelationships.value[0]?.key || '';
-});
 
 function mapOrder(order: CustomerOrderSummary) {
   return {
@@ -756,30 +767,46 @@ async function onDeleteCustomer() {
   await alert.present();
 }
 
-// TODO: need to identify roleTypeIdFrom and roleTypeIdTo for the relationship,
-// and ensure PartyRole records exist for both parties before creating.
-// async function onAddRelationship() {
-//   const modal = await modalController.create({
-//     component: AddRelationshipModal,
-//     componentProps: { currentPartyId: props.customerId }
-//   });
-//   await modal.present();
-//   const { data, role } = await modal.onWillDismiss();
-//   if (role === 'confirm' && data) {
-//     await createRelationship({
-//       partyIdFrom: props.customerId,
-//       partyIdTo: data.partyId,
-//       partyRelationshipTypeId: data.partyRelationshipTypeId,
-//       fromDate: new Date().toISOString(),
-//       comments: data.comments
-//     });
-//   }
-// }
+async function onAddRelationship() {
+  const modal = await modalController.create({
+    component: AddRelationshipModal,
+    componentProps: { currentPartyId: props.customerId }
+  });
+  await modal.present();
+  const { data, role } = await modal.onWillDismiss();
+  if (role === 'confirm' && data) {
+    await createRelationship({
+      partyIdFrom: props.customerId,
+      partyIdTo: data.partyId,
+      partyRelationshipTypeId: data.partyRelationshipTypeId,
+      roleTypeIdFrom: data.roleTypeIdFrom,
+      roleTypeIdTo: data.roleTypeIdTo,
+      fromDate: DateTime.now().toMillis(),
+      comments: data.comments
+    });
+  }
+}
 
-async function onViewRelationshipHistory() {
+async function onMergeCandidate(candidatePartyId: string) {
+  mergingIds.value = [...mergingIds.value, candidatePartyId];
+  try {
+    await mergeContact(candidatePartyId);
+    await commonUtil.showToast('Contact merged successfully.');
+  } catch {
+    await commonUtil.showToast('Failed to merge contact. Please try again.');
+  } finally {
+    mergingIds.value = mergingIds.value.filter((id) => id !== candidatePartyId);
+  }
+}
+
+async function onExpireDuplicateRelationship(duplicate: { keyFields: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string } }) {
+  await expireRelationship(duplicate.keyFields, DateTime.now().toMillis());
+}
+
+async function onViewRelationshipHistory(filterType?: 'duplicate' | 'personal') {
   const modal = await modalController.create({
     component: RelationshipHistoryModal,
-    componentProps: { currentPartyId: props.customerId }
+    componentProps: { currentPartyId: props.customerId, filterType }
   });
   await modal.present();
 }
@@ -814,7 +841,7 @@ async function onEditContact(section: import('@/types/customer').ContactSection)
 }
 
 async function onExpireRelationship(relationship: { keyFields: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string } }) {
-  await expireRelationship(relationship.keyFields, DateTime.now().toFormat('yyyy-LL-dd HH:mm:ss.SSS'));
+  await expireRelationship(relationship.keyFields, DateTime.now().toMillis());
 }
 
 async function showReturnReason(returnReasonId: string) {

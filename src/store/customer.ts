@@ -1,11 +1,14 @@
+import { DateTime } from 'luxon';
 import { defineStore } from 'pinia';
 import {
   createPartyEmail,
   createPartyPostalAddress,
   createPartyRelationship,
   createPartyTelecomNumber,
+  ensurePartyRole,
   expirePartyContactMech,
   expirePartyRelationship,
+  findShopifyDuplicateParties,
   updatePartyEmail,
   updatePartyPostalAddress,
   updatePartyTelecomNumber,
@@ -56,6 +59,7 @@ interface CustomerDetailState {
   returnsByPartyId: Record<string, SourceEntry<CustomerReturnSummary[]>>;
   communicationsByPartyId: Record<string, SourceEntry<CustomerCommunicationSummary[]>>;
   relationshipsByPartyId: Record<string, SourceEntry<CustomerRelationship[]>>;
+  mergableDuplicatesByPartyId: Record<string, Array<{ partyId: string; name: string }>>;
   lifetimeByPartyId: Record<string, { orders: number; value: number; currencyUom: string; firstOrderDate: string }>;
   partyNamesById: Record<string, string>;
 }
@@ -150,6 +154,7 @@ export const useCustomerStore = defineStore('customerDetail', {
     returnsByPartyId: {},
     communicationsByPartyId: {},
     relationshipsByPartyId: {},
+    mergableDuplicatesByPartyId: {},
     lifetimeByPartyId: {},
     partyNamesById: {}
   }),
@@ -266,7 +271,14 @@ export const useCustomerStore = defineStore('customerDetail', {
           fromDate: relationship.fromDate,
           thruDate: relationship.thruDate,
           active: isActiveThru(relationship.thruDate),
-          key: relationshipKey(relationship)
+          key: relationshipKey(relationship),
+          keyFields: {
+            partyIdFrom: relationship.partyIdFrom,
+            partyIdTo: relationship.partyIdTo,
+            roleTypeIdFrom: relationship.roleTypeIdFrom,
+            roleTypeIdTo: relationship.roleTypeIdTo,
+            fromDate: relationship.fromDate
+          }
         }));
     },
 
@@ -275,7 +287,7 @@ export const useCustomerStore = defineStore('customerDetail', {
       if (!profile) return [];
       const events: CustomerTimelineEvent[] = [];
       if (profile.createdStamp) {
-        events.push({ id: 'created', type: 'created', label: `Created by ${profile.id}`, at: profile.createdStamp, sourceId: profile.id });
+        events.push({ id: 'created', type: 'created', label: `Created by ${profile.createdByUserLogin}`, at: profile.createdStamp, sourceId: profile.id });
       }
       return events;
     },
@@ -289,7 +301,10 @@ export const useCustomerStore = defineStore('customerDetail', {
     returns: (state) => (partyId: string): CustomerReturnSummary[] =>
       state.returnsByPartyId[partyId]?.payload || [],
     communications: (state) => (partyId: string): CustomerCommunicationSummary[] =>
-      state.communicationsByPartyId[partyId]?.payload || []
+      state.communicationsByPartyId[partyId]?.payload || [],
+
+    mergableDuplicates: (state) => (partyId: string): Array<{ partyId: string; name: string }> =>
+      state.mergableDuplicatesByPartyId[partyId] || []
   },
 
   actions: {
@@ -308,6 +323,7 @@ export const useCustomerStore = defineStore('customerDetail', {
         this.loadCustomerTasks(partyId, force),
         (seed as any).loadPartyRelationshipTypes()
       ]);
+      await (this as any).loadMergableDuplicates(partyId);
     },
 
     async loadCustomerProfile(partyId: string, force = false) {
@@ -533,7 +549,11 @@ export const useCustomerStore = defineStore('customerDetail', {
       await this.loadCustomerProfile(partyId, true);
     },
 
-    async createRelationship(input: { partyIdFrom: string; partyIdTo: string; partyRelationshipTypeId: string; fromDate: string; comments?: string }) {
+    async createRelationship(input: { partyIdFrom: string; partyIdTo: string; partyRelationshipTypeId: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: number; comments?: string }) {
+      await Promise.all([
+        ensurePartyRole(input.partyIdFrom, input.roleTypeIdFrom),
+        ensurePartyRole(input.partyIdTo, input.roleTypeIdTo)
+      ]);
       await createPartyRelationship(input);
       const partyId = this.currentPartyId || input.partyIdFrom;
       await Promise.all([
@@ -542,12 +562,57 @@ export const useCustomerStore = defineStore('customerDetail', {
       ]);
     },
 
-    async expireRelationship(key: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string }, thruDate: string) {
+    async expireRelationship(key: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string }, thruDate: number) {
       await expirePartyRelationship(key, thruDate);
       await Promise.all([
         this.loadCustomerProfile(this.currentPartyId, true),
         this.loadCustomerRelationships(this.currentPartyId, true)
       ]);
+    },
+
+    async loadMergableDuplicates(partyId: string) {
+      if (!partyId) return;
+      const profile = this.profilesById[partyId]?.payload;
+      if (!profile) return;
+      const shopifyId = profile.identifications.find((id) => id.partyIdentificationTypeId === 'SHOPIFY_CUST_ID');
+      if (!shopifyId) return;
+
+      // Build the set of parties already linked via an active DUPLICATE relationship
+      // so we never surface them as merge candidates again.
+      const loadedRelationships = this.relationshipsByPartyId[partyId]?.payload || [];
+      const alreadyMergedIds = new Set(
+        allRelationships(profile, loadedRelationships)
+          .filter((r) => r.partyRelationshipTypeId === DUPLICATE_REL_TYPE && isActiveThru(r.thruDate))
+          .flatMap((r) => [r.partyIdFrom, r.partyIdTo])
+          .filter((id) => id !== partyId)
+      );
+
+      try {
+        const candidates = await findShopifyDuplicateParties(partyId, shopifyId.idValue);
+        this.mergableDuplicatesByPartyId[partyId] = candidates.filter((c) => !alreadyMergedIds.has(c.partyId));
+      } catch {
+        this.mergableDuplicatesByPartyId[partyId] = [];
+      }
+    },
+
+    async mergeContact(currentPartyId: string, duplicatePartyId: string) {
+      await Promise.all([
+        ensurePartyRole(currentPartyId, 'CUSTOMER'),
+        ensurePartyRole(duplicatePartyId, 'CUSTOMER')
+      ]);
+      await createPartyRelationship({
+        partyIdFrom: duplicatePartyId,
+        partyIdTo: currentPartyId,
+        partyRelationshipTypeId: 'DUPLICATE',
+        fromDate: DateTime.now().toMillis()
+      });
+      // Reload profile and relationships first so loadMergableDuplicates
+      // sees the newly created relationship when filtering candidates.
+      await Promise.all([
+        this.loadCustomerProfile(currentPartyId, true),
+        this.loadCustomerRelationships(currentPartyId, true)
+      ]);
+      await (this as any).loadMergableDuplicates(currentPartyId);
     },
 
     refreshCustomer(partyId: string) {
