@@ -77,10 +77,13 @@
           <DxpShopifyImg :src="productImageUrl(suggested.productId)" size="small" />
         </ion-thumbnail>
         <ion-label>
-          <p class="overline" v-if="suggested._isSubstitute">
-            <ion-text color="success">{{ translate('Approved swap') }}</ion-text>
+          <p
+            class="overline"
+            :style="{ visibility: suggestedItemOverlineLabel(suggested) ? undefined : 'hidden' }"
+            :aria-hidden="!suggestedItemOverlineLabel(suggested)"
+          >
+            <ion-text :color="suggested._isSubstitute ? 'success' : undefined">{{ suggestedItemOverlineLabel(suggested) || 'placeholder' }}</ion-text>
           </p>
-          <p class="overline" v-else-if="suggested._noReplacement">{{ translate('No replacement in stock') }}</p>
           {{ productPrimary(suggested) }}
           <p>{{ productSecondary(suggested) }}</p>
         </ion-label>
@@ -360,6 +363,13 @@ function getSuggestedItems(task: any): { list: any[]; newTotal: number; suggeste
   });
   const suggestedRefund = grandTotal > newTotal ? grandTotal - newTotal : 0;
   return { list, newTotal, suggestedRefund };
+}
+
+function suggestedItemOverlineLabel(suggested: any): string {
+  if (suggested._isSubstitute) return translate('Approved swap');
+  if (suggested._noReplacement) return translate('No replacement in stock');
+
+  return '';
 }
 
 function money(value: number) {

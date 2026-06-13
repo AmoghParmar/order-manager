@@ -16,7 +16,15 @@ describe('swap task card Figma routing block', () => {
     expect(source).toContain('isSwapItemUnavailable(item)');
     expect(source).toContain("translate('Unavailable')");
     expect(source).toContain('<ion-text color="danger">');
-    expect(source).toContain('<ion-text color="success">{{ translate(\'Approved swap\') }}</ion-text>');
+    expect(source).toContain(":style=\"{ visibility: suggestedItemOverlineLabel(suggested) ? undefined : 'hidden' }\"");
+    expect(source).toContain(':aria-hidden="!suggestedItemOverlineLabel(suggested)"');
+    expect(source).toContain('<ion-text :color="suggested._isSubstitute ? \'success\' : undefined">{{ suggestedItemOverlineLabel(suggested) || \'placeholder\' }}</ion-text>');
+    expect(source).not.toContain('<span v-else>');
+    expect(source).toContain('function suggestedItemOverlineLabel(suggested: any): string');
+    expect(source).toContain("translate('Approved swap')");
+    expect(source).toContain("translate('No replacement in stock')");
+    expect(source).not.toContain('swap-suggested-overline-hidden');
+    expect(source).not.toContain('v-else-if="suggested._noReplacement"');
     expect(source).toContain('orderedSwapActionItem(item)');
     expect(source).toContain('_sourceOrderItemSeqId: item.orderItemSeqId');
     expect(source).toContain('chevronForwardOutline');
