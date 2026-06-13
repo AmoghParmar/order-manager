@@ -157,8 +157,8 @@ import {
   alertController
 } from '@ionic/vue';
 import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
 import { DateTime } from 'luxon';
+import { useRoute } from 'vue-router';
 import { useCustomerServiceStore, BULK_ACTIONS } from '@/store/customerService';
 import { useOrderStore } from '@/store/order';
 import { useSeedStore } from '@/store/seed';
@@ -231,19 +231,15 @@ const hasMore = computed(() =>
   isApiBucket && orderStore.workflowOrders[apiBucket].length < orderStore.workflowOrdersTotal[apiBucket]
 );
 
-function queryValue(value: unknown) {
-  return Array.isArray(value) ? value[0] : value;
-}
-
 function applyRouteFilters() {
-  const facilityId = queryValue(route.query.facilityId);
+  const facilityId = route.query.facilityId;
 
-  if (typeof facilityId === 'string') {
+  if (typeof facilityId === 'string' && facilityId) {
     filters.value.facilityId = facilityId;
   }
 }
 
-watch(() => route.query, applyRouteFilters, { immediate: true });
+watch(() => route.query.facilityId, applyRouteFilters, { immediate: true });
 
 function loadWorkflowOrders() {
   orderStore.fetchWorkflowOrders(props.bucket as 'open' | 'inflight' | 'packed', filters.value);

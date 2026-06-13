@@ -14,6 +14,8 @@ describe('search filter card layout', () => {
     expect(source).toContain('gap: var(--spacer-sm);');
     expect(source).toContain('.search-filter-controls :slotted(*)');
     expect(source).toContain('flex: 1 1 220px;');
+    expect(source).toContain('.search-filter-controls :slotted(.date-filter-select)');
+    expect(source).toContain('flex: 0 0 11rem;');
     expect(source).not.toContain('search-filter-grid');
     expect(source).not.toContain('grid-template-columns');
     expect(source).not.toContain('<ion-grid');

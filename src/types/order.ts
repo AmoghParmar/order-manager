@@ -342,6 +342,17 @@ export interface Order {
   deliveryMethod: string;
   priority: string;
   parkingUnitCount?: number;
+  shippingAddress1?: string;
+  shippingCity?: string;
+  shippingStateProvinceGeoId?: string;
+  shippingPostalCode?: string;
+  shippingCountryGeoId?: string;
+  estimatedDeliveryDate?: string;
+  shipBeforeDate?: string;
+  shipByDate?: string;
+  queueReason?: string;
+  rejectionReason?: string;
+  ruleName?: string;
   items: OrderItem[];
   shipmentIds: string[];
   returnIds: string[];

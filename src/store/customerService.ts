@@ -18,101 +18,6 @@ const FACILITIES = [
 ];
 
 const CHANNELS = ['WEB_SALES_CHANNEL', 'POS_SALES_CHANNEL', 'MOBILE_SALES_CHANNEL', 'MARKETPLACE_CHANNEL'];
-const SHIP_METHODS = [
-  { id: 'STANDARD', desc: 'Ground · 3-5 days' },
-  { id: 'EXPRESS', desc: 'Express · 2 day' },
-  { id: 'OVERNIGHT', desc: 'Overnight' },
-  { id: 'STORE_PICKUP', desc: 'Store pickup' }
-];
-const PRIORITIES: WorkflowOrder['priority'][] = ['HIGH', 'NORMAL', 'NORMAL', 'NORMAL', 'LOW'];
-const FIRST_NAMES = ['Avery', 'Bhavya', 'Cole', 'Devi', 'Eli', 'Farrah', 'Gita', 'Hank', 'Indira', 'Jules', 'Kenji', 'Lalita', 'Mira', 'Noor', 'Omar', 'Priya'];
-const LAST_NAMES = ['Patel', 'Nguyen', 'Garcia', 'Okafor', 'Sato', 'Kowalski', 'Andersen', 'Reyes', 'Singh', 'Cohen'];
-
-function makeRng(seed: number) {
-  let s = seed;
-  return () => {
-    s = (s * 1664525 + 1013904223) % 4294967296;
-    return s / 4294967296;
-  };
-}
-
-function pick<T>(rng: () => number, list: T[]): T {
-  return list[Math.floor(rng() * list.length)];
-}
-
-function generateOrders(): WorkflowOrder[] {
-  const rng = makeRng(42);
-  const orders: WorkflowOrder[] = [];
-  const now = DateTime.now();
-
-  for (let i = 0; i < 60; i++) {
-    const store = { id: 'STORE_US', name: 'HotWax US' }; // Hardcoded for mock orders
-    const channel = pick(rng, CHANNELS);
-    const shipMethod = pick(rng, SHIP_METHODS);
-    const bucketRoll = rng();
-    const orderDate = now.minus({ hours: Math.floor(rng() * 96) }).toISO();
-    const customer = `${pick(rng, FIRST_NAMES)} ${pick(rng, LAST_NAMES)}`;
-
-    let facility: { id: string; name: string } | null = null;
-    let brokeringDate: string | null = null;
-    let picklistBinId: string | null = null;
-    let pickedDate: string | null = null;
-    let receivedAtFacility = false;
-    let statusId = 'ORDER_APPROVED';
-    let bucket: WorkflowBucket = 'open';
-
-    if (bucketRoll < 0.15) {
-      bucket = 'unfillable';
-      statusId = 'ORDER_APPROVED';
-    } else if (bucketRoll < 0.45) {
-      bucket = 'fraud';
-      statusId = 'ORDER_HELD';
-    } else if (bucketRoll < 0.75) {
-      bucket = 'open';
-      statusId = 'ORDER_APPROVED';
-    } else if (bucketRoll < 0.9) {
-      bucket = 'inflight';
-      statusId = 'ORDER_APPROVED';
-      facility = pick(rng, FACILITIES);
-      receivedAtFacility = true;
-    } else {
-      bucket = 'packed';
-      statusId = 'ORDER_APPROVED';
-      facility = pick(rng, FACILITIES);
-      receivedAtFacility = true;
-    }
-
-    orders.push({
-      orderId: `ORD-${10000 + i}`,
-      orderName: `#${10000 + i}`,
-      externalId: `SHOP-${100000 + i}`,
-      statusId,
-      orderDate: orderDate ?? '',
-      productStoreId: store.id,
-      productStoreName: store.name,
-      salesChannelEnumId: channel,
-      customerName: customer,
-      customerPartyId: `CUST-${1000 + i}`,
-      grandTotal: Math.round(rng() * 50000) / 100 + 12,
-      currencyUomId: store.id === 'STORE_EU' ? 'EUR' : store.id === 'STORE_CA' ? 'CAD' : 'USD',
-      itemCount: 1 + Math.floor(rng() * 6),
-      shipGroupSeqId: '00001',
-      shippingMethodTypeId: shipMethod.id,
-      shipmentMethodDesc: shipMethod.desc,
-      priority: pick(rng, PRIORITIES),
-      facilityId: facility?.id ?? null,
-      facilityName: facility?.name ?? null,
-      brokeringDate,
-      picklistBinId,
-      pickedDate,
-      receivedAtFacility,
-      shipBeforeDate: now.plus({ days: 1 + Math.floor(rng() * 5) }).toISO(),
-      bucket
-    });
-  }
-
-  return orders;
-}
 
 function emptyFilters(): WorkflowFilters {
   return {
@@ -183,7 +88,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
     facilityFulfillmentVelocity: [] as any[],
     facilityPartialFulfillments: [] as any[],
     facilityFulfillmentProgress: null as FacilityFulfillmentProgress | null,
-    orders: generateOrders() as WorkflowOrder[],
+    orders: [] as WorkflowOrder[],
     filters: {
       unfillable: emptyFilters(),
       fraud: emptyFilters(),

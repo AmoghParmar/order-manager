@@ -1,45 +1,30 @@
 <template>
-  <div>
-    <ion-item button detail="false" lines="full" @click="openDateModal">
-      <ion-label>{{ label }}</ion-label>
-      <ion-note slot="end">{{ selectedDateLabel }}</ion-note>
-      <ion-icon slot="end" :icon="caretDownOutline" />
+  <div class="date-filter-select">
+    <ion-item :id="triggerId" button detail="false" lines="none">
+      <ion-label>
+        <p>{{ label }}</p>
+        {{ selectedDateLabel }}
+      </ion-label>
     </ion-item>
 
-    <ion-modal :is-open="isOpen" @didDismiss="closeDateModal">
-      <ion-header>
-        <ion-toolbar>
-          <ion-buttons slot="start">
-            <ion-button @click="closeDateModal">
-              <ion-icon slot="icon-only" :icon="closeOutline" />
-            </ion-button>
-          </ion-buttons>
-          <ion-title>{{ label }}</ion-title>
-        </ion-toolbar>
-      </ion-header>
-      <ion-content class="ion-padding">
-        <ion-datetime
-          presentation="date"
-          :value="draftDate"
-          @ionChange="draftDate = normalizeDate($event.detail.value)"
-        />
-        <ion-button v-if="modelValue" expand="block" fill="clear" color="medium" @click="clearDate">
-          {{ translate('Clear') }}
-        </ion-button>
-        <ion-fab vertical="bottom" horizontal="end" slot="fixed">
-          <ion-fab-button @click="saveDate">
-            <ion-icon :icon="saveOutline" />
-          </ion-fab-button>
-        </ion-fab>
-      </ion-content>
-    </ion-modal>
+    <ion-popover :trigger="triggerId" trigger-action="click" :show-backdrop="false">
+      <ion-datetime
+        presentation="date"
+        :show-default-buttons="true"
+        :value="modelValue || undefined"
+        @ionChange="emit('update:modelValue', normalizeDate($event.detail.value))"
+      />
+    </ion-popover>
   </div>
 </template>
 
+<script lang="ts">
+let dateFilterSelectCounter = 0;
+</script>
+
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
-import { IonButton, IonButtons, IonContent, IonDatetime, IonFab, IonFabButton, IonHeader, IonIcon, IonItem, IonLabel, IonModal, IonNote, IonTitle, IonToolbar } from '@ionic/vue';
-import { caretDownOutline, closeOutline, saveOutline } from 'ionicons/icons';
+import { computed } from 'vue';
+import { IonDatetime, IonItem, IonLabel, IonPopover } from '@ionic/vue';
 import { DateTime } from 'luxon';
 import { translate } from '@common';
 
@@ -54,42 +39,14 @@ const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void;
 }>();
 
-const isOpen = ref(false);
-const draftDate = ref('');
+const triggerId = `date-filter-select-${(dateFilterSelectCounter += 1)}`;
 
 const selectedDateLabel = computed(() => {
-  if (!props.modelValue) return translate('Select');
+  if (!props.modelValue) return translate('Select date');
 
   const parsedDate = DateTime.fromISO(props.modelValue);
   return parsedDate.isValid ? parsedDate.toLocaleString(DateTime.DATE_MED) : props.modelValue;
 });
-
-watch(() => props.modelValue, (value) => {
-  draftDate.value = value || today();
-}, { immediate: true });
-
-function openDateModal() {
-  draftDate.value = props.modelValue || today();
-  isOpen.value = true;
-}
-
-function closeDateModal() {
-  isOpen.value = false;
-}
-
-function saveDate() {
-  emit('update:modelValue', normalizeDate(draftDate.value));
-  closeDateModal();
-}
-
-function clearDate() {
-  emit('update:modelValue', '');
-  closeDateModal();
-}
-
-function today(): string {
-  return DateTime.now().toISODate() || '';
-}
 
 function normalizeDate(value: string | string[] | null | undefined): string {
   if (!value) return '';
@@ -97,3 +54,24 @@ function normalizeDate(value: string | string[] | null | undefined): string {
   return selectedValue ? String(selectedValue).slice(0, 10) : '';
 }
 </script>
+
+<style scoped>
+.date-filter-select {
+  flex: 0 0 11rem;
+  max-width: 11rem;
+  min-width: 11rem;
+}
+
+.date-filter-select ion-item {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .date-filter-select {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+    width: 100%;
+  }
+}
+</style>
