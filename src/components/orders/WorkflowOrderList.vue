@@ -15,7 +15,7 @@
         :placeholder="searchPlaceholder"
         @clear="clearFilters"
       >
-        <ion-input v-model="filters.customerName" label="Customer name" label-placement="stacked" :clear-input="true" />
+        <ion-input v-model="filters.customerName" label="Customer name" :placeholder="translate('Search by name')" label-placement="stacked" :clear-input="true" />
         <ion-select v-model="filters.priority" label="Priority" label-placement="stacked" interface="popover">
           <ion-select-option :value="null">All</ion-select-option>
           <ion-select-option :value="true">High priority</ion-select-option>
@@ -46,6 +46,7 @@
       <ion-list>
         <ion-list-header>
           <ion-checkbox
+            class="ion-margin-end"
             v-if="selectMode"
             :checked="allCurrentPageSelected"
             :indeterminate="someCurrentPageSelected && !allCurrentPageSelected"
