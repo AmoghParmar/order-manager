@@ -6,7 +6,7 @@
           <ion-icon slot="icon-only" :icon="closeOutline" />
         </ion-button>
       </ion-buttons>
-      <ion-title>{{ translate("Add a product") }}</ion-title>
+      <ion-title>{{ translate("Add product") }}</ion-title>
     </ion-toolbar>
   </ion-header>
 
@@ -22,9 +22,9 @@
     <!-- Product list -->
     <template v-if="products.length">
       <ion-item v-for="product in products" :key="product.productId">
-        <ion-avatar slot="start">
+        <ion-thumbnail slot="start">
           <DxpShopifyImg :src="product.mainImageUrl" />
-        </ion-avatar>
+        </ion-thumbnail>
         <ion-label>
           <h2>{{ commonUtil.getProductIdentificationValue(productIdentificationPref.primaryId, product) ? commonUtil.getProductIdentificationValue(productIdentificationPref.primaryId, product) : product?.internalName }}</h2>
           <p v-if="commonUtil.getProductIdentificationValue(productIdentificationPref.secondaryId, product) !== 'null'">{{ commonUtil.getProductIdentificationValue(productIdentificationPref.secondaryId, product) }}</p>
@@ -52,12 +52,13 @@
 </template>
 
 <script setup lang="ts">
-import { IonAvatar, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonSearchbar, IonSpinner, IonText, IonTitle, IonToolbar, modalController } from '@ionic/vue';
+import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonSearchbar, IonSpinner, IonText, IonThumbnail, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { checkmarkCircle, closeOutline } from "ionicons/icons";
 import { computed, onMounted, ref } from 'vue';
 import { translate, logger, commonUtil, useSolrSearch } from "@common";
 import { useProductStore } from '@/store/productStore';
 import { useProductMaster } from '@/composables/useProductMaster';
+import { DxpShopifyImg } from '@common';
 
 const props = defineProps(["query", "addProductToQueue", "isProductInOrder", "pendingProductIds"]);
 const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);

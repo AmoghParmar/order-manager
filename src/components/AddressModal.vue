@@ -21,7 +21,12 @@
         <ion-input :label="translate('City')" class="ion-text-right" name="city" v-model="address.city" id="city" type="text"/>
       </ion-item>
       <ion-item>
-        <ion-select :label="translate('Province')" interface="popover" v-model="address.province">
+        <ion-select :label="translate('Country')" interface="popover" name="country" v-model="address.country" id="country" @ionChange="onCountryChange">
+          <ion-select-option v-for="country in countries" :key="country.geoId" :value="country.geoId" >{{ country.geoName }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+      <ion-item>
+        <ion-select :label="translate('Province')" interface="popover" name="province" v-model="address.province">
           <ion-select-option v-for="state in states" :key="state.geoId" :value="state.geoId" >{{ state.geoName }}</ion-select-option>
         </ion-select>
       </ion-item>
@@ -29,15 +34,14 @@
         <ion-input :label="translate('Zipcode')" class="ion-text-right" name="zip" v-model="address.zip" id="zip"/>
       </ion-item>
       <ion-item>
-        <ion-input :label="translate('Country')" class="ion-text-right" name="country" v-model="address.country" id="country"/>
-      </ion-item>
-      <ion-item>
         <ion-input :label="translate('Phone')" class="ion-text-right" name="phone" v-model="address.phone" id="phone"/>
       </ion-item>
     </ion-list>
-    <div class="ion-text-center">
-      <ion-button @click="save()">{{ translate("Save shipping address") }}</ion-button>
-    </div>
+    <ion-fab horizontal="end" vertical="bottom">
+      <ion-fab-button @click="save()">
+        <ion-icon :icon="saveOutline" />
+      </ion-fab-button>
+    </ion-fab>
   </ion-content>
 </template>
 
@@ -55,12 +59,12 @@ import {
   IonSelectOption,
   IonTitle, 
   IonToolbar, 
-  modalController,
-  loadingController
+  modalController
 } from '@ionic/vue';
-import { onMounted, ref } from 'vue';
-import { closeOutline } from 'ionicons/icons';
+import { computed, onMounted, ref } from 'vue';
+import { closeOutline, saveOutline } from 'ionicons/icons';
 import { translate } from "@common";
+import { useSeedStore } from '@/store/seed';
 
 const address = ref({
   address1: "",
@@ -71,31 +75,19 @@ const address = ref({
   country: "",
   phone: ""
 })
-const contactMechId = ref("")
-const states = ref([])
-const loader = ref(null) as any
 
 const props = defineProps(["customerAddress"])
+const countries = computed(() => useSeedStore().getCountries)
+const states = computed(() => useSeedStore().getStatesForCountry(address.value.country))
 
-onMounted(async () => {
-  // presentLoader()
-  // await getAssociatedStates()
+onMounted(() => {
   prepareAddress();
-  // dismissLoader()
 })
 
-async function presentLoader() {
-  loader.value = await loadingController
-    .create({
-      message: translate("Fetching address")
-    });
-  await loader.value.present();
-}
-
-function dismissLoader() {
-  if(loader.value) {
-    loader.value.dismiss();
-    loader.value = null;
+function onCountryChange() {
+  address.value.province = "";
+  if(address.value.country) {
+    useSeedStore().loadGeoAssocs(address.value.country);
   }
 }
 
@@ -112,19 +104,4 @@ function close() {
 function save() {
   modalController.dismiss({ address: address.value })
 }
-
-// async function getAssociatedStates() {
-//   try {
-//     const payload = {
-//       "viewSize": 250
-//     }
-//     const resp = await UtilityService.getAssociatedStates(payload);
-//     if (!hasError(resp)) {
-//       states.value = resp.data.states;
-//       address.value.countryGeoId = resp.data.countryGeoId;
-//     }
-//   } catch (error) {
-//     console.error(error)
-//   }
-// }
 </script>

@@ -27,8 +27,14 @@
             <p>{{ customer.email }}</p>
           </ion-label>
         </ion-item>
-        <p v-if="!queryString.trim()" class="empty-state">{{ translate("Search for a customer") }}</p>
-        <p v-if="queryString.trim() && !customers?.length" class="empty-state">
+        <div class="empty-state" v-if="isLoading">
+          <ion-item lines="none">
+            <ion-spinner color="secondary" name="crescent" slot="start" />
+            {{ translate("Searching for customer") }}
+          </ion-item>
+        </div>
+        <p v-else-if="!queryString.trim()" class="empty-state">{{ translate("Search for a customer") }}</p>
+        <p v-else-if="queryString.trim() && !customers?.length" class="empty-state">
           {{ translate("Customer not found") }}<br />
           {{ translate("Create a new one before proceeding.") }}
         </p>
@@ -92,13 +98,14 @@
 <script setup lang="ts">
 import { showToast } from '@/utils';
 import { emitter, translate } from '@common';
-import { IonInput, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonSegment, IonSegmentButton, IonSegmentView, IonSegmentContent, IonItem, IonLabel, IonSearchbar, IonTitle, IonToolbar, modalController } from '@ionic/vue';
+import { IonInput, IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonSegment, IonSegmentButton, IonSegmentView, IonSegmentContent, IonSpinner, IonItem, IonLabel, IonSearchbar, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline } from "ionicons/icons";
 import { ref } from 'vue';
 import { searchShopifyCustomers, createShopifyCustomer } from '@/services/customer';
 
 const queryString = ref("")
 const selectedSection = ref("search")
+const isLoading = ref(false)
 
 const props = defineProps(["shopId"])
 
@@ -139,11 +146,14 @@ async function searchCustomers() {
     showToast(translate("Please select a Shopify Shop first."));
     return;
   }
-
+  
+  isLoading.value = true;
   try {
     customers.value = await searchShopifyCustomers(props.shopId, query);
   } catch (err: any) {
     showToast(translate("Failed to search customers: " + (err.message || err)));
+  } finally {
+    isLoading.value = false;
   }
 }
 

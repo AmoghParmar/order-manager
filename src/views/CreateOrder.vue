@@ -17,7 +17,7 @@
               <ion-card-title>{{ translate("Assign") }}</ion-card-title>
             </ion-card-header>
             <ion-item>
-              <ion-icon :icon="storefrontOutline" slot="start" />
+              <ion-icon :icon="globeOutline" slot="start" />
               <ion-select v-model="orderForm.shopId" :label="translate('Shopify Shop')" :placeholder="translate('Select')" interface="popover">
                 <ion-select-option v-for="shop in shopsList" :value="shop.shopId" :key="shop.shopId">{{ shop.name ? shop.name : shop.shopId }}</ion-select-option>
               </ion-select>
@@ -42,7 +42,7 @@
                 {{ translate("Customer") }}
                 <ion-button size="small" fill="outline" @click="openCustomerModal">
                   <ion-icon :icon="addCircleOutline" slot="start"/>
-                  {{ translate("Add") }}
+                  {{ orderForm.customer.id ? translate("Edit") : translate("Add") }}
                 </ion-button>
               </ion-card-title>
             </ion-card-header>
@@ -284,7 +284,7 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, nextTick, watch } from 'vue';
 import { IonBadge, IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonMenuButton, IonPage, IonSearchbar, IonSegment, IonSegmentButton, IonSelect, IonSelectOption, IonTextarea, IonThumbnail, IonTitle, IonToolbar, IonSpinner, modalController } from '@ionic/vue';
-import { addOutline, storefrontOutline, searchOutline, checkmarkDoneOutline, barcodeOutline, cloudOfflineOutline, shirtOutline, checkmarkOutline, locateOutline, addCircleOutline, trashOutline, cashOutline } from 'ionicons/icons';
+import { addOutline, storefrontOutline, searchOutline, checkmarkDoneOutline, barcodeOutline, cloudOfflineOutline, shirtOutline, checkmarkOutline, locateOutline, addCircleOutline, trashOutline, cashOutline, globeOutline } from 'ionicons/icons';
 import { api, commonUtil, DxpShopifyImg, logger, translate, useSolrSearch } from '@common';
 import emitter from '@/event-bus';
 import { getShopifyShops } from '@/services/customer';
@@ -323,6 +323,7 @@ const orderForm = ref({
   shopId: '',
   productStoreId: '',
   currencyCode: 'USD',
+  facilityId: '',
   customer: {
     id: '',
     firstName: '',
@@ -387,9 +388,13 @@ async function findProduct(value: string) {
     return null;
   }
 
+  console.log('dfdf', useProductStore().getCurrentProductStore)
+
   try {
     const payload: any = {
-      filters: {},
+      filters: {
+        productStoreIds_s: { value: useProductStore().getCurrentProductStore.productStoreId }
+      },
       viewSize: 1
     };
 
@@ -459,11 +464,6 @@ function clearSearch() {
   searchedProduct.value = {};
 }
 
-function clearQuery() {
-  queryString.value = "";
-  searchedProduct.value = {};
-}
-
 async function enableScan() {
   mode.value = "scan";
   isScanningEnabled.value = true;
@@ -480,7 +480,7 @@ async function enableSearch() {
 }
 
 function segmentChange(modeValue: string) {
-  clearQuery();
+  clearSearch();
   modeValue === "search" ? enableSearch() : isScanningEnabled.value = false;
 }
 
@@ -567,6 +567,7 @@ function resetForm() {
     currencyCode: 'USD',
     shopId: orderForm.value.shopId || '',
     productStoreId: orderForm.value.productStoreId || '',
+    facilityId: '',
     customer: {
       id: '',
       firstName: '',
@@ -587,6 +588,7 @@ function resetForm() {
     note: '',
     tags: ""
   };
+  clearSearch();
 }
 
 // Validation & API Submission
@@ -639,6 +641,7 @@ async function submitOrder() {
     shopId: form.shopId,
     shopifyCustomerId: form.customer.id,
     currencyCode: form.currencyCode,
+    facilityId: form.facilityId,
     customer: {
       firstName: form.customer.firstName,
       lastName: form.customer.lastName,
@@ -684,7 +687,6 @@ async function submitOrder() {
       
       // Present success feedback
       await commonUtil.showToast(translate("Shopify Order Created Successfully!"));
-      isModalOpen.value = true;
       resetForm();
     } else {
       throw new Error("Invalid response schema from order API");
@@ -706,7 +708,7 @@ async function openCustomerModal() {
 
   addCustomerModal.onDidDismiss().then((data) => {
     if(data?.data?.customer) {
-      orderForm.value.customer["customerId"] = data.data.customer["id"]
+      orderForm.value.customer["id"] = data.data.customer["id"]
       orderForm.value.customer["firstName"] = data.data.customer["firstName"]
       orderForm.value.customer["lastName"] = data.data.customer["lastName"]
       orderForm.value.customer["phone"] = data.data.customer["phone"]
