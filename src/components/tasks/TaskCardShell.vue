@@ -79,20 +79,18 @@
       </div>
     </div>
 
-    <div v-if="$slots.actions || $slots['actions-end']" class="task-card-actions ship-group-actions">
-      <ion-buttons class="task-card-action-buttons">
-        <slot name="actions" />
-      </ion-buttons>
+    <ion-item lines="none" v-if="$slots.actions || $slots['actions-end']">
+      <slot name="actions" />
       <div v-if="$slots['actions-end']" class="task-card-actions-end">
         <slot name="actions-end" />
       </div>
-    </div>
+    </ion-item>
   </ion-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { IonButton, IonButtons, IonCard, IonCheckbox, IonChip, IonIcon, IonItem, IonLabel, IonNote, IonProgressBar } from '@ionic/vue';
+import { IonButton, IonCard, IonCheckbox, IonChip, IonIcon, IonItem, IonLabel, IonNote, IonProgressBar } from '@ionic/vue';
 import { callOutline, copyOutline, mailOutline, personOutline, ticketOutline } from 'ionicons/icons';
 import { commonUtil, translate } from '@common';
 
