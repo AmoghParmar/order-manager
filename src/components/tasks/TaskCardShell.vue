@@ -79,7 +79,7 @@
       </div>
     </div>
 
-    <ion-item lines="none" v-if="$slots.actions || $slots['actions-end']" class="task-card-actions ship-group-actions">
+    <ion-item lines="none" v-if="$slots.actions || $slots['actions-end']">
       <slot name="actions" />
       <div v-if="$slots['actions-end']" class="task-card-actions-end">
         <slot name="actions-end" />
