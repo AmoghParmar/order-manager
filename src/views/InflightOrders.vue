@@ -440,7 +440,7 @@ function setOrderSelection(orderId: string, checked: boolean) {
 }
 
 function orderDetailLink(order: WorkflowOrder) {
-  return `/orders/${order.orderId}`;
+  return `/inflight/${order.orderId}`;
 }
 
 async function runAction(action: BulkActionDefinition) {
