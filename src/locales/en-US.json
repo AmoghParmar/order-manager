@@ -703,5 +703,14 @@
   "Order completed": "Order completed",
   "Top 10 facilities by": "Top 10 facilities by",
   "Unfillable today": "Unfillable today",
-  "or": "or"
+  "or": "or",
+  "Back to Login": "Back to Login",
+  "Detected": "Detected",
+  "Local OMS": "Local OMS",
+  "Next": "Next",
+  "Please contact the administrator.": "Please contact the administrator.",
+  "Please fill in the OMS": "Please fill in the OMS",
+  "Please fill in the user details": "Please fill in the user details",
+  "Processing": "Processing",
+  "Ready": "Ready"
 }
