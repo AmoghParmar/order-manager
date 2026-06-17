@@ -245,16 +245,16 @@
           <!-- Left Card: Fulfillment Sync Settings & Rate Limiting -->
           <ion-card class="ion-no-margin">
             <ion-card-header>
-              <ion-card-subtitle class="overline">PENDING SYNC</ion-card-subtitle>
+              <ion-card-subtitle class="overline">{{ translate("PENDING SYNC") }}</ion-card-subtitle>
               <ion-card-title class="big-number">{{ fulfillmentSyncData.settings?.pendingSyncCount ?? 0 }}</ion-card-title>
             </ion-card-header>
 
             <ion-card-content class="ion-no-padding">
               <!-- Sort Section -->
               <ion-item-divider>
-                <ion-label>Sort</ion-label>
+                <ion-label>{{ translate("Sort") }}</ion-label>
                 <ion-button id="add-sort-rule-trigger" fill="outline" size="small" slot="end" :disabled="availableSortOptions.length === 0">
-                  ADD
+                  {{ translate("ADD") }}
                   <ion-icon slot="end" :icon="addCircleOutline" />
                 </ion-button>
               </ion-item-divider>
@@ -291,14 +291,14 @@
 
               <!-- Ratelimit Section -->
               <ion-item-divider>
-                <ion-label>Ratelimit</ion-label>
+                <ion-label>{{ translate("Ratelimit") }}</ion-label>
               </ion-item-divider>
 
               <!-- Batch size -->
               <ion-item lines="full">
                 <ion-label>
-                  <h2>Batch size</h2>
-                  <p>Orders per run</p>
+                  <h2>{{ translate("Batch size") }}</h2>
+                  <p>{{ translate("Orders per run") }}</p>
                 </ion-label>
                 <ion-input slot="end" type="number" :value="fulfillmentSyncData.settings?.batchSize" class="ion-text-end" style="max-width: 100px" @ionChange="handleBatchSizeChange" />
               </ion-item>
@@ -306,11 +306,11 @@
               <!-- Frequency -->
               <ion-item lines="none">
                 <ion-label>
-                  <h2>Frequency</h2>
-                  <p>{{ fulfillmentSyncData.settings?.paused === 'Y' ? 'Paused' : fulfillmentSyncData.settings?.frequency }}</p>
+                  <h2>{{ translate("Frequency") }}</h2>
+                  <p>{{ fulfillmentSyncData.settings?.paused === 'Y' ? translate('Paused') : translate(fulfillmentSyncData.settings?.frequency) }}</p>
                 </ion-label>
                 <ion-button fill="outline" slot="end" @click="openScheduleModal()">
-                  {{ fulfillmentSyncData.settings?.paused === 'Y' ? 'Paused' : fulfillmentSyncData.settings?.cronExpression }}
+                  {{ fulfillmentSyncData.settings?.paused === 'Y' ? translate('Paused') : fulfillmentSyncData.settings?.cronExpression }}
                 </ion-button>
               </ion-item>
             </ion-card-content>
@@ -325,14 +325,14 @@
                     <ion-icon :icon="closeOutline" />
                   </ion-button>
                 </ion-buttons>
-                <ion-title>Schedule</ion-title>
+                <ion-title>{{ translate("Schedule") }}</ion-title>
               </ion-toolbar>
             </ion-header>
 
             <ion-content class="ion-padding">
               <!-- Expression Input -->
               <ion-item class="expression-input-item">
-                <ion-label position="stacked">Expression</ion-label>
+                <ion-label position="stacked">{{ translate("Expression") }}</ion-label>
                 <ion-input v-model="cronExpressionInput" placeholder="0 */15 * ? * *"></ion-input>
                 <ion-icon :icon="informationCircleOutline" slot="end" class="info-icon" />
               </ion-item>
@@ -349,13 +349,13 @@
                 </ion-item>
                 <ion-item>
                   <ion-icon :icon="powerOutline" slot="start" />
-                  <ion-label>Active</ion-label>
+                  <ion-label>{{ translate("Active") }}</ion-label>
                   <ion-toggle slot="end" v-model="isJobActive" />
                 </ion-item>
               </ion-list>
 
               <!-- Pre-made Options -->
-              <h3 class="options-header ion-margin-top">Schedule Options</h3>
+              <h3 class="options-header ion-margin-top">{{ translate("Schedule Options") }}</h3>
               <ion-radio-group v-model="selectedScheduleOption" @ionChange="handleScheduleOptionChange">
                 <ion-item v-for="option in scheduleOptions" :key="option.value">
                   <ion-radio slot="start" :value="option.value" />
@@ -377,8 +377,8 @@
             <template v-if="sortRules.length > 0">
               <!-- Queue Head/Tail Info Labels -->
               <div class="queue-header-labels">
-                <ion-note class="overline">Last to Process</ion-note>
-                <ion-note class="overline">Next to Process →</ion-note>
+                <ion-note class="overline">{{ translate("Last to Process") }}</ion-note>
+                <ion-note class="overline">{{ translate("Next to Process") }} →</ion-note>
               </div>
               <!-- Progress Bar -->
               <div class="queue-progress-bar-container">
@@ -399,7 +399,7 @@
                     transition: 'all 0.2s ease',
                     cursor: 'pointer'
                   }" 
-                  :title="`${segment.label}: ${segment.orderCount} orders (${segment.estimatedTime})`"
+                  :title="`${segment.label}: ${segment.orderCount} ${translate('orders')} (${segment.estimatedTime})`"
                   @mouseenter="hoveredSegmentId = segment.id"
                   @mouseleave="hoveredSegmentId = null"
                 />
@@ -407,7 +407,7 @@
 
               <!-- Segments Legend Grid Header -->
               <div class="queue-header-labels ion-margin-top">
-                <ion-note class="overline">Queue Breakdown</ion-note>
+                <ion-note class="overline">{{ translate("Queue Breakdown") }}</ion-note>
               </div>
 
               <!-- Segments Legend Grid -->
@@ -427,7 +427,7 @@
                   <div class="legend-card-header">
                     <span class="legend-orders">
                       <span class="legend-position">#{{ visibleIndex + 1 }}</span>
-                      {{ segment.orderCount }} orders
+                      {{ segment.orderCount }} {{ translate("orders") }}
                     </span>
                     <span class="legend-time">{{ segment.estimatedTime }}</span>
                   </div>
@@ -518,7 +518,7 @@ const unfillableTrend = computed(() => store.unfillableTrend);
 const fulfillmentSyncData = computed(() => store.getFulfillmentSyncData);
 
 const selectedStoreId = ref('');
-const selectedFacilityId = ref('');
+const selectedFacilityId = ref('BROADWAY');
 const hoveredSegmentId = ref<string | null>(null);
 const searchQuery = ref('');
 const selectedDimension = ref('volume');
@@ -711,34 +711,36 @@ const cronExpressionInput = ref('');
 const selectedScheduleOption = ref('');
 const isJobActive = ref(true);
 
-const scheduleOptions = [
-  { label: 'Every 5 minutes', value: '0 */5 * ? * *' },
-  { label: 'Every 15 minutes', value: '0 */15 * ? * *' },
-  { label: 'Every 30 minutes', value: '0 */30 * ? * *' },
-  { label: 'Hourly', value: '0 0 * ? * *' },
-  { label: 'Every six hours', value: '0 0 */6 ? * *' },
-  { label: 'Every day at midnight', value: '0 0 0 ? * *' }
-];
+const scheduleOptions = computed(() => [
+  { label: translate('Every 5 minutes'), value: '0 */5 * ? * *' },
+  { label: translate('Every 15 minutes'), value: '0 */15 * ? * *' },
+  { label: translate('Every 30 minutes'), value: '0 */30 * ? * *' },
+  { label: translate('Hourly'), value: '0 0 * ? * *' },
+  { label: translate('Every six hours'), value: '0 0 */6 ? * *' },
+  { label: translate('Every day at midnight'), value: '0 0 0 ? * *' }
+]);
 
 const cronDescription = computed(() => {
   if (!cronExpressionInput.value) return '';
-  return commonUtil.getCronString(cronExpressionInput.value) || 'Invalid expression';
+  const desc = commonUtil.getCronString(cronExpressionInput.value);
+  return desc ? translate(desc) : translate('Invalid expression');
 });
 
 const nextRunTime = computed(() => {
-  if (!isJobActive.value) return 'Paused';
+  if (!isJobActive.value) return translate('Paused');
   if (!cronExpressionInput.value) return '-';
   try {
     return commonUtil.getNextExecutionTime(cronExpressionInput.value);
   } catch (error) {
-    return 'Invalid expression';
+    return translate('Invalid expression');
   }
 });
 
 watch(cronExpressionInput, (newVal) => {
-  const match = scheduleOptions.find(opt => opt.value === newVal);
+  const match = scheduleOptions.value.find(opt => opt.value === newVal);
   selectedScheduleOption.value = match ? match.value : '';
 });
+
 
 function openScheduleModal() {
   const currentCron = fulfillmentSyncData.value?.settings?.cronExpression || 'Paused';
@@ -762,7 +764,7 @@ function handleScheduleOptionChange(event: any) {
 async function saveSchedule() {
   const settings = fulfillmentSyncData.value?.settings;
   if (!settings || !settings.jobName) {
-    commonUtil.showToast('Job name not found. Cannot save.');
+    commonUtil.showToast(translate('Job name not found. Cannot save.'));
     return;
   }
   

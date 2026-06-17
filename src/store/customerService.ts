@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { DateTime } from 'luxon';
 import { useOrderStore } from '@/store/order';
-import { api, commonUtil } from '@common';
+import { api, commonUtil, translate } from '@common';
 import type {
   BulkActionDefinition,
   WorkflowBucket,
@@ -409,10 +409,13 @@ export const useCustomerServiceStore = defineStore('customerService', {
           cond.sequenceNum = (idx + 1) * 10;
         }
       });
-      activeProfile.pickProfileFilters = [...filters];
-      this.pickProfileGroups = [...this.pickProfileGroups];
-      await this.savePickProfile(activeProfile);
-      await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
+      try {
+        await this.savePickProfile(activeProfile);
+        await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
+      } catch (error) {
+        console.error('Failed to update sort rules order', error);
+        commonUtil.showToast(translate('Failed to reorder sort rules.'));
+      }
     },
     async addSortRule(facilityId: string, fieldName: string) {
       const group = this.pickProfileGroups.find(g => g.facilityId === facilityId);
@@ -440,10 +443,13 @@ export const useCustomerServiceStore = defineStore('customerService', {
           sequenceNum: maxSeqNum + 10
         });
       }
-      activeProfile.pickProfileFilters = [...filters];
-      this.pickProfileGroups = [...this.pickProfileGroups];
-      await this.savePickProfile(activeProfile);
-      await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
+      try {
+        await this.savePickProfile(activeProfile);
+        await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
+      } catch (error) {
+        console.error('Failed to add sort rule', error);
+        commonUtil.showToast(translate('Failed to add sort rule.'));
+      }
     },
     async removeSortRule(facilityId: string, fieldName: string) {
       const group = this.pickProfileGroups.find(g => g.facilityId === facilityId);
@@ -454,27 +460,21 @@ export const useCustomerServiceStore = defineStore('customerService', {
 
       const filters = activeProfile.pickProfileFilters || [];
       const cond = filters.find((f: any) => f.fieldName === fieldName && f.conditionTypeEnumId === 'ENTCT_SORT_BY');
-      if (cond && cond.conditionSeqId) {
-        try {
-          await api({
-            url: `poorti/pickProfile/${activeProfile.profileId}/conditions/${cond.conditionSeqId}`,
-            method: 'DELETE'
-          });
-        } catch (error) {
-          console.error('Failed to delete condition from server', error);
+      if (!cond || !cond.conditionSeqId) return;
+
+      try {
+        const resp = await api({
+          url: `poorti/pickProfile/${activeProfile.profileId}/conditions/${cond.conditionSeqId}`,
+          method: 'DELETE'
+        });
+        if (resp && commonUtil.hasError(resp)) {
+          throw new Error('Failed to delete condition from server');
         }
+        await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
+      } catch (error) {
+        console.error('Failed to remove sort rule', error);
+        commonUtil.showToast(translate('Failed to remove sort rule.'));
       }
-
-      const filteredFilters = filters.filter((f: any) => !(f.fieldName === fieldName && f.conditionTypeEnumId === 'ENTCT_SORT_BY'));
-      const sortFilters = filteredFilters.filter((f: any) => f.conditionTypeEnumId === 'ENTCT_SORT_BY');
-      sortFilters.forEach((f: any, idx: number) => {
-        f.sequenceNum = (idx + 1) * 10;
-      });
-
-      activeProfile.pickProfileFilters = filteredFilters;
-      this.pickProfileGroups = [...this.pickProfileGroups];
-      await this.savePickProfile(activeProfile);
-      await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
     },
     async updateBatchSize(facilityId: string, batchSize: number) {
       console.log('updateBatchSize called with facilityId:', facilityId, 'batchSize:', batchSize);
@@ -532,11 +532,13 @@ export const useCustomerServiceStore = defineStore('customerService', {
         batchSizeFilter.conditionTypeEnumId = 'PPF_BATCH_SIZE'; // ensure it is normalized to PPF_BATCH_SIZE
       }
 
-      activeProfile.pickProfileFilters = [...filters];
-      this.pickProfileGroups = [...this.pickProfileGroups];
-      console.log('updateBatchSize - saving profile:', JSON.stringify(activeProfile, null, 2));
-      await this.savePickProfile(activeProfile);
-      await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
+      try {
+        await this.savePickProfile(activeProfile);
+        await this.fetchFulfillmentSyncData(facilityId, activeProfile.productStoreId);
+      } catch (error) {
+        console.error('Failed to update batch size', error);
+        commonUtil.showToast(translate('Failed to update batch size.'));
+      }
     },
     async fetchFulfillmentSyncData(facilityId: string, productStoreId: string) {
       try {
@@ -791,7 +793,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
     },
     async updateServiceJob(jobName: string, cronExpression: string, paused: string, facilityId: string, productStoreId: string) {
       try {
-        await api({
+        const resp = await api({
           url: `admin/serviceJobs/${jobName}`,
           method: 'PUT',
           data: {
@@ -799,20 +801,29 @@ export const useCustomerServiceStore = defineStore('customerService', {
             paused
           }
         });
+        if (resp && commonUtil.hasError(resp)) {
+          throw new Error('Failed to update service job');
+        }
         await this.fetchFulfillmentSyncData(facilityId, productStoreId);
+        commonUtil.showToast(translate('Fulfillment sync schedule updated successfully.'));
       } catch (error) {
         console.error('Failed to update service job', error);
+        commonUtil.showToast(translate('Failed to update fulfillment sync schedule.'));
       }
     },
     async savePickProfile(profile: any) {
       try {
-        await api({
+        const resp = await api({
           url: `poorti/pickProfile/${profile.profileId}`,
           method: 'PUT',
           data: profile
         });
+        if (resp && commonUtil.hasError(resp)) {
+          throw new Error('Failed to save pick profile');
+        }
       } catch (error) {
         console.error('Failed to save pick profile', error);
+        throw error;
       }
     },
     clearFilters(bucket: WorkflowBucket) {
