@@ -447,22 +447,6 @@ export const useCustomerServiceStore = defineStore('customerService', {
       if (!activeProfile) return;
 
       const filters = activeProfile.pickProfileFilters || [];
-      const hasSortFilters = filters.some((f: any) => f.conditionTypeEnumId === 'ENTCT_SORT_BY');
-      if (!hasSortFilters) {
-        const seedStore = useSeedStore() as any;
-        const sortParamEnums = seedStore.getEnumsByType('PP_SORT_PARAM_TYPE') || [];
-        sortParamEnums.forEach((e: any, idx: number) => {
-          filters.push({
-            profileId: activeProfile.profileId,
-            conditionSeqId: `0${idx + 1}`,
-            conditionTypeEnumId: 'ENTCT_SORT_BY',
-            fieldName: e.enumCode,
-            conditionOperator: 'equals',
-            fieldValue: 'ASC',
-            sequenceNum: (idx + 1) * 10
-          });
-        });
-      }
 
       const alreadyExists = filters.some((f: any) => f.fieldName === fieldName && f.conditionTypeEnumId === 'ENTCT_SORT_BY');
       if (!alreadyExists) {
@@ -656,17 +640,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
           };
         });
 
-        // Default rules if profile doesn't have any sort rules
-        if (sortRules.length === 0) {
-          sortParamEnums.forEach((e: any, idx: number) => {
-            sortRules.push({
-              id: e.enumCode,
-              name: e.description,
-              sequenceNum: (idx + 1) * 10,
-              conditionSeqId: `0${idx + 1}`
-            });
-          });
-        }
+
 
         // 3. Fetch order counts grouped by topSortField
         const topSortField = sortRules[0]?.id || 'deliveryDays';
@@ -859,7 +833,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
       try {
         await api({
           url: `poorti/pickProfile/${profile.profileId}`,
-          method: 'POST',
+          method: 'PUT',
           data: profile
         });
       } catch (error) {

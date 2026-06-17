@@ -374,65 +374,72 @@
 
           <!-- Right side: Queue progress & timeline -->
           <div class="sync-queue-container">
-            <!-- Queue Head/Tail Info Labels -->
-            <div class="queue-header-labels">
-              <ion-note class="overline">Last to Process</ion-note>
-              <ion-note class="overline">Next to Process →</ion-note>
-            </div>
-            <!-- Progress Bar -->
-            <div class="queue-progress-bar-container">
-              <div 
-                v-for="segment in fulfillmentSyncData.queueSegments" 
-                :key="segment.id" 
-                class="queue-segment" 
-                :class="segment.color?.startsWith('#') ? '' : segment.color" 
-                :style="{ 
-                  width: segment.percentWidth + '%', 
-                  minWidth: segment.orderCount > 0 ? '8px' : '0px',
-                  backgroundColor: segment.color?.startsWith('#') ? segment.color : undefined,
-                  opacity: hoveredSegmentId && hoveredSegmentId !== segment.id ? 0.35 : 1,
-                  transform: hoveredSegmentId === segment.id ? 'scaleY(1.2) scaleX(1.05)' : 'none',
-                  boxShadow: hoveredSegmentId === segment.id ? '0 0 6px rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.5)' : 'none',
-                  zIndex: hoveredSegmentId === segment.id ? 2 : 1,
-                  position: 'relative',
-                  transition: 'all 0.2s ease',
-                  cursor: 'pointer'
-                }" 
-                :title="`${segment.label}: ${segment.orderCount} orders (${segment.estimatedTime})`"
-                @mouseenter="hoveredSegmentId = segment.id"
-                @mouseleave="hoveredSegmentId = null"
-              />
-            </div>
-
-            <!-- Segments Legend Grid Header -->
-            <div class="queue-header-labels ion-margin-top">
-              <ion-note class="overline">Queue Breakdown</ion-note>
-            </div>
-
-            <!-- Segments Legend Grid -->
-            <div class="legend-grid">
-              <div 
-                v-for="(segment, visibleIndex) in fulfillmentSyncData.queueSegments.filter(s => s.orderCount > 0)" 
-                :key="segment.id"
-                class="legend-card"
-                :class="{ 'active-card': hoveredSegmentId === segment.id }"
-                :style="{ 
-                  borderLeftColor: segment.color === 'standard' ? '#9aa0a6' : segment.color === 'next-day' ? '#3880ff' : segment.color === 'same-day' ? '#ffd534' : segment.color,
-                  opacity: hoveredSegmentId && hoveredSegmentId !== segment.id ? 0.45 : 1
-                }"
-                @mouseenter="hoveredSegmentId = segment.id"
-                @mouseleave="hoveredSegmentId = null"
-              >
-                <div class="legend-card-header">
-                  <span class="legend-orders">
-                    <span class="legend-position">#{{ visibleIndex + 1 }}</span>
-                    {{ segment.orderCount }} orders
-                  </span>
-                  <span class="legend-time">{{ segment.estimatedTime }}</span>
-                </div>
-                <div class="legend-label" :title="segment.label">{{ segment.label }}</div>
+            <template v-if="sortRules.length > 0">
+              <!-- Queue Head/Tail Info Labels -->
+              <div class="queue-header-labels">
+                <ion-note class="overline">Last to Process</ion-note>
+                <ion-note class="overline">Next to Process →</ion-note>
               </div>
-            </div>
+              <!-- Progress Bar -->
+              <div class="queue-progress-bar-container">
+                <div 
+                  v-for="segment in fulfillmentSyncData.queueSegments" 
+                  :key="segment.id" 
+                  class="queue-segment" 
+                  :class="segment.color?.startsWith('#') ? '' : segment.color" 
+                  :style="{ 
+                    width: segment.percentWidth + '%', 
+                    minWidth: segment.orderCount > 0 ? '8px' : '0px',
+                    backgroundColor: segment.color?.startsWith('#') ? segment.color : undefined,
+                    opacity: hoveredSegmentId && hoveredSegmentId !== segment.id ? 0.35 : 1,
+                    transform: hoveredSegmentId === segment.id ? 'scaleY(1.2) scaleX(1.05)' : 'none',
+                    boxShadow: hoveredSegmentId === segment.id ? '0 0 6px rgba(255, 255, 255, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.5)' : 'none',
+                    zIndex: hoveredSegmentId === segment.id ? 2 : 1,
+                    position: 'relative',
+                    transition: 'all 0.2s ease',
+                    cursor: 'pointer'
+                  }" 
+                  :title="`${segment.label}: ${segment.orderCount} orders (${segment.estimatedTime})`"
+                  @mouseenter="hoveredSegmentId = segment.id"
+                  @mouseleave="hoveredSegmentId = null"
+                />
+              </div>
+
+              <!-- Segments Legend Grid Header -->
+              <div class="queue-header-labels ion-margin-top">
+                <ion-note class="overline">Queue Breakdown</ion-note>
+              </div>
+
+              <!-- Segments Legend Grid -->
+              <div class="legend-grid">
+                <div 
+                  v-for="(segment, visibleIndex) in fulfillmentSyncData.queueSegments.filter(s => s.orderCount > 0)" 
+                  :key="segment.id"
+                  class="legend-card"
+                  :class="{ 'active-card': hoveredSegmentId === segment.id }"
+                  :style="{ 
+                    borderLeftColor: segment.color === 'standard' ? '#9aa0a6' : segment.color === 'next-day' ? '#3880ff' : segment.color === 'same-day' ? '#ffd534' : segment.color,
+                    opacity: hoveredSegmentId && hoveredSegmentId !== segment.id ? 0.45 : 1
+                  }"
+                  @mouseenter="hoveredSegmentId = segment.id"
+                  @mouseleave="hoveredSegmentId = null"
+                >
+                  <div class="legend-card-header">
+                    <span class="legend-orders">
+                      <span class="legend-position">#{{ visibleIndex + 1 }}</span>
+                      {{ segment.orderCount }} orders
+                    </span>
+                    <span class="legend-time">{{ segment.estimatedTime }}</span>
+                  </div>
+                  <div class="legend-label" :title="segment.label">{{ segment.label }}</div>
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <div class="empty-state">
+                <p>{{ translate("No sorting conditions configured.") }}</p>
+              </div>
+            </template>
           </div>
         </div>
       </div>
@@ -1200,6 +1207,24 @@ function handleBatchSizeChange(event: any) {
   font-weight: 500;
   color: var(--ion-color-step-600, #666666);
   padding: 16px 16px 8px 16px;
+  margin: 0;
+}
+
+.sync-queue-container .empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+  border: 1.5px dashed var(--ion-color-step-200, #cccccc);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: var(--spacer-base);
+  text-align: center;
+}
+
+.sync-queue-container .empty-state p {
+  color: var(--ion-color-step-500, #808080);
+  font-size: 14px;
   margin: 0;
 }
 </style>
