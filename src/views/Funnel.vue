@@ -664,7 +664,7 @@ const queueSegments = computed(() => {
 });
 
 const selectedStoreId = computed(() => productStore.currentProductStore.productStoreId);
-const selectedFacilityId = ref('BROADWAY');
+const selectedFacilityId = ref("");
 const hoveredSegmentId = ref<string | null>(null);
 const searchQuery = ref('');
 const selectedDimension = ref('volume');
