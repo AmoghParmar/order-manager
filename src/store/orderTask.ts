@@ -385,6 +385,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
         });
       } catch (err) {
         console.error('Failed to cancel the order', err);
+        throw err;
       }
     },
     async changeTaskStatus(workEffortId: string, statusId: string, communication?: TaskStatusCommunicationOptions) {
