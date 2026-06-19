@@ -154,8 +154,7 @@ import {
   IonTitle,
   IonToast,
   IonToolbar,
-  alertController,
-  useIonRouter
+  alertController
 } from '@ionic/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { DateTime } from 'luxon';
@@ -181,7 +180,6 @@ const store = useCustomerServiceStore();
 const orderStore = useOrderStore();
 const seedStore = useSeedStore();
 const route = router.currentRoute.value;
-const ionRouter = useIonRouter();
 const toastMessage = ref('');
 
 function handleOrderRowClick(order: WorkflowOrder) {
@@ -190,7 +188,7 @@ function handleOrderRowClick(order: WorkflowOrder) {
     return;
   }
 
-  ionRouter.push(orderDetailLink(order));
+  router.push(orderDetailLink(order));
 }
 
 const filters = computed({

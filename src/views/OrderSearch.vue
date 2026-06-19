@@ -158,8 +158,7 @@ import {
   IonTitle,
   IonToolbar,
   alertController,
-  modalController,
-  useIonRouter
+  modalController
 } from '@ionic/vue';
 import { commonUtil, translate } from '@common';
 import { DateTime } from 'luxon';
@@ -169,6 +168,7 @@ import { useOrderStore } from '@/store/order';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useUserStore } from '@/store/user';
 import { useSeedStore } from '@/store/seed';
+import { useRouter } from 'vue-router';
 import AddOrderTaskModal from '@/components/tasks/AddOrderTaskModal.vue';
 import EditShippingMethodModal from '@/components/fulfillment/EditShippingMethodModal.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -185,14 +185,14 @@ const orderStore = useOrderStore();
 const orderDetailStore = useOrderDetailStore();
 const userStore = useUserStore();
 const seedStore = useSeedStore();
-const ionRouter = useIonRouter();
+const router = useRouter();
 const { searchQuery, searchFilters, searchSort, searchResults, searchTotal, loading, error, hasMore } = storeToRefs(orderStore);
 
 function handleItemClick(order: any, event: Event) {
   if (selectMode.value) {
     toggleOrderSelection(order.id);
   } else {
-    ionRouter.push(`/orders/${order.id}`);
+    router.push(`/orders/${order.id}`);
   }
 }
 const debounceTimer = ref<ReturnType<typeof setTimeout>>();
