@@ -190,14 +190,14 @@ type QueueGlobalAction = 'brokerSelected';
 
 const props = defineProps<{
   // Facility IDs that scope this queue. This preset is always applied and is not user-removable.
-    facilityIds: string[];
-    title: string;
-    searchPlaceholder: string;
-    emptyTitle: string;
-    emptyMessage: string;
-    globalActions?: QueueGlobalAction[];
-    onClearFilters?: () => void;
-  }>();
+  facilityIds: string[];
+  title: string;
+  searchPlaceholder: string;
+  emptyTitle: string;
+  emptyMessage: string;
+  globalActions?: QueueGlobalAction[];
+  onClearFilters?: () => void;
+}>();
 
 const orderDetailStore = useOrderDetailStore();
 const orderTaskStore = useOrderTaskStore();
@@ -448,14 +448,12 @@ function isVirtualShipGroup(shipGroup: any) {
 function clearFilters() {
   searchQuery.value = '';
   selectedOrderIds.value = [];
-
   searchFilters.value = {
     channel: 'All',
     shipmentMethodTypeId: 'All',
     dateFrom: '',
     dateThru: '',
   };
-
   props.onClearFilters?.();
 }
 
