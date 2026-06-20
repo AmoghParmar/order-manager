@@ -229,8 +229,12 @@ async function cancelOrder() {
         text: translate('Cancel order'),
         role: 'confirm',
         handler: async () => {
-          await submitCancel();
-          emit('completed');
+          try {
+            await submitCancel();
+            emit('completed');
+          } catch {
+            await showToast(translate('Failed to cancel the order. Please try again.'));
+          }
         }
       }
     ]

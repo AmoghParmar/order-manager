@@ -216,10 +216,14 @@ async function bulkCancel() {
         text: translate('Cancel orders'),
         role: 'confirm',
         handler: async () => {
-          await Promise.all(cards.map((card: any) => card.submitCancel()));
-          selectedOrders.value = {};
-          selectAll.value = false;
-          await fetchFraudTasks();
+          try {
+            await Promise.all(cards.map((card: any) => card.submitCancel()));
+            selectedOrders.value = {};
+            selectAll.value = false;
+            await fetchFraudTasks();
+          } catch {
+            await showToast(translate('Failed to cancel some orders. Please try again.'));
+          }
         }
       }
     ]
