@@ -2690,7 +2690,7 @@ async function runOrderStatusAction(action: any) {
     return;
   }
   if (action.id === 'ORDER_CANCELLED') {
-    await cancelWholeOrder(orderId);
+    await cancelOrder(orderId);
     return;
   }
   // Destructive transitions (cancel/reject) confirm first.
@@ -2726,7 +2726,7 @@ async function approveOrder(orderId: string) {
   }
 }
 
-async function cancelWholeOrder(orderId: string) {
+async function cancelOrder(orderId: string) {
   const items = groupedItems.value
     .flatMap((group: any) => group.items)
     .filter((item: any) => !['ITEM_CANCELLED', 'ITEM_COMPLETED'].includes(item.statusId))
