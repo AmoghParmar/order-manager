@@ -268,7 +268,7 @@
                     :quantity-label="translate('qty')"
                     :show-quantity="false"
                     :facility-label="item.facilityName"
-                    :facility-disabled="['ITEM_CANCELLED', 'ITEM_COMPLETED'].includes(item.statusId)"
+                    :facility-disabled="isItemFacilityActionDisabled(item)"
                     :attributes-label="attributeChipLabel(item.attributeCount)"
                     :attributes-disabled="!item.attributeCount"
                     :status-label="item.status"
@@ -702,13 +702,15 @@
             </div>
 
             <div class="ship-group-actions">
-              <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear" @click="brokerShipGroup(shipGroup.id)">{{
+              <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear"
+                :disabled="isShipGroupActionDisabled(shipGroup, 'BROKER')" @click="brokerShipGroup(shipGroup.id)">{{
                 translate('Broker ship group') }}</ion-button>
-              <ion-button fill="clear" :disabled="!selectedItemsForShipGroup(shipGroup.id).length"
+              <ion-button fill="clear"
+                :disabled="isShipGroupActionDisabled(shipGroup, isVirtualFacility(shipGroup) ? 'PARK_ITEMS' : 'PULL_BACK')"
                 @click="isVirtualFacility(shipGroup) ? parkSelectedItems(shipGroup) : rejectSelectedItems(shipGroup)">{{
                   isVirtualFacility(shipGroup) ? translate('Park Items') : translate('Pull back') }}</ion-button>
               <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear"
-                :disabled="!selectedItemsForShipGroup(shipGroup.id).length" @click="releaseSelectedItems(shipGroup)">{{
+                :disabled="isShipGroupActionDisabled(shipGroup, 'RELEASE')" @click="releaseSelectedItems(shipGroup)">{{
                   translate('Release') }}</ion-button>
               <ion-button fill="clear" @click="openAddTaskModal(shipGroup)">{{ translate('Add Task') }}</ion-button>
               <ion-button fill="clear" @click="openAddItemModal(shipGroup)">{{ translate('Add Items') }}</ion-button>
@@ -1524,6 +1526,88 @@ const selectedItems = computed(() =>
     group.items.filter(item => selectedItemIds.value.has(item.orderItemSeqId))
   )
 );
+
+const allGroupedItems = computed(() =>
+  groupedItems.value.flatMap((group: any) => group.items)
+);
+
+function shipGroupById(shipGroupId: string) {
+  return (order.value?.shipGroups || []).find((shipGroup: any) => shipGroup.id === shipGroupId) || null;
+}
+
+function selectedItemObjectsForShipGroup(shipGroup: any) {
+  const itemIds = new Set(selectedItemsForShipGroup(shipGroup.id));
+  return allGroupedItems.value.filter((item: any) =>
+    item.shipGroupSeqId === shipGroup.id && itemIds.has(item.orderItemSeqId)
+  );
+}
+
+function shipGroupActionContext(shipGroup: any) {
+  return {
+    timeline: timelineByShipGroup.value[shipGroup.id],
+    isVirtual: isVirtualFacility(shipGroup),
+    allItems: allGroupedItems.value
+  };
+}
+
+function shipGroupActionValidation(shipGroup: any, actionId: any) {
+  if (!order.value) return { allowed: false };
+  return OrderActionValidator.validateShipGroupAction(
+    order.value,
+    shipGroup,
+    actionId,
+    selectedItemObjectsForShipGroup(shipGroup),
+    shipGroupActionContext(shipGroup)
+  );
+}
+
+function isShipGroupActionDisabled(shipGroup: any, actionId: any) {
+  return !shipGroupActionValidation(shipGroup, actionId).allowed;
+}
+
+function isVirtualFacilityForItem(item: any) {
+  const shipGroup = shipGroupById(item.shipGroupSeqId);
+  return shipGroup ? isVirtualFacility(shipGroup) : !item.facilityId;
+}
+
+function itemActionContext(item: any) {
+  const allowedTransitions = seed.allowedTransitions(item.statusId);
+  return {
+    timeline: timelineByShipGroup.value[item.shipGroupSeqId],
+    isVirtual: isVirtualFacilityForItem(item),
+    itemAllowedToStatusIds: new Set(allowedTransitions.map((transition: any) => transition.toStatusId)),
+    allItems: allGroupedItems.value
+  };
+}
+
+function itemFacilityActionValidation(item: any) {
+  if (!order.value) return { allowed: false };
+  const shipGroup = shipGroupById(item.shipGroupSeqId);
+  if (shipGroup && isVirtualFacility(shipGroup)) {
+    return OrderActionValidator.validateShipGroupAction(
+      order.value,
+      shipGroup,
+      'RELEASE',
+      [item],
+      shipGroupActionContext(shipGroup)
+    );
+  }
+
+  return OrderActionValidator.validateItemAction(
+    order.value,
+    item,
+    'REJECT_AND_RELEASE',
+    itemActionContext(item)
+  );
+}
+
+function isItemFacilityActionDisabled(item: any) {
+  return !itemFacilityActionValidation(item).allowed;
+}
+
+async function showUnavailableAction(validation: any) {
+  await showToast(validation?.reason || 'Action is not available.');
+}
 
 function toggleSelectAll(checked: boolean) {
   if (checked) {
@@ -2369,6 +2453,15 @@ async function openItemAttributesModal(item: any) {
 }
 
 async function brokerShipGroup(shipGroupSeqId: string) {
+  const shipGroup = shipGroupById(shipGroupSeqId);
+  const validation = shipGroup
+    ? shipGroupActionValidation(shipGroup, 'BROKER')
+    : { allowed: false, reason: 'Ship group is not available.' };
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const productStoreId = useProductStore().getCurrentProductStore.productStoreId;
   const modal = await modalController.create({ component: RoutingGroupModal, componentProps: { productStoreId } });
   await modal.present();
@@ -2429,6 +2522,12 @@ async function cancelOrderItems() {
 }
 
 async function rejectAndReleaseItem(item: any, productId: string) {
+  const validation = itemFacilityActionValidation(item);
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const orderId = order.value!.id;
 
   // Step 1 — pick a facility with inventory to release to
@@ -2586,7 +2685,15 @@ async function startReturn() {
 async function runOrderStatusAction(action: any) {
   if (!order.value) return;
   const orderId = order.value.id;
-  // Destructive transitions (cancel/reject) confirm first; approve is direct.
+  if (action.id === 'ORDER_APPROVED') {
+    await approveOrder(orderId);
+    return;
+  }
+  if (action.id === 'ORDER_CANCELLED') {
+    await cancelOrder(orderId);
+    return;
+  }
+  // Destructive transitions (cancel/reject) confirm first.
   if (action.color === 'danger') {
     const alert = await alertController.create({
       header: translate(action.label),
@@ -2600,6 +2707,57 @@ async function runOrderStatusAction(action: any) {
     return;
   }
   await changeOrderStatus(orderId, action.toStatusId);
+}
+
+async function approveOrder(orderId: string) {
+  try {
+    const resp = await api({
+      url: `oms/orders/${orderId}/approve`,
+      method: 'POST'
+    });
+    if(resp?.data.approveOrder) {
+      await showToast(translate('Order approved successfully.'));
+      await loadOrder(orderId, true);
+    } else {
+      throw resp.data
+    }
+  } catch {
+    await showToast(translate('Failed to approve the order. Please try again.'));
+  }
+}
+
+async function cancelOrder(orderId: string) {
+  const items = groupedItems.value
+    .flatMap((group: any) => group.items)
+    .filter((item: any) => !['ITEM_CANCELLED', 'ITEM_COMPLETED'].includes(item.statusId))
+    .map((item: any) => ({
+      orderItemSeqId: item.orderItemSeqId,
+      shipGroupSeqId: item.shipGroupSeqId,
+      reason: 'NO_VARIANCE_LOG',
+      comment: ''
+    }));
+  if (!items.length) return;
+  const alert = await alertController.create({
+    header: translate('Cancel order'),
+    message: translate("Are you sure you want to cancel this order?"),
+    buttons: [
+      { text: translate('Cancel'), role: 'cancel' },
+      {
+        text: translate('Cancel order'),
+        role: 'confirm',
+        handler: async () => {
+          try {
+            await orderTaskStore.cancelOrder(orderId, items);
+            await showToast(translate('Order cancelled successfully.'));
+            await loadOrder(orderId, true);
+          } catch {
+            await showToast(translate('Failed to cancel the order. Please try again.'));
+          }
+        }
+      }
+    ]
+  });
+  await alert.present();
 }
 
 async function changeOrderStatus(orderId: string, statusId: string) {
@@ -2661,6 +2819,12 @@ async function openPhysicalFacilityModal(): Promise<string | null> {
 }
 
 async function parkSelectedItems(shipGroup: any) {
+  const validation = shipGroupActionValidation(shipGroup, 'PARK_ITEMS');
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const itemIds = selectedItemsForShipGroup(shipGroup.id);
   if (!itemIds.length) return;
   const facilityId = await openFacilityModal();
@@ -2685,6 +2849,12 @@ async function parkSelectedItems(shipGroup: any) {
 }
 
 async function rejectSelectedItems(shipGroup: any) {
+  const validation = shipGroupActionValidation(shipGroup, 'PULL_BACK');
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const itemIds = selectedItemsForShipGroup(shipGroup.id);
   if (!itemIds.length) return;
 
@@ -2717,6 +2887,12 @@ async function rejectSelectedItems(shipGroup: any) {
 }
 
 async function releaseSelectedItems(shipGroup: any) {
+  const validation = shipGroupActionValidation(shipGroup, 'RELEASE');
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const itemIds = selectedItemsForShipGroup(shipGroup.id);
   if (!itemIds.length) return;
   const facilityId = await openPhysicalFacilityModal();

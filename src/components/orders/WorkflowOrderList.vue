@@ -361,7 +361,7 @@ async function runAction(action: BulkActionDefinition) {
     if (isApiBucket) await loadWorkflowOrders();
     toastMessage.value = `${action.label} · ${count} ${count === 1 ? translate('order') : translate('orders')}`;
   } catch {
-    toastMessage.value = translate('Failed to run action. Please try again.');
+    toastMessage.value = translate('Failed to complete bulk action. Please try again.');
   }
 }
 

@@ -12,6 +12,7 @@ import type {
 } from '@/types/customerService';
 import { getPickProfileGroups, type FulfillmentSyncData, type SortRule } from '@/services/fulfillmentSync';
 import { useSeedStore } from '@/store/seed';
+import { useOrderDetailStore } from '@/store/orderDetail';
 
 
 function emptyFilters(): WorkflowFilters {
@@ -713,6 +714,14 @@ export const useCustomerServiceStore = defineStore('customerService', {
       if (bucket === 'packed' && actionId === 'ship') {
         const orderStore = useOrderStore();
         await orderStore.shipPackedWorkflowOrders([...selectedIds]);
+        this.lastAction = `${actionId} · ${selectedIds.size} order${selectedIds.size === 1 ? '' : 's'}`;
+        this.clearSelection(bucket);
+        return;
+      }
+
+      if (bucket === 'open' && actionId === 'cancel') {
+        await useOrderDetailStore().bulkCancelOrders([...selectedIds]);
+        await useOrderStore().fetchWorkflowOrders(bucket, this.filters[bucket]);
         this.lastAction = `${actionId} · ${selectedIds.size} order${selectedIds.size === 1 ? '' : 's'}`;
         this.clearSelection(bucket);
         return;
