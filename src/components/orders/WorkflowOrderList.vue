@@ -61,8 +61,7 @@
           v-for="order in orders"
           :key="order.orderId"
           button
-          :router-link="selectMode ? undefined : orderDetailLink(order)"
-          @click="toggleOrderSelection(order.orderId)"
+          @click="handleOrderRowClick(order)"
         >
           <ion-checkbox
             v-if="selectMode"
@@ -183,6 +182,14 @@ const seedStore = useSeedStore();
 const route = router.currentRoute.value;
 const toastMessage = ref('');
 
+function handleOrderRowClick(order: WorkflowOrder) {
+  if (selectMode.value) {
+    toggleOrderSelection(order.orderId);
+  } else {
+    router.push(orderDetailLink(order));
+  }
+}
+
 const filters = computed({
   get: () => store.filters[props.bucket],
   set: (value) => (store.filters[props.bucket] = value)
@@ -243,7 +250,7 @@ function applyRouteFilters() {
 watch(() => route.query.facilityId, applyRouteFilters, { immediate: true });
 
 function loadWorkflowOrders() {
-  orderStore.fetchWorkflowOrders(props.bucket as 'open' | 'inflight' | 'packed', filters.value);
+  return orderStore.fetchWorkflowOrders(props.bucket as 'open' | 'inflight' | 'packed', filters.value);
 }
 
 async function loadMore(event: any) {
@@ -349,8 +356,13 @@ async function runAction(action: BulkActionDefinition) {
   }
 
   const count = selectedIds.value.size;
-  store.runBulkAction(props.bucket, action.id);
-  toastMessage.value = `${action.label} · ${count} ${count === 1 ? translate('order') : translate('orders')}`;
+  try {
+    await store.runBulkAction(props.bucket, action.id);
+    if (isApiBucket) await loadWorkflowOrders();
+    toastMessage.value = `${action.label} · ${count} ${count === 1 ? translate('order') : translate('orders')}`;
+  } catch {
+    toastMessage.value = translate('Failed to complete bulk action. Please try again.');
+  }
 }
 
 function formatChannel(channel: string) {
