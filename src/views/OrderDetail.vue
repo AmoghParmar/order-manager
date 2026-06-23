@@ -2689,6 +2689,10 @@ async function runOrderStatusAction(action: any) {
     await approveOrder(orderId);
     return;
   }
+  if (action.id === 'ORDER_CANCELLED') {
+    await cancelWholeOrder(orderId);
+    return;
+  }
   // Destructive transitions (cancel/reject) confirm first.
   if (action.color === 'danger') {
     const alert = await alertController.create({
@@ -2720,6 +2724,40 @@ async function approveOrder(orderId: string) {
   } catch {
     await showToast(translate('Failed to approve the order. Please try again.'));
   }
+}
+
+async function cancelWholeOrder(orderId: string) {
+  const items = groupedItems.value
+    .flatMap((group: any) => group.items)
+    .filter((item: any) => !['ITEM_CANCELLED', 'ITEM_COMPLETED'].includes(item.statusId))
+    .map((item: any) => ({
+      orderItemSeqId: item.orderItemSeqId,
+      shipGroupSeqId: item.shipGroupSeqId,
+      reason: 'NO_VARIANCE_LOG',
+      comment: ''
+    }));
+  if (!items.length) return;
+  const alert = await alertController.create({
+    header: translate('Cancel order'),
+    message: translate("Are you sure you want to cancel this order?"),
+    buttons: [
+      { text: translate('Cancel'), role: 'cancel' },
+      {
+        text: translate('Cancel order'),
+        role: 'confirm',
+        handler: async () => {
+          try {
+            await orderTaskStore.cancelOrder(orderId, items);
+            await showToast(translate('Order cancelled successfully.'));
+            await loadOrder(orderId, true);
+          } catch {
+            await showToast(translate('Failed to cancel the order. Please try again.'));
+          }
+        }
+      }
+    ]
+  });
+  await alert.present();
 }
 
 async function changeOrderStatus(orderId: string, statusId: string) {
