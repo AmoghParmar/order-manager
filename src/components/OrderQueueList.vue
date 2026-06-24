@@ -196,6 +196,7 @@ const props = defineProps<{
   emptyTitle: string;
   emptyMessage: string;
   globalActions?: QueueGlobalAction[];
+  status?: string | string[];
 }>();
 const emit = defineEmits<{
   (e: 'clearFilters'): void;
@@ -263,6 +264,7 @@ function toSearchParams(page: number) {
     sort: 'orderDate desc',
     pageSize: PAGE_SIZE,
     pageIndex: page,
+    status: props.status,
   };
 }
 
