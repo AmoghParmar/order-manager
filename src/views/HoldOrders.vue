@@ -13,7 +13,6 @@
       <SearchFilterCard
         v-model="searchQuery"
         :placeholder="translate('Search')"
-        :show-clear="false"
         @search="fetchHoldTasks()"
         @clear="clearFilters"
       >
@@ -92,6 +91,7 @@ import {
   onIonViewWillEnter
 } from '@ionic/vue';
 import { translate } from '@common';
+import router from '@/router';
 import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
 import FilterSelect from '@/components/common/FilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
@@ -154,6 +154,7 @@ function clearFilters() {
   dateAfter.value = '';
   dateBefore.value = '';
   orderChannel.value = '';
+  router.replace({ query: {} });
   fetchHoldTasks();
 }
 

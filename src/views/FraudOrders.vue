@@ -13,7 +13,6 @@
       <SearchFilterCard
         v-model="searchQuery"
         :placeholder="translate('Search')"
-        :show-clear="false"
         @search="fetchFraudTasks()"
         @clear="clearFilters"
       >
@@ -87,10 +86,11 @@
 import { ref, computed, watch, onBeforeUpdate } from 'vue';
 import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, IonInfiniteScroll, IonInfiniteScrollContent, alertController, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
+import router from '@/router';
 import { showToast } from '@/utils';
 import FilterSelect from '@/components/common/FilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
-import SelectAllResultsItem from '@/components/common/SelectAllResultsItem.vue';
+import SelectAllResultsItem v-if="fraudTasks.length" v-model="selectAll" :count="fraudTasks.length" />
 import FraudTaskCard from '@/components/tasks/FraudTaskCard.vue';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useSeedStore } from '@/store/seed';
@@ -150,6 +150,7 @@ function clearFilters() {
   recommendation.value = '';
   orderChannel.value = '';
   severity.value = '';
+  router.replace({ query: {} });
   fetchFraudTasks();
 }
 
@@ -216,10 +217,14 @@ async function bulkCancel() {
         text: translate('Cancel orders'),
         role: 'confirm',
         handler: async () => {
-          await Promise.all(cards.map((card: any) => card.submitCancel()));
-          selectedOrders.value = {};
-          selectAll.value = false;
-          await fetchFraudTasks();
+          try {
+            await Promise.all(cards.map((card: any) => card.submitCancel()));
+            selectedOrders.value = {};
+            selectAll.value = false;
+            await fetchFraudTasks();
+          } catch {
+            await showToast(translate('Failed to cancel some orders. Please try again.'));
+          }
         }
       }
     ]
