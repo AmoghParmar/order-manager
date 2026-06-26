@@ -13,7 +13,6 @@
       <SearchFilterCard
         v-model="searchQuery"
         :placeholder="translate('Search')"
-        :show-clear="false"
         @search="fetchFraudTasks()"
         @clear="clearFilters"
       >
@@ -87,6 +86,7 @@
 import { ref, computed, watch, onBeforeUpdate } from 'vue';
 import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, IonInfiniteScroll, IonInfiniteScrollContent, alertController, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
+import router from '@/router';
 import { showToast } from '@/utils';
 import FilterSelect from '@/components/common/FilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
@@ -150,6 +150,7 @@ function clearFilters() {
   recommendation.value = '';
   orderChannel.value = '';
   severity.value = '';
+  router.replace({ query: {} });
   fetchFraudTasks();
 }
 

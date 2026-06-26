@@ -13,7 +13,6 @@
       <SearchFilterCard
         v-model="searchQuery"
         :placeholder="translate('Search')"
-        :show-clear="false"
         @search="fetchAddressValidationTasks()"
         @clear="clearFilters"
       >
@@ -80,6 +79,7 @@
 import { ref, computed, watch, onBeforeUpdate } from 'vue';
 import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, alertController, modalController, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
+import router from '@/router';
 import { showToast } from '@/utils';
 import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
 import FilterSelect from '@/components/common/FilterSelect.vue';
@@ -212,6 +212,7 @@ function clearFilters() {
   dateAfter.value = '';
   dateBefore.value = '';
   orderChannel.value = '';
+  router.replace({ query: {} });
   fetchAddressValidationTasks();
 }
 
