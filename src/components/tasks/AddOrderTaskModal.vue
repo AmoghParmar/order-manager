@@ -12,6 +12,20 @@
 
   <ion-content>
     <ion-list>
+      <ion-item v-if="props.shipGroups && props.shipGroups.length > 1">
+        <ion-select
+          :label="translate('Ship groups')"
+          label-placement="stacked"
+          interface="popover"
+          :multiple="true"
+          :placeholder="translate('Select ship groups')"
+          v-model="selectedShipGroupSeqIds"
+        >
+          <ion-select-option v-for="shipGroup in props.shipGroups" :key="shipGroup.id" :value="shipGroup.id">
+            {{ shipGroup.label || shipGroup.id }}
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
       <ion-item>
         <ion-input
           :label="translate('Task Name')"
@@ -85,9 +99,15 @@ import {
   modalController,
 } from '@ionic/vue';
 import { closeOutline, saveOutline } from 'ionicons/icons';
-import { computed, onMounted, reactive } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { translate } from '@common';
 import { useSeedStore } from '@/store/seed';
+
+const props = defineProps<{
+  // When provided, the user can scope the task to one or more ship groups of an
+  // order. Omitted for the generic bulk "Add task" flow, which keeps its old shape.
+  shipGroups?: Array<{ id: string; label?: string }>;
+}>();
 
 const seedStore = useSeedStore();
 
@@ -98,15 +118,20 @@ const form = reactive({
   description: '',
 });
 
+// Default to every ship group selected; only surfaced as a control when there
+// is more than one to choose from.
+const selectedShipGroupSeqIds = ref<string[]>(props.shipGroups?.map((shipGroup) => shipGroup.id) ?? []);
+
 const taskTypes = computed(() => seedStore.getEnumsByType('WorkEffortType'));
 const taskPurposes = computed(() => seedStore.getEnumsByParentType('WorkEffortPurposeType'));
 
-const isValid = computed(() =>
-  form.workEffortName.trim() &&
-  form.workEffortTypeId &&
-  form.workEffortPurposeTypeId &&
-  form.description.trim()
-);
+const isValid = computed(() => {
+  const detailsValid = !!(form.workEffortName.trim() && form.workEffortTypeId && form.workEffortPurposeTypeId && form.description.trim());
+  if (props.shipGroups && props.shipGroups.length) {
+    return detailsValid && selectedShipGroupSeqIds.value.length > 0;
+  }
+  return detailsValid;
+});
 
 onMounted(() => {
   seedStore.loadEnumType('WorkEffortType');
@@ -118,6 +143,8 @@ function dismiss() {
 }
 
 function confirm() {
-  modalController.dismiss({ ...form }, 'confirm');
+  const payload: Record<string, any> = { ...form };
+  if (props.shipGroups) payload.shipGroupSeqIds = [...selectedShipGroupSeqIds.value];
+  modalController.dismiss(payload, 'confirm');
 }
 </script>
