@@ -14,7 +14,7 @@
       <ion-item lines="none" class="selected-store-header">
         <ion-icon slot="start" :icon="globeOutline" />
         <ion-label>
-          <h1>{{ productStore.currentProductStore.storeName || selectedStoreId }}</h1>
+          <h1>{{ selectedStoreName }}</h1>
         </ion-label>
       </ion-item>
 
@@ -31,25 +31,14 @@
           </div>
 
           <div class="metrics">
-            <ion-item button :detail="true" lines="none" class="metric" router-link="/open">
+            <ion-item v-for="metric in fulfillmentStageMetrics" :key="metric.id" lines="none" class="metric">
               <div style="width: 100%;">
                 <div class="metric-label">
-                  <p>{{ translate("Brokering status") }}</p>
-                  <p>{{ fulfillmentStats.brokeringPercentage }}%</p>
+                  <p>{{ metric.label }}</p>
+                  <p>{{ metric.percent }}%</p>
                 </div>
-                <ion-progress-bar :value="fulfillmentStats.brokeringPercentage / 100"></ion-progress-bar>
-              </div>
-            </ion-item>
-            <ion-item button detail lines="none" class="metric" router-link="/packed">
-              <div style="width: 100%;">
-                <div class="metric-label">
-                  <p>{{ translate("Picked and packed") }}</p>
-                  <p>{{ fulfillmentStats.pickedAndPackedText }}%</p>
-                </div>
-                <div class="custom-progress-track">
-                  <div class="custom-progress-packed" :style="{ width: fulfillmentStats.packedPercentage + '%' }"></div>
-                  <div class="custom-progress-picked" :style="{ width: fulfillmentStats.pickedPercentage + '%' }"></div>
-                </div>
+                <ion-note>{{ formatCount(metric.count) }} / {{ formatCount(fulfillmentStats.totalShipGroups) }} {{ translate("ship groups") }}</ion-note>
+                <ion-progress-bar :value="metric.value"></ion-progress-bar>
               </div>
             </ion-item>
           </div>
@@ -58,17 +47,37 @@
 
       <!-- Drilldown Section -->
       <section class="drilldown ion-padding">
-        <!-- Card 1: Open Orders — subtitle follow-up -->
-        <!-- BUSINESS LOGIC COMMENT: Navigate to Open Orders list on click -->
-        <!-- stat: orders where status is approved -->
-        <!-- subtitle: order date from 1st result where status is approved sorted by order date ascending -->
-        <StatCard
-          button
-          router-link="/open"
-          :title="translate('Open Orders')"
-          :stat="openOrders.openOrdersCount || 0"
-          :subtitle="oldestOpenOrderDateStr"
-        />
+        <StatCard :title="translate('Unbrokered')" :stat="virtualLocationWorkTotal">
+          <ion-list lines="none" class="hold-tasks-list">
+            <ion-item
+              v-for="item in virtualLocationWorkRows"
+              :key="item.id"
+              button
+              :detail="true"
+              :router-link="virtualLocationRoute(item)"
+            >
+              <ion-label>{{ translate(item.label) }}</ion-label>
+              <p slot="end">{{ formatCount(item.count) }} {{ translate(item.count === 1 ? "order" : "orders") }}</p>
+            </ion-item>
+          </ion-list>
+        </StatCard>
+
+        <StatCard :title="translate('Brokered')" :stat="fulfillmentStats.brokeredShipGroups">
+          <ion-list lines="none" class="hold-tasks-list">
+            <ion-item button :detail="true" router-link="/open">
+              <ion-label>{{ translate("Open") }}</ion-label>
+              <p slot="end">{{ formatCount(fulfillmentStats.brokeredOpenShipGroups) }} {{ translate("ship groups") }}</p>
+            </ion-item>
+            <ion-item button :detail="true" router-link="/inflight">
+              <ion-label>{{ translate("Picked") }}</ion-label>
+              <p slot="end">{{ formatCount(fulfillmentStats.pickedShipGroups) }} {{ translate("ship groups") }}</p>
+            </ion-item>
+            <ion-item button :detail="true" router-link="/packed">
+              <ion-label>{{ translate("Packed") }}</ion-label>
+              <p slot="end">{{ formatCount(fulfillmentStats.packedShipGroups) }} {{ translate("ship groups") }}</p>
+            </ion-item>
+          </ion-list>
+        </StatCard>
 
         <!-- Card 2: Unfillable — trendline follow-up -->
         <!-- BUSINESS LOGIC COMMENT: Navigate to Unfillable Orders list on click -->
@@ -479,7 +488,7 @@ import {
   IonToggle,
   onIonViewWillEnter
 } from '@ionic/vue';
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   globeOutline,
   businessOutline,
@@ -493,7 +502,6 @@ import {
   saveOutline,
   powerOutline
 } from 'ionicons/icons';
-import { computed, watch } from 'vue';
 import { translate, StatCard, Sparkline, commonUtil } from '@common';
 import { useCustomerServiceStore } from '@/store/customerService';
 import { useProductStore } from '@/store/productStore';
@@ -501,16 +509,16 @@ import { useSeedStore } from '@/store/seed';
 
 const store = useCustomerServiceStore();
 const productStore = useProductStore() as any;
-const seedStore = useSeedStore()
+const seedStore = useSeedStore();
 
 const fulfillmentProgress = computed(() => store.getFulfillmentProgress);
-const openOrders = computed(() => store.getOpenOrders);
 const holdTasks = computed(() => store.getHoldTasks);
 const facilityFulfillmentProgress = computed(() => store.getFacilityFulfillmentProgress);
 const facilityOrderVolume = computed(() => store.getFacilityOrderVolume);
 const facilityFulfillmentVelocity = computed(() => store.getFacilityFulfillmentVelocity);
 const facilityPartialFulfillments = computed(() => store.getFacilityPartialFulfillments);
 const unfillableTrend = computed(() => store.unfillableTrend);
+const virtualLocationWorkRows = computed(() => store.getVirtualLocationCounts);
 
 const fulfillmentSyncData = computed(() => store.getFulfillmentSyncData);
 
@@ -663,54 +671,153 @@ const queueSegments = computed(() => {
   return segments;
 });
 
-const selectedStoreId = computed(() => productStore.currentProductStore.productStoreId);
-const selectedFacilityId = ref("");
+const selectedFacilityId = ref('');
 const hoveredSegmentId = ref<string | null>(null);
 const searchQuery = ref('');
 const selectedDimension = ref('volume');
-
-const oldestOpenOrderDateStr = computed(() => {
-  const timestamp = openOrders.value.oldestOpenOrderDate;
-  return timestamp ? translate('Oldest: ') + commonUtil.getDateAndTime(timestamp) : translate('No open orders');
-});
+const currentProductStore = computed(() => productStore.getCurrentProductStore || {});
+const selectedProductStoreId = computed(() => currentProductStore.value.productStoreId || '');
+const selectedStoreName = computed(
+  () => currentProductStore.value.storeName || currentProductStore.value.productStoreId || ''
+);
 
 const totalUnfillable = computed(() => unfillableTrend.value.reduce((sum, val) => sum + val, 0));
+const virtualLocationWorkTotal = computed(() => virtualLocationWorkRows.value.reduce((sum, row) => sum + row.count, 0));
+
+function virtualLocationRoute(item: { id: string; facilityIds: string[] }) {
+  if (item.id === 'unfillable') {
+    return { path: '/unfillable' };
+  }
+
+  return {
+    path: '/brokering',
+    query: {
+      facilityId: item.facilityIds
+    }
+  };
+}
+
+function fetchStoreDashboardData(productStoreId: string) {
+  store.fetchFulfillmentProgress(productStoreId);
+  store.fetchUnfillable(productStoreId);
+  store.fetchVirtualLocationCounts(productStoreId);
+  store.fetchFacilityOrderVolume(productStoreId);
+  store.fetchFacilityFulfillmentVelocity(productStoreId);
+  store.fetchFacilityPartialFulfillments(productStoreId);
+  store.fetchHoldTasks(productStoreId);
+}
+
+function fetchSelectedFacilityDashboardData(productStoreId: string) {
+  if (selectedFacilityId.value) {
+    store.fetchFacilityFulfillmentProgress(selectedFacilityId.value, productStoreId);
+    store.fetchFulfillmentSyncData(selectedFacilityId.value, productStoreId);
+  }
+}
+
+function refreshDashboardData() {
+  const productStoreId = selectedProductStoreId.value;
+  if (!productStoreId) return;
+
+  fetchStoreDashboardData(productStoreId);
+  fetchSelectedFacilityDashboardData(productStoreId);
+}
+
+watch(selectedProductStoreId, (productStoreId, previousProductStoreId) => {
+  if (productStoreId !== previousProductStoreId) {
+    selectedFacilityId.value = '';
+  }
+  refreshDashboardData();
+});
 
 watch(selectedFacilityId, (newFacilityId) => {
-  if (newFacilityId && selectedStoreId.value) {
-    store.fetchFacilityFulfillmentProgress(newFacilityId, selectedStoreId.value);
-    store.fetchFulfillmentSyncData(newFacilityId, selectedStoreId.value);
+  if (newFacilityId && selectedProductStoreId.value) {
+    store.fetchFacilityFulfillmentProgress(newFacilityId, selectedProductStoreId.value);
+    store.fetchFulfillmentSyncData(newFacilityId, selectedProductStoreId.value);
   }
 });
+
+function countValue(value: unknown) {
+  const count = Number(value || 0);
+  return Number.isFinite(count) ? count : 0;
+}
+
+function clampCount(count: number) {
+  return Math.max(0, count);
+}
+
+function progressValue(count: number, total: number) {
+  if (!total) return 0;
+  return Math.min(1, Math.max(0, count / total));
+}
+
+function percentValue(count: number, total: number) {
+  return Math.round(progressValue(count, total) * 100);
+}
+
+function formatCount(value: number) {
+  return countValue(value).toLocaleString();
+}
 
 const fulfillmentStats = computed(() => {
   const fp = fulfillmentProgress.value || {};
-  const total = fp.totalShipGroupsCount || 0;
-  const brokered = fp.brokeredShipGroupsCount || 0;
-  const picked = fp.pickedShipGroupsCount || 0;
-  const packedTotal = (fp.packedShipGroupsCount || 0) + (fp.shippedShipGroupsCount || 0);
+  const totalShipGroups = countValue(fp.totalShipGroupsCount);
+  const brokeredShipGroups = countValue(fp.brokeredShipGroupsCount);
+  const pickedShipGroups = countValue(fp.pickedShipGroupsCount);
+  const packedShipGroups = countValue(fp.packedShipGroupsCount);
+  const shippedShipGroups = countValue(fp.shippedShipGroupsCount);
+  const inFlightShipGroups = pickedShipGroups + packedShipGroups + shippedShipGroups;
+  const packedAndShippedShipGroups = packedShipGroups + shippedShipGroups;
 
   return {
-    brokeringPercentage: total ? Math.round((brokered / total) * 100) : 0,
-    pickedPercentage: brokered ? (picked / brokered) * 100 : 0,
-    packedPercentage: brokered ? (packedTotal / brokered) * 100 : 0,
-    pickedAndPackedText: brokered ? Math.round(((picked + packedTotal) / brokered) * 100) : 0,
+    totalShipGroups,
+    brokeredShipGroups,
+    pickedShipGroups,
+    packedShipGroups,
+    shippedShipGroups,
+    inFlightShipGroups,
+    packedAndShippedShipGroups,
+    unbrokeredShipGroups: clampCount(totalShipGroups - brokeredShipGroups),
+    brokeredOpenShipGroups: clampCount(brokeredShipGroups - inFlightShipGroups),
+    assignedPercentage: percentValue(brokeredShipGroups, totalShipGroups),
+    assignedValue: progressValue(brokeredShipGroups, totalShipGroups),
+    inFlightPercentage: percentValue(inFlightShipGroups, totalShipGroups),
+    inFlightValue: progressValue(inFlightShipGroups, totalShipGroups),
+    packedAndShippedPercentage: percentValue(packedAndShippedShipGroups, totalShipGroups),
+    packedAndShippedValue: progressValue(packedAndShippedShipGroups, totalShipGroups)
   };
 });
 
+const fulfillmentStageMetrics = computed(() => {
+  const stats = fulfillmentStats.value;
+
+  return [
+    {
+      id: 'assigned',
+      label: translate('Assigned to fulfillment'),
+      count: stats.brokeredShipGroups,
+      percent: stats.assignedPercentage,
+      value: stats.assignedValue
+    },
+    {
+      id: 'inFlight',
+      label: translate('In flight'),
+      count: stats.inFlightShipGroups,
+      percent: stats.inFlightPercentage,
+      value: stats.inFlightValue
+    },
+    {
+      id: 'packedAndShipped',
+      label: translate('Packed and shipped'),
+      count: stats.packedAndShippedShipGroups,
+      percent: stats.packedAndShippedPercentage,
+      value: stats.packedAndShippedValue
+    }
+  ];
+});
+
 onIonViewWillEnter(() => {
-  store.fetchFulfillmentProgress(selectedStoreId.value);
-  store.fetchOpenOrders(selectedStoreId.value);
-  store.fetchUnfillable(selectedStoreId.value);
-  store.fetchFacilityOrderVolume(selectedStoreId.value);
-  store.fetchFacilityFulfillmentVelocity(selectedStoreId.value);
-  store.fetchFacilityPartialFulfillments(selectedStoreId.value);
-  store.fetchHoldTasks(selectedStoreId.value);
-  if(selectedFacilityId.value) {
-    store.fetchFacilityFulfillmentProgress(selectedFacilityId.value, selectedStoreId.value);
-    store.fetchFulfillmentSyncData(selectedFacilityId.value, selectedStoreId.value);
-  }
-})
+  refreshDashboardData();
+});
 
 function getFacilityName(facilityId: string) {
   return seedStore.facilityName(facilityId);
@@ -765,11 +872,12 @@ watch(filteredFacilities, (newList) => {
     if (!exists) {
       selectedFacilityId.value = newList[0].facilityId;
     }
+  } else {
+    selectedFacilityId.value = '';
   }
 });
 
 const workflowRouteQuery = computed(() => ({
-  productStoreId: selectedStoreId.value,
   facilityId: selectedFacilityId.value
 }));
 
@@ -899,7 +1007,7 @@ async function saveSchedule() {
     cronExpressionInput.value,
     isJobActive.value ? 'N' : 'Y',
     selectedFacilityId.value,
-    selectedStoreId.value
+    selectedProductStoreId.value
   );
   
   closeScheduleModal();

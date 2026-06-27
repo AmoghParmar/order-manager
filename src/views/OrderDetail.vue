@@ -20,9 +20,6 @@
             <h1>{{ order.orderName ? order.orderName : order.id }}</h1>
             <p>{{ order.id }}</p>
           </ion-label>
-          <ion-badge v-if="order.status" slot="end" :color="commonUtil.getStatusColor(order.statusId)">
-            {{ order.status }}
-          </ion-badge>
         </ion-item>
 
         <!-- timeline: child matching .order-detail-timeline -->
@@ -150,6 +147,18 @@
                   <p>{{ id.typeLabel }}</p>
                   {{ id.idValue }}
                 </ion-label>
+                <ion-button
+                  v-if="isShopifyOrderIdentification(id) && shopifyOrderUrl"
+                  slot="end"
+                  fill="clear"
+                  :href="shopifyOrderUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open in Shopify"
+                  title="Open in Shopify"
+                >
+                  <ion-icon slot="icon-only" :icon="openOutline" />
+                </ion-button>
               </ion-item>
             </ion-list>
           </ion-card>
@@ -279,7 +288,6 @@
                     :facility-label="item.facilityName"
                     :facility-disabled="isItemFacilityActionDisabled(item)"
                     :attributes-label="attributeChipLabel(item.attributeCount)"
-                    :attributes-disabled="!item.attributeCount"
                     :status-label="item.status"
                     :status-color="commonUtil.getStatusColor(item.statusId)"
                     :status-detail="itemStatusDetail(item)"
@@ -989,7 +997,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { IonAccordion, IonAccordionGroup, IonBackButton, IonBadge, IonButton, IonButtons, IonCard, IonCardHeader, IonCardSubtitle, IonCardTitle, IonCheckbox, IonChip, IonContent, IonFab, IonFabButton, IonFooter, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonMenuButton, IonModal, IonNote, IonPage, IonPopover, IonProgressBar, IonSegment, IonSegmentButton, IonSelect, IonSelectOption, IonTextarea, IonThumbnail, IonTitle, IonToolbar, alertController, modalController } from '@ionic/vue';
 import { storeToRefs } from 'pinia';
 import { DateTime } from 'luxon';
-import { calendarOutline, checkmarkDoneOutline, checkmarkOutline, chevronDown, chevronUp, closeOutline, compassOutline, createOutline, cubeOutline, documentTextOutline, downloadOutline, ellipsisVertical, giftOutline, informationCircleOutline, mailOutline, pulseOutline, saveOutline, sendOutline, shieldOutline, sunnyOutline, ticketOutline, timeOutline, trashOutline, warningOutline } from 'ionicons/icons';
+import { calendarOutline, checkmarkDoneOutline, checkmarkOutline, chevronDown, chevronUp, closeOutline, compassOutline, createOutline, cubeOutline, documentTextOutline, downloadOutline, ellipsisVertical, giftOutline, informationCircleOutline, mailOutline, openOutline, pulseOutline, saveOutline, sendOutline, shieldOutline, sunnyOutline, ticketOutline, timeOutline, trashOutline, warningOutline } from 'ionicons/icons';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useSeedStore } from '@/store/seed';
 import { useProductCacheStore } from '@/store/productCache';
@@ -1034,6 +1042,7 @@ const { isLoading: loading, error } = storeToRefs(orderDetailStore);
 
 const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);
 const customerPartyId = computed(() => orderDetailStore.customerPartyId);
+const shopifyOrderUrl = ref('');
 /**
  * View model — adapts the raw order master-detail payload to the shape this template
  * already binds, joining IDs to labels through the seed store and product cache. The
@@ -1653,6 +1662,7 @@ onMounted(() => loadOrder(props.orderId));
 watch(() => props.orderId, (orderId) => loadOrder(orderId));
 
 async function loadOrder(orderId: string, force = false) {
+  shopifyOrderUrl.value = '';
   if (force) {
     await orderDetailStore.fetchOrder(orderId, true);
   } else {
@@ -1668,7 +1678,47 @@ async function loadOrder(orderId: string, force = false) {
   await Promise.all([
     orderDetailStore.fetchShippingMethods(),
     orderDetailStore.fetchCarrierParties(),
+    resolveShopifyOrderUrl(orderId),
   ]);
+}
+
+function responseRows(data: any): any[] {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.docs)) return data.docs;
+  if (data && typeof data === 'object') return [data];
+  return [];
+}
+
+function shopifyDomain(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .replace(/^https?:\/\//, '')
+    .replace(/\/.*$/, '');
+}
+
+function isShopifyOrderIdentification(identification: any): boolean {
+  return identification?.orderIdentificationTypeId === 'SHOPIFY_ORD_ID';
+}
+
+async function resolveShopifyOrderUrl(orderId: string) {
+  try {
+    await seed.loadShopifyShops();
+    const response = await api({ url: `oms/orders/${orderId}/shopifyShopOrder`, method: 'GET' });
+    const mapping = responseRows(response.data).find((row: any) => row?.shopifyOrderId);
+    if (!mapping?.shopifyOrderId) return;
+
+    const shop = seed.shopifyShops.byId[mapping.shopId] || {};
+    const domain = shopifyDomain(
+      mapping.myshopifyDomain
+      || mapping.shopifyShop?.myshopifyDomain
+      || shop.myshopifyDomain
+    );
+    if (!domain) return;
+
+    shopifyOrderUrl.value = `https://${domain}/admin/orders/${encodeURIComponent(String(mapping.shopifyOrderId))}`;
+  } catch {
+    shopifyOrderUrl.value = '';
+  }
 }
 
 async function openCustomerContactModal(contactMechTypeId: string, contactMechPurposeTypeId: string) {
@@ -2471,6 +2521,8 @@ async function openItemAttributesModal(item: any) {
     }
   });
   await modal.present();
+  await modal.onDidDismiss();
+  if (order.value?.id) await loadOrder(order.value.id, true);
 }
 
 async function brokerShipGroup(shipGroupSeqId: string) {
