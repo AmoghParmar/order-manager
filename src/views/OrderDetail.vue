@@ -168,6 +168,12 @@
                   {{ order.channel || translate('Channel') }}
                 </ion-label>
               </ion-item>
+              <ion-item v-if="order.originFacilityId">
+                <ion-label>
+                  <p>{{ translate('Placed at') }}</p>
+                  {{ order.originFacilityName }}
+                </ion-label>
+              </ion-item>
             </ion-list>
           </ion-card>
 
@@ -1039,6 +1045,13 @@ const order = computed(() => {
     statusId: raw.statusId,
     channel: seed.enumDescription(raw.salesChannelEnumId),
     productStoreName: seed.productStoreName(raw.productStoreId),
+    // Origin/placed-at facility from the order header (set by the OMS order import for
+    // POS/retail-location orders). Prefer a name from the payload, then the seed facility
+    // lookup, falling back to the raw id. Empty when the order has no origin facility.
+    originFacilityId: raw.originFacilityId,
+    originFacilityName: raw.originFacilityId
+      ? (raw.originFacilityName || seed.facility(raw.originFacilityId)?.facilityName || raw.originFacilityId)
+      : '',
     currency: raw.currencyUom,
     localeString: raw.localeString || raw.locale,
     riskRecommendationEnumId: raw.riskRecommendationEnumId,
