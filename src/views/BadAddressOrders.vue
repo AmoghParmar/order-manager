@@ -6,6 +6,11 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>{{ translate('Bad address') }}</ion-title>
+        <ion-buttons slot="end">
+          <ion-button v-if="addressValidationTasks.length" fill="clear" size="small" @click="toggleSelectMode">
+            {{ selectMode ? translate('Done') : translate('Select') }}
+          </ion-button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -30,7 +35,7 @@
         </FilterSelect>
       </SearchFilterCard>
 
-      <SelectAllResultsItem v-if="addressValidationTasks.length" v-model="selectAll" :count="addressValidationTasks.length" />
+      <SelectAllResultsItem v-if="selectMode && addressValidationTasks.length" v-model="selectAll" :count="addressValidationTasks.length" />
 
       <div class="bad-address-list">
         <BadAddressTaskCard
@@ -39,7 +44,7 @@
           :task="task"
           :address-state="addressStateMap[task.workEffortId]"
           :countries="countries"
-          :selectable="true"
+          :selectable="selectMode"
           :selected="!!selectedOrders[task.workEffortId]"
           show-view-order-action
           @update:selected="val => selectedOrders[task.workEffortId] = val"
@@ -63,7 +68,7 @@
       </ion-infinite-scroll>
     </ion-content>
 
-    <ion-footer v-if="addressValidationTasks.length">
+    <ion-footer v-if="selectMode">
       <ion-toolbar>
         <ion-buttons slot="start">
           <ion-button fill="solid" color="primary" :disabled="!hasSelectedTasks" @click="bulkSaveAndReleaseHold()">{{ translate('Save and Release Hold') }}</ion-button>
@@ -153,6 +158,7 @@ const assignee = ref('');
 const dateAfter = ref('');
 const dateBefore = ref('');
 const orderChannel = ref('');
+const selectMode = ref(false);
 const selectAll = ref(false);
 const selectedOrders = ref<Record<string, boolean>>({});
 
@@ -194,6 +200,11 @@ watch(addressValidationTasks, (tasks) => {
   Object.keys(addressStateMap.value).forEach(id => {
     if (!incoming.has(id)) delete addressStateMap.value[id];
   });
+
+  // Prune selections for tasks no longer present, without changing select mode.
+  Object.keys(selectedOrders.value).forEach(id => {
+    if (!incoming.has(id)) delete selectedOrders.value[id];
+  });
 });
 
 watch([assignee, dateAfter, dateBefore, orderChannel], () => {
@@ -205,6 +216,16 @@ watch(selectAll, (val) => {
     selectedOrders.value[task.workEffortId] = val;
   });
 });
+
+function toggleSelectMode() {
+  if (selectMode.value) {
+    selectMode.value = false;
+    selectAll.value = false;
+    selectedOrders.value = {};
+    return;
+  }
+  selectMode.value = true;
+}
 
 function clearFilters() {
   searchQuery.value = '';

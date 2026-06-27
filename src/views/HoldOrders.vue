@@ -6,6 +6,11 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>{{ translate('Hold') }}</ion-title>
+        <ion-buttons slot="end">
+          <ion-button v-if="heldTasks.length" fill="clear" size="small" @click="toggleSelectMode">
+            {{ selectMode ? translate('Done') : translate('Select') }}
+          </ion-button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -30,7 +35,7 @@
         </FilterSelect>
       </SearchFilterCard>
 
-      <SelectAllResultsItem v-if="heldTasks.length" v-model="selectAll" :count="heldTasks.length" />
+      <SelectAllResultsItem v-if="selectMode && heldTasks.length" v-model="selectAll" :count="heldTasks.length" />
 
       <div class="hold-orders-list">
         <HoldTaskCard
@@ -39,7 +44,7 @@
           :key="task.workEffortId"
           :ref="(el) => setCardRef(task.workEffortId, el)"
           :task="task"
-          :selectable="true"
+          :selectable="selectMode"
           :selected="!!selectedOrders[task.workEffortId]"
           show-view-order-action
           @update:selected="val => selectedOrders[task.workEffortId] = val"
@@ -62,7 +67,7 @@
       </ion-infinite-scroll>
     </ion-content>
 
-    <ion-footer v-if="heldTasks.length">
+    <ion-footer v-if="selectMode">
       <ion-toolbar>
         <ion-buttons slot="start">
           <ion-button fill="solid" color="primary" :disabled="!hasSelectedTasks" @click="resolveSelectedTasks()">{{ translate('Resolve') }}</ion-button>
@@ -114,6 +119,7 @@ const assignee = ref('');
 const dateAfter = ref('');
 const dateBefore = ref('');
 const orderChannel = ref('');
+const selectMode = ref(false);
 const selectAll = ref(false);
 const selectedOrders = ref<Record<string, boolean>>({});
 const cardRefs = ref<Record<string, any>>({});
@@ -144,6 +150,25 @@ watch([assignee, dateAfter, dateBefore, orderChannel], () => {
 watch(selectAll, (val) => {
   heldTasks.value.forEach(task => {
     selectedOrders.value[task.workEffortId] = val;
+  });
+});
+
+function toggleSelectMode() {
+  if (selectMode.value) {
+    selectMode.value = false;
+    selectAll.value = false;
+    selectedOrders.value = {};
+    return;
+  }
+  selectMode.value = true;
+}
+
+// Prune selections for tasks that are no longer in the list (e.g. after a filter change)
+// without forcing select mode on or off.
+watch(heldTasks, () => {
+  const validIds = new Set(heldTasks.value.map((task) => task.workEffortId));
+  Object.keys(selectedOrders.value).forEach((id) => {
+    if (!validIds.has(id)) delete selectedOrders.value[id];
   });
 });
 

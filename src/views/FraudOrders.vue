@@ -6,6 +6,11 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>{{ translate('Fraud') }}</ion-title>
+        <ion-buttons slot="end">
+          <ion-button v-if="fraudTasks.length" fill="clear" size="small" @click="toggleSelectMode">
+            {{ selectMode ? translate('Done') : translate('Select') }}
+          </ion-button>
+        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -40,7 +45,7 @@
         </FilterSelect>
       </SearchFilterCard>
 
-      <SelectAllResultsItem v-if="fraudTasks.length" v-model="selectAll" :count="fraudTasks.length" />
+      <SelectAllResultsItem v-if="selectMode && fraudTasks.length" v-model="selectAll" :count="fraudTasks.length" />
 
       <div class="fraud-orders">
         <FraudTaskCard
@@ -48,7 +53,7 @@
           :key="task.workEffortId"
           :ref="setCardRef"
           :task="task"
-          :selectable="true"
+          :selectable="selectMode"
           :selected="!!selectedOrders[task.workEffortId]"
           show-view-order-action
           @update:selected="val => selectedOrders[task.workEffortId] = val"
@@ -71,7 +76,7 @@
       </ion-infinite-scroll>
     </ion-content>
 
-    <ion-footer v-if="fraudTasks.length">
+    <ion-footer v-if="selectMode">
       <ion-toolbar>
         <ion-buttons slot="start">
           <ion-button color="primary" :disabled="!selectedTaskCount" @click="bulkResolve">{{ translate('Resolve') }}</ion-button>
@@ -111,6 +116,7 @@ const assignee = ref('');
 const recommendation = ref('');
 const orderChannel = ref('');
 const severity = ref('');
+const selectMode = ref(false);
 const selectAll = ref(false);
 const selectedOrders = ref<Record<string, boolean>>({});
 
@@ -142,6 +148,25 @@ watch(selectAll, (val) => {
 
 watch([assignee, orderChannel, recommendation, severity], () => {
   fetchFraudTasks();
+});
+
+function toggleSelectMode() {
+  if (selectMode.value) {
+    selectMode.value = false;
+    selectAll.value = false;
+    selectedOrders.value = {};
+    return;
+  }
+  selectMode.value = true;
+}
+
+// Prune selections for tasks no longer in the list (e.g. after a filter change)
+// without forcing select mode on or off.
+watch(fraudTasks, () => {
+  const validIds = new Set(fraudTasks.value.map((task: any) => task.workEffortId));
+  Object.keys(selectedOrders.value).forEach((id) => {
+    if (!validIds.has(id)) delete selectedOrders.value[id];
+  });
 });
 
 function clearFilters() {
