@@ -37,12 +37,13 @@
       </div>
 
       <!-- First-load failure: explicit, retryable error state. -->
-      <template v-else-if="isErrored">
-        <ErrorState :title="translate('Could not load swap tasks')" :message="errorMessage" />
-        <div class="ion-text-center ion-padding">
-          <ion-button fill="outline" @click="fetchSwapTasks()">{{ translate('Retry') }}</ion-button>
-        </div>
-      </template>
+      <ErrorState
+        v-else-if="isErrored"
+        :title="translate('Could not load swap tasks')"
+        :message="errorMessage"
+        retryable
+        @retry="fetchSwapTasks()"
+      />
 
       <template v-else>
         <div class="swap-order-list">
@@ -76,7 +77,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import { IonButton, IonButtons, IonContent, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonMenuButton, IonPage, IonProgressBar, IonSelectOption, IonSpinner, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
+import { IonButtons, IonContent, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonMenuButton, IonPage, IonProgressBar, IonSelectOption, IonSpinner, IonTitle, IonToolbar, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
 import router from '@/router';
 import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
