@@ -6,11 +6,6 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>{{ translate('Fraud') }}</ion-title>
-        <ion-buttons slot="end">
-          <ion-button v-if="fraudTasks.length" fill="clear" size="small" @click="toggleSelectMode">
-            {{ selectMode ? translate('Done') : translate('Select') }}
-          </ion-button>
-        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -44,6 +39,19 @@
           </ion-select-option>
         </FilterSelect>
       </SearchFilterCard>
+
+      <ion-list-header v-if="fraudTasks.length" class="order-results-header">
+        <ion-label>
+          {{
+            translate(fraudTasks.length === 1 ? '{count} fraud task' : '{count} fraud tasks', {
+              count: fraudTasks.length
+            })
+          }}
+        </ion-label>
+        <ion-button fill="clear" size="small" @click="toggleSelectMode">
+          {{ selectMode ? translate('Done') : translate('Select') }}
+        </ion-button>
+      </ion-list-header>
 
       <SelectAllResultsItem v-if="selectMode && fraudTasks.length" v-model="selectAll" :count="fraudTasks.length" />
 
@@ -89,7 +97,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUpdate } from 'vue';
-import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, IonInfiniteScroll, IonInfiniteScrollContent, alertController, onIonViewWillEnter } from '@ionic/vue';
+import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonLabel, IonListHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, IonInfiniteScroll, IonInfiniteScrollContent, alertController, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
 import router from '@/router';
 import { showToast } from '@/utils';
@@ -265,6 +273,12 @@ onIonViewWillEnter(() => {
 <style scoped>
 .fraud-orders {
   padding: 0 var(--spacer-sm) var(--spacer-sm);
+}
+
+.order-results-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {

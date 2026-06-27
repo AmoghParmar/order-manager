@@ -6,11 +6,6 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>{{ translate('Hold') }}</ion-title>
-        <ion-buttons slot="end">
-          <ion-button v-if="heldTasks.length" fill="clear" size="small" @click="toggleSelectMode">
-            {{ selectMode ? translate('Done') : translate('Select') }}
-          </ion-button>
-        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -34,6 +29,19 @@
           </ion-select-option>
         </FilterSelect>
       </SearchFilterCard>
+
+      <ion-list-header v-if="heldTasks.length" class="order-results-header">
+        <ion-label>
+          {{
+            translate(heldTasks.length === 1 ? '{count} hold task' : '{count} hold tasks', {
+              count: heldTasks.length
+            })
+          }}
+        </ion-label>
+        <ion-button fill="clear" size="small" @click="toggleSelectMode">
+          {{ selectMode ? translate('Done') : translate('Select') }}
+        </ion-button>
+      </ion-list-header>
 
       <SelectAllResultsItem v-if="selectMode && heldTasks.length" v-model="selectAll" :count="heldTasks.length" />
 
@@ -84,6 +92,8 @@ import {
   IonContent,
   IonFooter,
   IonHeader,
+  IonLabel,
+  IonListHeader,
   IonMenuButton,
   IonPage,
   IonTitle,
@@ -243,6 +253,12 @@ onIonViewWillEnter(() => {
 <style scoped>
 .hold-orders-list {
   padding: 0 var(--spacer-sm) var(--spacer-sm);
+}
+
+.order-results-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {

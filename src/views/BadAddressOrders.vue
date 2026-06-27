@@ -6,11 +6,6 @@
           <ion-menu-button />
         </ion-buttons>
         <ion-title>{{ translate('Bad address') }}</ion-title>
-        <ion-buttons slot="end">
-          <ion-button v-if="addressValidationTasks.length" fill="clear" size="small" @click="toggleSelectMode">
-            {{ selectMode ? translate('Done') : translate('Select') }}
-          </ion-button>
-        </ion-buttons>
       </ion-toolbar>
     </ion-header>
 
@@ -34,6 +29,19 @@
           </ion-select-option>
         </FilterSelect>
       </SearchFilterCard>
+
+      <ion-list-header v-if="addressValidationTasks.length" class="order-results-header">
+        <ion-label>
+          {{
+            translate(addressValidationTasks.length === 1 ? '{count} bad address task' : '{count} bad address tasks', {
+              count: addressValidationTasks.length
+            })
+          }}
+        </ion-label>
+        <ion-button fill="clear" size="small" @click="toggleSelectMode">
+          {{ selectMode ? translate('Done') : translate('Select') }}
+        </ion-button>
+      </ion-list-header>
 
       <SelectAllResultsItem v-if="selectMode && addressValidationTasks.length" v-model="selectAll" :count="addressValidationTasks.length" />
 
@@ -82,7 +90,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUpdate } from 'vue';
-import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, alertController, modalController, onIonViewWillEnter } from '@ionic/vue';
+import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonLabel, IonListHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, alertController, modalController, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
 import router from '@/router';
 import { showToast } from '@/utils';
@@ -347,6 +355,12 @@ onIonViewWillEnter(() => {
 <style scoped>
 .bad-address-list {
   padding: 0 var(--spacer-sm) var(--spacer-sm);
+}
+
+.order-results-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
 }
 
 @media (max-width: 640px) {
