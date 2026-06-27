@@ -30,7 +30,14 @@
           <ion-input :label="translate('Postal code')" label-placement="stacked" v-model="addressState.original.postalCode" />
         </ion-item>
         <ion-item>
-          <ion-select :label="translate('State')" label-placement="stacked" v-model="addressState.original.stateProvinceGeoId" interface="popover">
+          <ion-select
+            :label="translate('State')"
+            label-placement="stacked"
+            v-model="addressState.original.stateProvinceGeoId"
+            interface="popover"
+            :disabled="!addressState.original.countryGeoId"
+            :placeholder="addressState.original.countryGeoId ? translate('Select') : translate('Select country first')"
+          >
             <ion-select-option v-for="state in originalStates" :key="state.geoId" :value="state.geoId">{{ state.geoName }}</ion-select-option>
           </ion-select>
         </ion-item>
@@ -59,7 +66,14 @@
           <ion-input :label="translate('Postal code')" label-placement="stacked" v-model="addressState.suggested.postalCode" />
         </ion-item>
         <ion-item>
-          <ion-select :label="translate('State')" label-placement="stacked" v-model="addressState.suggested.stateProvinceGeoId" interface="popover">
+          <ion-select
+            :label="translate('State')"
+            label-placement="stacked"
+            v-model="addressState.suggested.stateProvinceGeoId"
+            interface="popover"
+            :disabled="!addressState.suggested.countryGeoId"
+            :placeholder="addressState.suggested.countryGeoId ? translate('Select') : translate('Select country first')"
+          >
             <ion-select-option v-for="state in suggestedStates" :key="state.geoId" :value="state.geoId">{{ state.geoName }}</ion-select-option>
           </ion-select>
         </ion-item>
