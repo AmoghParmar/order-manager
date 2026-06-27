@@ -30,20 +30,24 @@
         </FilterSelect>
       </SearchFilterCard>
 
-      <ion-list-header v-if="addressValidationTasks.length" class="order-results-header">
-        <ion-label>
-          {{
-            translate(addressValidationTasks.length === 1 ? '{count} bad address task' : '{count} bad address tasks', {
-              count: addressValidationTasks.length
-            })
-          }}
-        </ion-label>
-        <ion-button fill="clear" size="small" @click="toggleSelectMode">
-          {{ selectMode ? translate('Done') : translate('Select') }}
-        </ion-button>
-      </ion-list-header>
-
-      <SelectAllResultsItem v-if="selectMode && addressValidationTasks.length" v-model="selectAll" :count="addressValidationTasks.length" />
+      <ion-list v-if="addressValidationTasks.length" lines="none">
+        <ion-list-header class="order-results-header">
+          <span class="order-results-header-start">
+            <ion-checkbox
+              v-if="selectMode"
+              :checked="allCurrentPageSelected"
+              :indeterminate="someCurrentPageSelected && !allCurrentPageSelected"
+              @ionChange="toggleCurrentPageSelection($event.detail.checked)"
+            />
+          </span>
+          <ion-label>
+            {{ addressValidationTasks.length }} {{ addressValidationTasks.length === 1 ? translate('bad address task') : translate('bad address tasks') }}
+          </ion-label>
+          <ion-button fill="clear" size="small" @click="toggleSelectMode">
+            {{ selectMode ? translate('Done') : translate('Select') }}
+          </ion-button>
+        </ion-list-header>
+      </ion-list>
 
       <div class="bad-address-list">
         <BadAddressTaskCard
@@ -90,14 +94,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUpdate } from 'vue';
-import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonLabel, IonListHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, alertController, modalController, onIonViewWillEnter } from '@ionic/vue';
+import { IonButton, IonButtons, IonCheckbox, IonContent, IonFooter, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonLabel, IonList, IonListHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, alertController, modalController, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
 import router from '@/router';
 import { showToast } from '@/utils';
 import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
 import FilterSelect from '@/components/common/FilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
-import SelectAllResultsItem from '@/components/common/SelectAllResultsItem.vue';
 import FacilityModal from '@/components/fulfillment/FacilityModal.vue';
 import BadAddressTaskCard from '@/components/tasks/BadAddressTaskCard.vue';
 import { useOrderTaskStore } from '@/store/orderTask';
@@ -167,7 +170,6 @@ const dateAfter = ref('');
 const dateBefore = ref('');
 const orderChannel = ref('');
 const selectMode = ref(false);
-const selectAll = ref(false);
 const selectedOrders = ref<Record<string, boolean>>({});
 
 const cardRefs = ref<any[]>([]);
@@ -182,6 +184,9 @@ const addressValidationTasks = computed(() => orderTaskStore.getAddressValidatio
 const isScrollable = computed(() => orderTaskStore.isAddressValidationTasksScrollable);
 const hasSelectedTasks = computed(() => Object.values(selectedOrders.value).some(Boolean));
 const hasFilters = computed(() => !!(searchQuery.value || assignee.value || dateAfter.value || dateBefore.value || orderChannel.value));
+const currentPageTaskIds = computed(() => addressValidationTasks.value.map((task: any) => task.workEffortId));
+const allCurrentPageSelected = computed(() => currentPageTaskIds.value.length > 0 && currentPageTaskIds.value.every((workEffortId: string) => selectedOrders.value[workEffortId]));
+const someCurrentPageSelected = computed(() => currentPageTaskIds.value.some((workEffortId: string) => selectedOrders.value[workEffortId]));
 
 function getEmptyMessage() {
   return hasFilters.value
@@ -219,20 +224,19 @@ watch([assignee, dateAfter, dateBefore, orderChannel], () => {
   fetchAddressValidationTasks();
 });
 
-watch(selectAll, (val) => {
-  addressValidationTasks.value.forEach(task => {
-    selectedOrders.value[task.workEffortId] = val;
-  });
-});
-
 function toggleSelectMode() {
   if (selectMode.value) {
     selectMode.value = false;
-    selectAll.value = false;
     selectedOrders.value = {};
     return;
   }
   selectMode.value = true;
+}
+
+function toggleCurrentPageSelection(checked: boolean) {
+  addressValidationTasks.value.forEach((task: any) => {
+    selectedOrders.value[task.workEffortId] = checked;
+  });
 }
 
 function clearFilters() {
@@ -282,7 +286,6 @@ async function bulkSaveAndReleaseHold() {
         handler: async () => {
           await Promise.all(cards.map((card: any) => card.submitSaveAndRelease()));
           selectedOrders.value = {};
-          selectAll.value = false;
           await fetchAddressValidationTasks();
         }
       }
@@ -307,7 +310,6 @@ async function bulkCancelOrder() {
           try {
             await Promise.all(cards.map((card: any) => card.submitCancel()));
             selectedOrders.value = {};
-            selectAll.value = false;
             await fetchAddressValidationTasks();
           } catch {
             await showToast(translate('Failed to cancel some orders. Please try again.'));
@@ -331,7 +333,6 @@ async function bulkParkOrder() {
   try {
     await Promise.all(cards.map((card: any) => card.submitPark(facilityId)));
     selectedOrders.value = {};
-    selectAll.value = false;
     await showToast(translate('Orders successfully moved to parking.'));
     await fetchAddressValidationTasks();
   } catch {
@@ -361,6 +362,11 @@ onIonViewWillEnter(() => {
   align-items: center;
   display: flex;
   gap: 8px;
+}
+
+.order-results-header-start {
+  display: flex;
+  min-width: 24px;
 }
 
 @media (max-width: 640px) {

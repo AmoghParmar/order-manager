@@ -30,20 +30,24 @@
         </FilterSelect>
       </SearchFilterCard>
 
-      <ion-list-header v-if="heldTasks.length" class="order-results-header">
-        <ion-label>
-          {{
-            translate(heldTasks.length === 1 ? '{count} hold task' : '{count} hold tasks', {
-              count: heldTasks.length
-            })
-          }}
-        </ion-label>
-        <ion-button fill="clear" size="small" @click="toggleSelectMode">
-          {{ selectMode ? translate('Done') : translate('Select') }}
-        </ion-button>
-      </ion-list-header>
-
-      <SelectAllResultsItem v-if="selectMode && heldTasks.length" v-model="selectAll" :count="heldTasks.length" />
+      <ion-list v-if="heldTasks.length" lines="none">
+        <ion-list-header class="order-results-header">
+          <span class="order-results-header-start">
+            <ion-checkbox
+              v-if="selectMode"
+              :checked="allCurrentPageSelected"
+              :indeterminate="someCurrentPageSelected && !allCurrentPageSelected"
+              @ionChange="toggleCurrentPageSelection($event.detail.checked)"
+            />
+          </span>
+          <ion-label>
+            {{ heldTasks.length }} {{ heldTasks.length === 1 ? translate('hold task') : translate('hold tasks') }}
+          </ion-label>
+          <ion-button fill="clear" size="small" @click="toggleSelectMode">
+            {{ selectMode ? translate('Done') : translate('Select') }}
+          </ion-button>
+        </ion-list-header>
+      </ion-list>
 
       <div class="hold-orders-list">
         <HoldTaskCard
@@ -89,10 +93,12 @@
 import { ref, computed, watch } from 'vue';
 import {
   IonButtons,
+  IonCheckbox,
   IonContent,
   IonFooter,
   IonHeader,
   IonLabel,
+  IonList,
   IonListHeader,
   IonMenuButton,
   IonPage,
@@ -110,7 +116,6 @@ import router from '@/router';
 import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
 import FilterSelect from '@/components/common/FilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
-import SelectAllResultsItem from '@/components/common/SelectAllResultsItem.vue';
 import HoldTaskCard from '@/components/tasks/HoldTaskCard.vue';
 import { useUserStore } from '@/store/user';
 import { useOrderTaskStore } from '@/store/orderTask';
@@ -130,7 +135,6 @@ const dateAfter = ref('');
 const dateBefore = ref('');
 const orderChannel = ref('');
 const selectMode = ref(false);
-const selectAll = ref(false);
 const selectedOrders = ref<Record<string, boolean>>({});
 const cardRefs = ref<Record<string, any>>({});
 
@@ -146,6 +150,9 @@ const heldTasks = computed(() => orderTaskStore.getHoldTasks);
 const isScrollable = computed(() => orderTaskStore.isHoldTasksScrollable);
 const hasSelectedTasks = computed(() => Object.values(selectedOrders.value).some(Boolean));
 const hasFilters = computed(() => !!(searchQuery.value || assignee.value || dateAfter.value || dateBefore.value || orderChannel.value));
+const currentPageTaskIds = computed(() => heldTasks.value.map((task) => task.workEffortId));
+const allCurrentPageSelected = computed(() => currentPageTaskIds.value.length > 0 && currentPageTaskIds.value.every((workEffortId: string) => selectedOrders.value[workEffortId]));
+const someCurrentPageSelected = computed(() => currentPageTaskIds.value.some((workEffortId: string) => selectedOrders.value[workEffortId]));
 
 function getEmptyMessage() {
   return hasFilters.value
@@ -157,20 +164,19 @@ watch([assignee, dateAfter, dateBefore, orderChannel], () => {
   fetchHoldTasks();
 });
 
-watch(selectAll, (val) => {
-  heldTasks.value.forEach(task => {
-    selectedOrders.value[task.workEffortId] = val;
-  });
-});
-
 function toggleSelectMode() {
   if (selectMode.value) {
     selectMode.value = false;
-    selectAll.value = false;
     selectedOrders.value = {};
     return;
   }
   selectMode.value = true;
+}
+
+function toggleCurrentPageSelection(checked: boolean) {
+  heldTasks.value.forEach((task) => {
+    selectedOrders.value[task.workEffortId] = checked;
+  });
 }
 
 // Prune selections for tasks that are no longer in the list (e.g. after a filter change)
@@ -215,7 +221,6 @@ async function resolveSelectedTasks() {
               .map(card => card.submitResolve())
           );
           selectedOrders.value = {};
-          selectAll.value = false;
           await fetchHoldTasks();
         }
       }
@@ -259,6 +264,11 @@ onIonViewWillEnter(() => {
   align-items: center;
   display: flex;
   gap: 8px;
+}
+
+.order-results-header-start {
+  display: flex;
+  min-width: 24px;
 }
 
 @media (max-width: 640px) {

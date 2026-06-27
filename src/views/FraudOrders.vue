@@ -40,20 +40,24 @@
         </FilterSelect>
       </SearchFilterCard>
 
-      <ion-list-header v-if="fraudTasks.length" class="order-results-header">
-        <ion-label>
-          {{
-            translate(fraudTasks.length === 1 ? '{count} fraud task' : '{count} fraud tasks', {
-              count: fraudTasks.length
-            })
-          }}
-        </ion-label>
-        <ion-button fill="clear" size="small" @click="toggleSelectMode">
-          {{ selectMode ? translate('Done') : translate('Select') }}
-        </ion-button>
-      </ion-list-header>
-
-      <SelectAllResultsItem v-if="selectMode && fraudTasks.length" v-model="selectAll" :count="fraudTasks.length" />
+      <ion-list v-if="fraudTasks.length" lines="none">
+        <ion-list-header class="order-results-header">
+          <span class="order-results-header-start">
+            <ion-checkbox
+              v-if="selectMode"
+              :checked="allCurrentPageSelected"
+              :indeterminate="someCurrentPageSelected && !allCurrentPageSelected"
+              @ionChange="toggleCurrentPageSelection($event.detail.checked)"
+            />
+          </span>
+          <ion-label>
+            {{ fraudTasks.length }} {{ fraudTasks.length === 1 ? translate('fraud task') : translate('fraud tasks') }}
+          </ion-label>
+          <ion-button fill="clear" size="small" @click="toggleSelectMode">
+            {{ selectMode ? translate('Done') : translate('Select') }}
+          </ion-button>
+        </ion-list-header>
+      </ion-list>
 
       <div class="fraud-orders">
         <FraudTaskCard
@@ -97,13 +101,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onBeforeUpdate } from 'vue';
-import { IonButton, IonButtons, IonContent, IonFooter, IonHeader, IonLabel, IonListHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, IonInfiniteScroll, IonInfiniteScrollContent, alertController, onIonViewWillEnter } from '@ionic/vue';
+import { IonButton, IonButtons, IonCheckbox, IonContent, IonFooter, IonHeader, IonLabel, IonList, IonListHeader, IonMenuButton, IonPage, IonSelectOption, IonTitle, IonToolbar, IonInfiniteScroll, IonInfiniteScrollContent, alertController, onIonViewWillEnter } from '@ionic/vue';
 import { translate } from '@common';
 import router from '@/router';
 import { showToast } from '@/utils';
 import FilterSelect from '@/components/common/FilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
-import SelectAllResultsItem from '@/components/common/SelectAllResultsItem.vue';
 import FraudTaskCard from '@/components/tasks/FraudTaskCard.vue';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useSeedStore } from '@/store/seed';
@@ -125,7 +128,6 @@ const recommendation = ref('');
 const orderChannel = ref('');
 const severity = ref('');
 const selectMode = ref(false);
-const selectAll = ref(false);
 const selectedOrders = ref<Record<string, boolean>>({});
 
 // Card component instances, collected in render order to map back to fraudTasks.
@@ -141,18 +143,15 @@ const fraudTasks = computed(() => orderTaskStore.getFraudTasks);
 const isScrollable = computed(() => orderTaskStore.isFraudTasksScrollable);
 const selectedTaskCount = computed(() => Object.values(selectedOrders.value).filter(Boolean).length as number);
 const hasFilters = computed(() => !!(searchQuery.value || assignee.value || recommendation.value || orderChannel.value || severity.value));
+const currentPageTaskIds = computed(() => fraudTasks.value.map((task: any) => task.workEffortId));
+const allCurrentPageSelected = computed(() => currentPageTaskIds.value.length > 0 && currentPageTaskIds.value.every((workEffortId: string) => selectedOrders.value[workEffortId]));
+const someCurrentPageSelected = computed(() => currentPageTaskIds.value.some((workEffortId: string) => selectedOrders.value[workEffortId]));
 
 function getEmptyMessage() {
   return hasFilters.value
     ? translate('No records found for the search criteria.')
     : translate('No records found.');
 }
-
-watch(selectAll, (val) => {
-  fraudTasks.value.forEach((task: any) => {
-    selectedOrders.value[task.workEffortId] = val;
-  });
-});
 
 watch([assignee, orderChannel, recommendation, severity], () => {
   fetchFraudTasks();
@@ -161,11 +160,16 @@ watch([assignee, orderChannel, recommendation, severity], () => {
 function toggleSelectMode() {
   if (selectMode.value) {
     selectMode.value = false;
-    selectAll.value = false;
     selectedOrders.value = {};
     return;
   }
   selectMode.value = true;
+}
+
+function toggleCurrentPageSelection(checked: boolean) {
+  fraudTasks.value.forEach((task: any) => {
+    selectedOrders.value[task.workEffortId] = checked;
+  });
 }
 
 // Prune selections for tasks no longer in the list (e.g. after a filter change)
@@ -231,7 +235,6 @@ async function bulkResolve() {
     await Promise.all(cards.map((card: any) => card.submitResolve()));
     await showToast(translate('{count} tasks resolved.', { count: cards.length }));
     selectedOrders.value = {};
-    selectAll.value = false;
     await fetchFraudTasks();
   } catch {
     await showToast(translate('Failed to resolve some tasks. Please try again.'));
@@ -253,7 +256,6 @@ async function bulkCancel() {
           try {
             await Promise.all(cards.map((card: any) => card.submitCancel()));
             selectedOrders.value = {};
-            selectAll.value = false;
             await fetchFraudTasks();
           } catch {
             await showToast(translate('Failed to cancel some orders. Please try again.'));
@@ -279,6 +281,11 @@ onIonViewWillEnter(() => {
   align-items: center;
   display: flex;
   gap: 8px;
+}
+
+.order-results-header-start {
+  display: flex;
+  min-width: 24px;
 }
 
 @media (max-width: 640px) {
