@@ -975,7 +975,7 @@
       </ion-toolbar>
     </ion-footer>
 
-    <ion-footer v-if="order && selectedSegment === 'holds'">
+    <ion-footer v-if="order && selectedSegment === 'holds' && hasOrderHoldTasks">
       <ion-toolbar>
         <ion-buttons slot="end">
           <ion-button @click="openCreateHoldTaskModal()">{{ translate('Create hold task') }}</ion-button>
@@ -2806,7 +2806,7 @@ async function openCreateHoldTaskModal() {
     return;
   }
 
-  const modal = await modalController.create({ component: AddOrderTaskModal, componentProps: { shipGroups } });
+  const modal = await modalController.create({ component: AddOrderTaskModal, componentProps: { shipGroups, title: translate('Create hold task') } });
   await modal.present();
   const { data, role } = await modal.onWillDismiss();
   if (role !== 'confirm' || !data) return;

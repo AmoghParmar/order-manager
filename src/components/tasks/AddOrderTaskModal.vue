@@ -6,7 +6,7 @@
           <ion-icon slot="icon-only" :icon="closeOutline" />
         </ion-button>
       </ion-buttons>
-      <ion-title>{{ translate('Add Task') }}</ion-title>
+      <ion-title>{{ title || translate('Add Task') }}</ion-title>
     </ion-toolbar>
   </ion-header>
 
@@ -104,6 +104,8 @@ import { translate } from '@common';
 import { useSeedStore } from '@/store/seed';
 
 const props = defineProps<{
+  // Optional modal title (already localized by the caller); defaults to "Add Task".
+  title?: string;
   // When provided, the user can scope the task to one or more ship groups of an
   // order. Omitted for the generic bulk "Add task" flow, which keeps its old shape.
   shipGroups?: Array<{ id: string; label?: string }>;
