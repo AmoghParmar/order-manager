@@ -114,7 +114,7 @@
 
           <ion-label class="tablet ion-text-start">
             {{ order.customerName || order.customerId || translate('Unknown customer') }}
-            <p>{{ customerAddressLine(order) }}</p>
+            <p v-if="customerAddressLine(order)">{{ customerAddressLine(order) }}</p>
             <p v-if="customerAddressTrailingLine(order)">{{ customerAddressTrailingLine(order) }}</p>
           </ion-label>
 
@@ -457,7 +457,9 @@ function parseOrderDate(value: string) {
 }
 
 function customerAddressLine(order: any) {
-  return order.shippingAddress1 || order.customerId || order.externalId || '';
+  // Only the real shipping address — no id fallbacks, which would just repeat the
+  // order id / external id already shown in the first column.
+  return order.shippingAddress1 || '';
 }
 
 function customerAddressTrailingLine(order: any) {
@@ -468,8 +470,7 @@ function customerAddressTrailingLine(order: any) {
     order.shippingCountryGeoId
   ].filter(Boolean);
 
-  if (parts.length) return parts.join(' ');
-  return order.shippingAddress1 ? '' : order.externalId;
+  return parts.length ? parts.join(' ') : '';
 }
 
 function estimatedDeliveryValue(order: any) {
@@ -478,7 +479,9 @@ function estimatedDeliveryValue(order: any) {
 
 function estimatedDeliveryDateLabel(order: any) {
   const date = dateFromValue(estimatedDeliveryValue(order));
-  return date ? date.toFormat('MM-dd-yyyy') : translate('No delivery date');
+  // Neutral placeholder rather than "No delivery date" — the order-search response
+  // often omits delivery dates, and a per-row sentence reads as noise.
+  return date ? date.toFormat('MM-dd-yyyy') : '—';
 }
 
 function estimatedDeliveryRelativeLabel(order: any) {
