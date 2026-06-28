@@ -110,7 +110,9 @@ const errorMessage = computed(() => translate(orderTaskStore.getSwapError));
 const isFirstLoading = computed(() => swapStatus.value === 'loading' && !swapTasks.value.length);
 // Refetch with cards already on screen (filter change, search, post-action reload).
 const isRefetching = computed(() => swapStatus.value === 'loading' && swapTasks.value.length > 0);
-const isErrored = computed(() => swapStatus.value === 'error');
+// Only take over the page when there's nothing to show; a failed refetch with
+// cards on screen keeps the existing rows instead of blanking the queue.
+const isErrored = computed(() => swapStatus.value === 'error' && !swapTasks.value.length);
 const isSuccess = computed(() => swapStatus.value === 'success');
 
 function getEmptyMessage() {
