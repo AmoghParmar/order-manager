@@ -9,7 +9,6 @@ describe('AttributeListItem', () => {
     // Name at the start, value trailing on the same row, both inside one
     // wrapping flex container so they stack on narrow widths.
     expect(source).toContain('class="attribute-kv__pair"');
-    expect(source).toContain('class="attribute-kv__name"');
     expect(source).toContain('{{ name }}');
     expect(source).toContain('class="attribute-kv__value"');
     expect(source).toContain('hasValue ? value : translate(\'Value not available\')');
@@ -25,7 +24,7 @@ describe('AttributeListItem', () => {
   });
 
   it('renders a clear empty state instead of dropping blank values', () => {
-    expect(source).toContain('attribute-kv__value--empty');
+    expect(source).toContain('translate(\'Value not available\')');
     // hasValue treats whitespace-only / null / undefined as empty.
     expect(source).toContain("String(value).trim() !== ''");
   });
@@ -37,5 +36,11 @@ describe('AttributeListItem', () => {
   it('keeps the description as secondary supporting text', () => {
     expect(source).toContain('v-if="description"');
     expect(source).toContain('class="attribute-kv__description"');
+  });
+
+  it('keeps new CSS limited to layout properties', () => {
+    expect(source).not.toContain('font-weight');
+    expect(source).not.toContain('font-style');
+    expect(source).not.toContain('color:');
   });
 });

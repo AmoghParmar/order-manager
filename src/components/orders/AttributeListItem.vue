@@ -8,11 +8,8 @@
   <ion-item :lines="lines">
     <ion-label class="attribute-kv">
       <div class="attribute-kv__pair">
-        <span class="attribute-kv__name">{{ name }}</span>
-        <span
-          class="attribute-kv__value"
-          :class="{ 'attribute-kv__value--empty': !hasValue }"
-        >
+        <span>{{ name }}</span>
+        <span class="attribute-kv__value">
           {{ hasValue ? value : translate('Value not available') }}
         </span>
       </div>
@@ -53,21 +50,11 @@ const hasValue = computed(() => {
   gap: 2px 16px;
 }
 
-.attribute-kv__name {
-  font-weight: 600;
-}
-
 .attribute-kv__value {
-  color: var(--ion-color-medium-shade);
   word-break: break-word;
-}
-
-.attribute-kv__value--empty {
-  font-style: italic;
 }
 
 .attribute-kv__description {
   margin-top: 4px;
-  color: var(--ion-color-medium);
 }
 </style>
