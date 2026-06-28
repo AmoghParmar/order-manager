@@ -543,6 +543,8 @@
   "Failed to create customer on Shopify: no customerId returned.": "No se pudo crear el cliente en Shopify: no se devolvió customerId.",
   "Failed to create customer:": "No se pudo crear el cliente:",
   "Failed to create Shopify order:": "No se pudo crear el pedido de Shopify:",
+  "Couldn't load facilities": "No se pudieron cargar las instalaciones",
+  "Couldn't load this section": "No se pudo cargar esta sección",
   "Failed to fetch user profile information": "No se pudo obtener la información del perfil de usuario",
   "Failed to load bad address tasks. Please try again.": "No se pudieron cargar las tareas de dirección incorrecta. Inténtalo de nuevo.",
   "Failed to load orders": "No se pudieron cargar los pedidos",
