@@ -69,9 +69,12 @@
 
         <!-- details wrapper: child matching .order-detail-header-details -->
         <div class="order-detail-header-details">
-          <ion-card>
+          <ion-card class="customer-summary-card">
             <ion-card-header>
               <ion-card-title>{{ order.customerName || 'Customer name' }}</ion-card-title>
+              <ion-button v-if="customerPartyId" fill="clear" size="small" :router-link="'/customers/' + customerPartyId">
+                {{ translate('View details') }}
+              </ion-button>
             </ion-card-header>
             <ion-list lines="none">
               <ion-item>
@@ -179,6 +182,12 @@
                   {{ order.channel || translate('Channel') }}
                 </ion-label>
               </ion-item>
+              <ion-item v-if="order.originFacilityId">
+                <ion-label>
+                  <p>{{ translate('Placed at') }}</p>
+                  {{ order.originFacilityName }}
+                </ion-label>
+              </ion-item>
             </ion-list>
           </ion-card>
 
@@ -244,7 +253,7 @@
           <ion-item lines="full" class="order-items-toolbar">
             <ion-checkbox :checked="areAllSelected" justify="start" label-placement="end"
               @ionChange="toggleSelectAll($event.detail.checked)">{{ translate('Select all') }}</ion-checkbox>
-            <ion-button slot="end" fill="outline" color="medium" @click="openAddItemFromItemsSegment">
+            <ion-button v-if="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)" slot="end" fill="outline" color="medium" @click="openAddItemFromItemsSegment">
               {{ translate('Add items') }}
             </ion-button>
           </ion-item>
@@ -279,7 +288,7 @@
                     :quantity-label="translate('qty')"
                     :show-quantity="false"
                     :facility-label="item.facilityName"
-                    :facility-disabled="['ITEM_CANCELLED', 'ITEM_COMPLETED'].includes(item.statusId)"
+                    :facility-disabled="isItemFacilityActionDisabled(item)"
                     :attributes-label="attributeChipLabel(item.attributeCount)"
                     :attributes-disabled="!item.attributeCount"
                     :status-label="item.status"
@@ -326,6 +335,9 @@
             </ion-list>
           </ion-card>
           <ion-card class="totals">
+            <ion-card-header>
+              <ion-card-title>{{ translate('Total') }}</ion-card-title>
+            </ion-card-header>
             <ion-list lines="full">
               <ion-item>
                 <ion-label>{{ translate('Subtotal') }}</ion-label>
@@ -467,11 +479,11 @@
               <ion-item lines="none">
                 <ion-icon slot="start" :icon="compassOutline" />
                 <ion-label>
-                  <p class="overline" v-if="timelineByShipGroup[shipGroup.id]?.firstBrokeredDate">{{
-                    commonUtil.getRelativeTime(timelineByShipGroup[shipGroup.id]?.firstBrokeredDate) }}</p>
+                  <p class="overline" v-if="timelineByShipGroup[shipGroup.id]?.firstBrokeredDate || timelineByShipGroup[shipGroup.id]?.firstReleasedDate">{{
+                    commonUtil.getRelativeTime(timelineByShipGroup[shipGroup.id]?.firstBrokeredDate || timelineByShipGroup[shipGroup.id]?.firstReleasedDate) }}</p>
                   {{ translate('Brokered') }}
                 </ion-label>
-                <ion-note slot="end">{{ formatTime(timelineByShipGroup[shipGroup.id]?.firstBrokeredDate) ||
+                <ion-note slot="end">{{ formatTime(timelineByShipGroup[shipGroup.id]?.firstBrokeredDate) || formatTime(timelineByShipGroup[shipGroup.id]?.firstReleasedDate) ||
                   translate('Pending')
                   }}</ion-note>
               </ion-item>
@@ -713,16 +725,18 @@
             </div>
 
             <div class="ship-group-actions">
-              <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear" @click="brokerShipGroup(shipGroup.id)">{{
+              <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear"
+                :disabled="isShipGroupActionDisabled(shipGroup, 'BROKER')" @click="brokerShipGroup(shipGroup.id)">{{
                 translate('Broker ship group') }}</ion-button>
-              <ion-button fill="clear" :disabled="!selectedItemsForShipGroup(shipGroup.id).length"
+              <ion-button fill="clear"
+                :disabled="isShipGroupActionDisabled(shipGroup, isVirtualFacility(shipGroup) ? 'PARK_ITEMS' : 'PULL_BACK')"
                 @click="isVirtualFacility(shipGroup) ? parkSelectedItems(shipGroup) : rejectSelectedItems(shipGroup)">{{
                   isVirtualFacility(shipGroup) ? translate('Park Items') : translate('Pull back') }}</ion-button>
               <ion-button v-if="isVirtualFacility(shipGroup)" fill="clear"
-                :disabled="!selectedItemsForShipGroup(shipGroup.id).length" @click="releaseSelectedItems(shipGroup)">{{
+                :disabled="isShipGroupActionDisabled(shipGroup, 'RELEASE')" @click="releaseSelectedItems(shipGroup)">{{
                   translate('Release') }}</ion-button>
               <ion-button fill="clear" @click="openAddTaskModal(shipGroup)">{{ translate('Add Task') }}</ion-button>
-              <ion-button fill="clear" @click="openAddItemModal(shipGroup)">{{ translate('Add Items') }}</ion-button>
+              <ion-button v-if="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)" fill="clear" @click="openAddItemModal(shipGroup)">{{ translate('Add Items') }}</ion-button>
             </div>
           <!-- Gift message modal -->
           <ion-modal :is-open="giftModalShipGroupId === shipGroup.id" @didDismiss="giftModalShipGroupId = null">
@@ -1049,6 +1063,15 @@ const order = computed(() => {
     statusId: raw.statusId,
     channel: seed.enumDescription(raw.salesChannelEnumId),
     productStoreName: seed.productStoreName(raw.productStoreId),
+    // Origin/placed-at facility from the order header (set by the OMS order import for
+    // POS/retail-location orders). Prefer a name from the payload, then the seed facility
+    // lookup, falling back to the raw id. Empty when the order has no origin facility.
+    // '_NA_' is the OMS "no origin facility" sentinel (common on non-POS orders) and
+    // resolves to a virtual "Brokering Queue" facility — treat it (and blanks) as no origin.
+    originFacilityId: raw.originFacilityId && raw.originFacilityId !== '_NA_' ? raw.originFacilityId : '',
+    originFacilityName: raw.originFacilityId && raw.originFacilityId !== '_NA_'
+      ? (raw.originFacilityName || seed.facility(raw.originFacilityId)?.facilityName || raw.originFacilityId)
+      : '',
     currency: raw.currencyUom,
     localeString: raw.localeString || raw.locale,
     riskRecommendationEnumId: raw.riskRecommendationEnumId,
@@ -1164,7 +1187,7 @@ const orderTimeline = computed(() => {
   const entryDate = timelineMillis(raw.entryDate);
   const approvedDate = statusTimelineDate(['ORDER_APPROVED', 'ORDER_ACCEPTED']);
   const completedDate = statusTimelineDate(['ORDER_COMPLETED']);
-  const firstBrokeredDate = fulfillmentTimelineDate('firstBrokeredDate');
+  const firstBrokeredDate = fulfillmentTimelineDate('firstBrokeredDate') ?? fulfillmentTimelineDate('firstReleasedDate');
 
   if (orderDate) {
     timeline.push({
@@ -1300,7 +1323,7 @@ function shipGroupProgress(shipGroup: any): number {
   const tl = timelineByShipGroup.value[shipGroup.id];
   if (!tl) return 0;
   let progress = 0;
-  if (tl.firstBrokeredDate) progress += 0.25;
+  if (tl.firstBrokeredDate || tl.firstReleasedDate) progress += 0.25;
   if (tl.picklistDate) progress += 0.25;
   if (tl.packedDate) progress += 0.25;
   if (tl.shippedDate) progress += 0.25;
@@ -1547,6 +1570,88 @@ const selectedItems = computed(() =>
     group.items.filter(item => selectedItemIds.value.has(item.orderItemSeqId))
   )
 );
+
+const allGroupedItems = computed(() =>
+  groupedItems.value.flatMap((group: any) => group.items)
+);
+
+function shipGroupById(shipGroupId: string) {
+  return (order.value?.shipGroups || []).find((shipGroup: any) => shipGroup.id === shipGroupId) || null;
+}
+
+function selectedItemObjectsForShipGroup(shipGroup: any) {
+  const itemIds = new Set(selectedItemsForShipGroup(shipGroup.id));
+  return allGroupedItems.value.filter((item: any) =>
+    item.shipGroupSeqId === shipGroup.id && itemIds.has(item.orderItemSeqId)
+  );
+}
+
+function shipGroupActionContext(shipGroup: any) {
+  return {
+    timeline: timelineByShipGroup.value[shipGroup.id],
+    isVirtual: isVirtualFacility(shipGroup),
+    allItems: allGroupedItems.value
+  };
+}
+
+function shipGroupActionValidation(shipGroup: any, actionId: any) {
+  if (!order.value) return { allowed: false };
+  return OrderActionValidator.validateShipGroupAction(
+    order.value,
+    shipGroup,
+    actionId,
+    selectedItemObjectsForShipGroup(shipGroup),
+    shipGroupActionContext(shipGroup)
+  );
+}
+
+function isShipGroupActionDisabled(shipGroup: any, actionId: any) {
+  return !shipGroupActionValidation(shipGroup, actionId).allowed;
+}
+
+function isVirtualFacilityForItem(item: any) {
+  const shipGroup = shipGroupById(item.shipGroupSeqId);
+  return shipGroup ? isVirtualFacility(shipGroup) : !item.facilityId;
+}
+
+function itemActionContext(item: any) {
+  const allowedTransitions = seed.allowedTransitions(item.statusId);
+  return {
+    timeline: timelineByShipGroup.value[item.shipGroupSeqId],
+    isVirtual: isVirtualFacilityForItem(item),
+    itemAllowedToStatusIds: new Set(allowedTransitions.map((transition: any) => transition.toStatusId)),
+    allItems: allGroupedItems.value
+  };
+}
+
+function itemFacilityActionValidation(item: any) {
+  if (!order.value) return { allowed: false };
+  const shipGroup = shipGroupById(item.shipGroupSeqId);
+  if (shipGroup && isVirtualFacility(shipGroup)) {
+    return OrderActionValidator.validateShipGroupAction(
+      order.value,
+      shipGroup,
+      'RELEASE',
+      [item],
+      shipGroupActionContext(shipGroup)
+    );
+  }
+
+  return OrderActionValidator.validateItemAction(
+    order.value,
+    item,
+    'REJECT_AND_RELEASE',
+    itemActionContext(item)
+  );
+}
+
+function isItemFacilityActionDisabled(item: any) {
+  return !itemFacilityActionValidation(item).allowed;
+}
+
+async function showUnavailableAction(validation: any) {
+  await showToast(validation?.reason || 'Action is not available.');
+}
 
 function toggleSelectAll(checked: boolean) {
   if (checked) {
@@ -1992,9 +2097,7 @@ function toDateInputValue(value: any): string {
 // ── Shipping address display & edit ──────────────────────────────────────────
 
 function shippingAddressLines(shipGroup: any): string[] {
-  const mech = shipGroup.contactMechId
-    ? orderDetailStore.contactMechsById[shipGroup.contactMechId]
-    : orderDetailStore.contactMechsByPurpose['SHIPPING_LOCATION'];
+  const mech = shipGroupShippingContactMech(shipGroup);
   return addressLines(mech?.postalAddress);
 }
 
@@ -2003,9 +2106,7 @@ function shippingAddressLines(shipGroup: any): string[] {
  * & 2) / locality (city, zip, state, country). Returns null when no address.
  */
 function shippingAddressView(shipGroup: any): { name: string; street: string; locality: string } | null {
-  const mech = shipGroup.contactMechId
-    ? orderDetailStore.contactMechsById[shipGroup.contactMechId]
-    : orderDetailStore.contactMechsByPurpose['SHIPPING_LOCATION'];
+  const mech = shipGroupShippingContactMech(shipGroup);
   const addr = mech?.postalAddress;
   if (!addr) return null;
   return {
@@ -2013,6 +2114,12 @@ function shippingAddressView(shipGroup: any): { name: string; street: string; lo
     street: [addr.address1, addr.address2].filter(Boolean).join(', '),
     locality: [addr.city, addr.postalCode, seed.geoName(addr.stateProvinceGeoId), seed.geoName(addr.countryGeoId)].filter(Boolean).join(', ')
   };
+}
+
+function shipGroupShippingContactMech(shipGroup: any) {
+  return shipGroup.contactMechId
+    ? orderDetailStore.contactMechsById[shipGroup.contactMechId]
+    : orderDetailStore.contactMechsByPurpose['SHIPPING_LOCATION'];
 }
 
 const editingShipGroupId = ref<string | null>(null);
@@ -2029,9 +2136,7 @@ const shippingAddressForm = ref({
 const statesForCountry = computed(() => seed.getStates);
 
 function openEditShippingAddress(shipGroup: any) {
-  const mech = shipGroup.contactMechId
-    ? orderDetailStore.contactMechsById[shipGroup.contactMechId]
-    : orderDetailStore.contactMechsByPurpose['SHIPPING_LOCATION'];
+  const mech = shipGroupShippingContactMech(shipGroup);
   const addr = mech?.postalAddress ?? {};
   shippingAddressForm.value = {
     address1: addr.address1 ?? '',
@@ -2050,10 +2155,19 @@ function closeEditShippingAddress() {
 
 async function saveShippingAddress(shipGroup: any) {
   if (!order.value) return;
+  const partyId = customerPartyId.value;
+  if (!partyId) {
+    await showToast(translate('Customer is not available for this order.'));
+    return;
+  }
+
+  const contactMechId = shipGroupShippingContactMech(shipGroup)?.contactMechId || shipGroup.contactMechId;
   savingShippingAddress.value = true;
   try {
     await orderTaskStore.updateShippingInformation(order.value.id, shipGroup.id, {
       ...shippingAddressForm.value,
+      partyId,
+      contactMechId,
       contactMechPurposeTypeId: 'SHIPPING_LOCATION',
       isEdited: true,
     });
@@ -2383,6 +2497,15 @@ async function openItemAttributesModal(item: any) {
 }
 
 async function brokerShipGroup(shipGroupSeqId: string) {
+  const shipGroup = shipGroupById(shipGroupSeqId);
+  const validation = shipGroup
+    ? shipGroupActionValidation(shipGroup, 'BROKER')
+    : { allowed: false, reason: 'Ship group is not available.' };
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const productStoreId = useProductStore().getCurrentProductStore.productStoreId;
   const modal = await modalController.create({ component: RoutingGroupModal, componentProps: { productStoreId } });
   await modal.present();
@@ -2443,9 +2566,27 @@ async function cancelOrderItems() {
 }
 
 async function rejectAndReleaseItem(item: any, productId: string) {
+  const validation = itemFacilityActionValidation(item);
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const orderId = order.value!.id;
 
-  // Step 1 — reject (pull back) the item with hardcoded reason
+  // Step 1 — pick a facility with inventory to release to
+  const facilityModal = await modalController.create({
+    component: ItemFacilityInventoryModal,
+    componentProps: { productId, productStoreId: orderDetailStore.current?.productStoreId },
+    cssClass: 'item-facility-inventory-modal'
+  });
+  await facilityModal.present();
+  const { data: facilityId } = await facilityModal.onWillDismiss();
+  if (!facilityId) {
+    return;
+  }
+
+  // Step 2 — reject the item with default reason
   try {
     await api({
       url: `oms/orders/${orderId}/reject`,
@@ -2461,20 +2602,6 @@ async function rejectAndReleaseItem(item: any, productId: string) {
     });
   } catch {
     await showToast(translate('Failed to reject the item. Please try again.'));
-    return;
-  }
-
-  // Step 2 — pick a facility with inventory to release to
-  const facilityModal = await modalController.create({
-    component: ItemFacilityInventoryModal,
-    componentProps: { productId, productStoreId: orderDetailStore.current?.productStoreId },
-    cssClass: 'item-facility-inventory-modal'
-  });
-  await facilityModal.present();
-  const { data: facilityId } = await facilityModal.onWillDismiss();
-  if (!facilityId) {
-    // Rejected but no facility chosen — still refresh
-    await loadOrder(orderId, true);
     return;
   }
 
@@ -2602,7 +2729,10 @@ async function startReturn() {
 async function runOrderStatusAction(action: any) {
   if (!order.value) return;
   const orderId = order.value.id;
-  // Destructive transitions (cancel/reject) confirm first; approve is direct.
+  if (action.id === 'ORDER_CANCELLED') {
+    await cancelOrder(orderId);
+    return;
+  }
   if (action.color === 'danger') {
     const alert = await alertController.create({
       header: translate(action.label),
@@ -2616,6 +2746,40 @@ async function runOrderStatusAction(action: any) {
     return;
   }
   await changeOrderStatus(orderId, action.toStatusId);
+}
+
+async function cancelOrder(orderId: string) {
+  const items = groupedItems.value
+    .flatMap((group: any) => group.items)
+    .filter((item: any) => !['ITEM_CANCELLED', 'ITEM_COMPLETED'].includes(item.statusId))
+    .map((item: any) => ({
+      orderItemSeqId: item.orderItemSeqId,
+      shipGroupSeqId: item.shipGroupSeqId,
+      reason: 'NO_VARIANCE_LOG',
+      comment: ''
+    }));
+  if (!items.length) return;
+  const alert = await alertController.create({
+    header: translate('Cancel order'),
+    message: translate("Are you sure you want to cancel this order?"),
+    buttons: [
+      { text: translate('Cancel'), role: 'cancel' },
+      {
+        text: translate('Cancel order'),
+        role: 'confirm',
+        handler: async () => {
+          try {
+            await orderTaskStore.cancelOrder(orderId, items);
+            await showToast(translate('Order cancelled successfully.'));
+            await loadOrder(orderId, true);
+          } catch {
+            await showToast(translate('Failed to cancel the order. Please try again.'));
+          }
+        }
+      }
+    ]
+  });
+  await alert.present();
 }
 
 async function changeOrderStatus(orderId: string, statusId: string) {
@@ -2677,6 +2841,12 @@ async function openPhysicalFacilityModal(): Promise<string | null> {
 }
 
 async function parkSelectedItems(shipGroup: any) {
+  const validation = shipGroupActionValidation(shipGroup, 'PARK_ITEMS');
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const itemIds = selectedItemsForShipGroup(shipGroup.id);
   if (!itemIds.length) return;
   const facilityId = await openFacilityModal();
@@ -2701,6 +2871,12 @@ async function parkSelectedItems(shipGroup: any) {
 }
 
 async function rejectSelectedItems(shipGroup: any) {
+  const validation = shipGroupActionValidation(shipGroup, 'PULL_BACK');
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const itemIds = selectedItemsForShipGroup(shipGroup.id);
   if (!itemIds.length) return;
 
@@ -2733,6 +2909,12 @@ async function rejectSelectedItems(shipGroup: any) {
 }
 
 async function releaseSelectedItems(shipGroup: any) {
+  const validation = shipGroupActionValidation(shipGroup, 'RELEASE');
+  if (!validation.allowed) {
+    await showUnavailableAction(validation);
+    return;
+  }
+
   const itemIds = selectedItemsForShipGroup(shipGroup.id);
   if (!itemIds.length) return;
   const facilityId = await openPhysicalFacilityModal();
@@ -2866,5 +3048,11 @@ ion-card-header ion-buttons {
   .order-items .order-summary {
     grid-template-columns: 1fr;
   }
+}
+.customer-summary-card ion-card-header {
+  align-items: center;
+  display: flex;
+  gap: var(--spacer-xs);
+  justify-content: space-between;
 }
 </style>

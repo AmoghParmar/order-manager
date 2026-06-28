@@ -185,7 +185,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
             ...payload,
             statusId: 'TASK_CREATED',
             workEffortTypeId: 'RESOLVE_ONHOLD_ORDER',
-            workEffortPurposeTypeId: 'RESOLVE_ONHOLD_ORDER',
+            workEffortPurposeTypeId: 'ORD_HOLD_MANUAL',
             productStoreId,
           },
         });
@@ -277,7 +277,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
               orderId,
               statusId: 'TASK_CREATED',
               workEffortTypeId: 'RESOLVE_ONHOLD_ORDER',
-              workEffortPurposeTypeId: 'RESOLVE_ONHOLD_ORDER',
+              workEffortPurposeTypeId: 'ORD_HOLD_MANUAL',
               productStoreId,
             },
           });
@@ -385,6 +385,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
         });
       } catch (err) {
         console.error('Failed to cancel the order', err);
+        throw err;
       }
     },
     async changeTaskStatus(workEffortId: string, statusId: string, communication?: TaskStatusCommunicationOptions) {

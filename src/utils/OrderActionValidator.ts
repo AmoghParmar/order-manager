@@ -195,6 +195,7 @@ export interface OrderLifecyclePolicy {
 
 export interface ShipGroupTimeline {
   firstBrokeredDate?: string | number | null;
+  firstReleasedDate?: string | number | null;
   picklistDate?: string | number | null;
   packedDate?: string | number | null;
   shippedDate?: string | number | null;
@@ -293,7 +294,7 @@ export const OrderActionValidator = {
 
   /** Brokered == assigned to a real (physical) facility OR timeline shows a brokered date. */
   isShipGroupBrokered(shipGroup: any, ctx?: OrderLifecycleContext): boolean {
-    if (ctx?.timeline?.firstBrokeredDate) return true;
+    if (ctx?.timeline?.firstBrokeredDate || ctx?.timeline?.firstReleasedDate) return true;
     return !this.isVirtualFacility(shipGroup, ctx);
   },
 
@@ -364,6 +365,10 @@ export const OrderActionValidator = {
   /** Order header is terminal (cancelled/completed only — see D4 note above). */
   isOrderTerminal(order: any): boolean {
     return TERMINAL_ORDER_STATUSES.includes(order?.statusId);
+  },
+
+  isOrderApproved(order: any): boolean {
+    return order?.statusId === 'ORDER_APPROVED';
   },
 
   /**
@@ -623,6 +628,7 @@ export const OrderActionValidator = {
       case 'BROKER': {
         if (!virtual) return { allowed: false, reason: 'Ship group is already brokered to a facility.' };
         if (this.isOrderTerminal(order)) return { allowed: false, reason: 'Cannot broker a cancelled/completed order.' };
+        if (!this.isOrderApproved(order)) return { allowed: false, reason: 'Order must be approved before brokering.' };
         return { allowed: true };
       }
 
@@ -669,6 +675,7 @@ export const OrderActionValidator = {
         if (!virtual) return { allowed: false, reason: 'Release only applies to items on a virtual/brokering facility.' };
         if (!hasSelection) return { allowed: false, reason: 'Select one or more items to release.' };
         if (this.isOrderTerminal(order)) return { allowed: false, reason: 'Cannot release items on a cancelled/completed order.' };
+        if (!this.isOrderApproved(order)) return { allowed: false, reason: 'Order must be approved before releasing items to a facility.' };
         const anyReleasable = selectedItems.some((it) => PRE_FULFILL_ITEM_STATUSES.includes(it?.statusId));
         if (!anyReleasable) return { allowed: false, reason: 'Selected items are not in a releasable status.' };
         return { allowed: true };
@@ -761,6 +768,9 @@ export const OrderActionValidator = {
         }
         if (this.isOrderTerminal(order)) {
           return { allowed: false, reason: 'Order is already cancelled or completed.' };
+        }
+        if (!this.isOrderApproved(order)) {
+          return { allowed: false, reason: 'Order must be approved before releasing items to a facility.' };
         }
         if (ctx?.isVirtual === true) {
           return { allowed: false, reason: 'Reject only applies to items at a physical facility — release the item instead.' };

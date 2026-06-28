@@ -15,6 +15,7 @@ import {
 } from '@/authorization/permissions';
 import OrderSearch from '@/views/OrderSearch.vue';
 import OrderDetail from '@/views/OrderDetail.vue';
+import ReturnDetail from '@/views/ReturnDetail.vue';
 import Customers from '@/views/Customers.vue';
 import CustomerDetail from '@/views/CustomerDetail.vue';
 import Settings from '@/views/Settings.vue';
@@ -72,6 +73,16 @@ const routes: RouteRecordRaw[] = [
     beforeEnter: authGuard,
     meta: {
       permissionId: ORDER_VIEW_PERMISSION
+    }
+  },
+  {
+    path: '/returns/:returnId',
+    name: 'ReturnDetail',
+    component: ReturnDetail,
+    props: true,
+    beforeEnter: authGuard,
+    meta: {
+      permissionId: `${ORDER_VIEW_PERMISSION} OR ${CUSTOMER_VIEW_PERMISSION}`
     }
   },
   {
@@ -225,16 +236,16 @@ const router = createRouter({
 });
 
 router.beforeEach((to, from) => {
-  const permissionId = to.meta.permissionId as string | undefined;
-
-  if (permissionId && !useUserStore().hasPermission(permissionId)) {
-    showToast(translate('The requested page was not available to your user. Please contact your administrator to update your permissions.'));
-
-    if (from.path === '/login' || from.path === '/') {
-      return { path: '/settings' };
+  if (to.meta.permissionId && !useUserStore().hasPermission(to.meta.permissionId)) {
+    let redirectToPath = from.path;
+    // If the user has navigated from Login page or if it is page load, redirect user to settings page without showing any toast
+    if (redirectToPath == "/login" || redirectToPath == "/") redirectToPath = "/settings";
+    else {
+      showToast(translate('You do not have permission to access this page'));
     }
-
-    return { path: from.path };
+    return {
+      path: redirectToPath,
+    }
   }
 });
 

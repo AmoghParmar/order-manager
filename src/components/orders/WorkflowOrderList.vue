@@ -52,7 +52,7 @@
             :indeterminate="someCurrentPageSelected && !allCurrentPageSelected"
             @ion-change="toggleCurrentPageSelection($event.detail.checked)"
           />
-          <ion-label>{{ orderTotal }} {{ orderTotal === 1 ? translate('order') : translate('orders') }}</ion-label>
+          <ion-label>{{ orderCountLabel }}</ion-label>
           <ion-button fill="clear" size="small" @click="toggleSelectMode">
             {{ selectMode ? translate('Done') : translate('Select') }}
           </ion-button>
@@ -61,8 +61,7 @@
           v-for="order in orders"
           :key="order.orderId"
           button
-          :router-link="selectMode ? undefined : orderDetailLink(order)"
-          @click="toggleOrderSelection(order.orderId)"
+          @click="handleOrderRowClick(order)"
         >
           <ion-checkbox
             v-if="selectMode"
@@ -159,7 +158,6 @@ import {
 } from '@ionic/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { DateTime } from 'luxon';
-import { useRoute } from 'vue-router';
 import { useCustomerServiceStore, BULK_ACTIONS } from '@/store/customerService';
 import { useOrderStore } from '@/store/order';
 import { useSeedStore } from '@/store/seed';
@@ -167,6 +165,7 @@ import type { BulkActionDefinition, WorkflowBucket, WorkflowOrder } from '@/type
 import EmptyState from '@/components/common/EmptyState.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 import { commonUtil, translate } from '@common';
+import router from '@/router';
 
 const props = defineProps<{
   bucket: WorkflowBucket;
@@ -180,8 +179,16 @@ const props = defineProps<{
 const store = useCustomerServiceStore();
 const orderStore = useOrderStore();
 const seedStore = useSeedStore();
-const route = useRoute();
+const route = router.currentRoute.value;
 const toastMessage = ref('');
+
+function handleOrderRowClick(order: WorkflowOrder) {
+  if (selectMode.value) {
+    toggleOrderSelection(order.orderId);
+  } else {
+    router.push(orderDetailLink(order));
+  }
+}
 
 const filters = computed({
   get: () => store.filters[props.bucket],
@@ -227,6 +234,16 @@ const isLoading = computed(() => isApiBucket && orderStore.workflowOrdersLoading
 const orderTotal = computed(() =>
   isApiBucket ? orderStore.workflowOrdersTotal[apiBucket] : orders.value.length
 );
+const orderCountLabel = computed(() => {
+  if (isApiBucket) {
+    return translate('{loaded} of {total} orders', {
+      loaded: orders.value.length,
+      total: orderTotal.value
+    });
+  }
+
+  return `${orderTotal.value} ${orderTotal.value === 1 ? translate('order') : translate('orders')}`;
+});
 
 const hasMore = computed(() =>
   isApiBucket && orderStore.workflowOrders[apiBucket].length < orderStore.workflowOrdersTotal[apiBucket]
@@ -243,7 +260,7 @@ function applyRouteFilters() {
 watch(() => route.query.facilityId, applyRouteFilters, { immediate: true });
 
 function loadWorkflowOrders() {
-  orderStore.fetchWorkflowOrders(props.bucket as 'open' | 'inflight' | 'packed', filters.value);
+  return orderStore.fetchWorkflowOrders(props.bucket as 'open' | 'inflight' | 'packed', filters.value);
 }
 
 async function loadMore(event: any) {
@@ -349,8 +366,13 @@ async function runAction(action: BulkActionDefinition) {
   }
 
   const count = selectedIds.value.size;
-  store.runBulkAction(props.bucket, action.id);
-  toastMessage.value = `${action.label} · ${count} ${count === 1 ? translate('order') : translate('orders')}`;
+  try {
+    await store.runBulkAction(props.bucket, action.id);
+    if (isApiBucket) await loadWorkflowOrders();
+    toastMessage.value = `${action.label} · ${count} ${count === 1 ? translate('order') : translate('orders')}`;
+  } catch {
+    toastMessage.value = translate('Failed to complete bulk action. Please try again.');
+  }
 }
 
 function formatChannel(channel: string) {

@@ -1,4 +1,4 @@
-import { api } from '@common';
+import { api, logger } from '@common';
 import { defineStore } from 'pinia';
 import {
   searchOrders as searchOrderService,
@@ -8,7 +8,6 @@ import { toStringValue, toNumberValue } from '@/services/OrderService';
 import type { Customer, Order, ReturnRecord, Shipment } from '@/types/order';
 import type { WorkflowOrder, WorkflowFilters } from '@/types/customerService';
 import { useSeedStore } from '@/store/seed';
-import logger from '@/logger';
 import { useProductStore } from './productStore';
 
 
@@ -17,21 +16,19 @@ async function fetchWorkflowPage(
   filters: WorkflowFilters,
   pageIndex: number
 ): Promise<{ orders: WorkflowOrder[]; total: number }> {
-  const params: Record<string, any> = { bucket, pageSize: import.meta.env.VITE_VIEW_SIZE, pageIndex };
+  const params: Record<string, any> = { pageSize: import.meta.env.VITE_VIEW_SIZE, pageIndex };
   if (filters.query) params.keyword = filters.query;
   if (filters.customerName) params.customerName = filters.customerName;
   if (filters.salesChannelEnumId && filters.salesChannelEnumId !== 'All') params.salesChannelEnumId = filters.salesChannelEnumId;
   if (filters.facilityId && filters.facilityId !== 'All') params.facilityId = filters.facilityId;
   if (filters.shipmentMethodTypeId && filters.shipmentMethodTypeId !== 'All') params.shipmentMethodTypeId = filters.shipmentMethodTypeId;
-  if (filters.priority !== null) params.priority = filters.priority;
+  const productStore = useProductStore();
+  if (productStore.currentProductStore?.productStoreId) params.productStoreId = productStore.currentProductStore.productStoreId;
+  if (filters.priority !== null) params.isPriority = filters.priority;
   if (filters.dateFrom) params.orderDateFrom = `${filters.dateFrom} 00:00:00`;
   if (filters.dateThru) params.orderDateThru = `${filters.dateThru} 23:59:59`;
 
-  if(useProductStore().currentProductStore.productStoreId) {
-    params.productStoreId = useProductStore().currentProductStore.productStoreId
-  }
-
-  const resp = await api({ url: 'oms/orders/salesOrders', method: 'get', params });
+  const resp = await api({ url: `oms/orders/salesOrders/${bucket}`, method: 'get', params });
   const docs: any[] = resp.data?.orders || [];
   const total: number = resp.data?.ordersCount ?? docs.length;
 
@@ -52,10 +49,18 @@ async function fetchWorkflowPage(
       currencyUomId: toStringValue(doc.currencyUom) || 'USD',
       itemCount: toNumberValue(doc.itemCount),
       shipGroupSeqId: toStringValue(doc.shipGroupSeqId),
+      shipmentId: toStringValue(doc.shipmentId),
+      shipmentStatusId: toStringValue(doc.shipmentStatusId),
       shippingMethodTypeId: toStringValue(doc.shipmentMethodTypeId),
       shipmentMethodDesc: (() => { const m = seedStore.shipmentMethodTypes.byId[toStringValue(doc.shipmentMethodTypeId)]; return m?.description || toStringValue(doc.shipmentMethodTypeId); })(),
       carrierPartyId: toStringValue(doc.carrierPartyId),
-      priority: toStringValue(doc.priority) === 'Y' ? 'HIGH' as const : 'NORMAL' as const,
+      priority: (() => {
+        const p = Number(doc.priority);
+        if (isNaN(p)) return 'NORMAL' as const;
+        if (p >= 1 && p <= 3) return 'HIGH' as const;
+        if (p >= 4 && p <= 6) return 'NORMAL' as const;
+        return 'LOW' as const;
+      })(),
       facilityId: toStringValue(doc.facilityId) || null,
       facilityName: toStringValue(doc.facilityName) || null,
       brokeringDate: null,
@@ -240,6 +245,27 @@ export const useOrderStore = defineStore('orders', {
       } finally {
         this.workflowOrdersLoading[bucket] = false;
       }
+    },
+    async shipPackedWorkflowOrders(orderIds: string[]) {
+      const selectedOrderIds = new Set(orderIds);
+      const shipmentIds = [
+        ...new Set(
+          this.workflowOrders.packed
+            .filter((order) => selectedOrderIds.has(order.orderId))
+            .map((order) => order.shipmentId)
+            .filter((shipmentId): shipmentId is string => !!shipmentId)
+        )
+      ];
+
+      if (!shipmentIds.length) {
+        throw new Error('No packed shipments found for selected orders.');
+      }
+
+      await api({
+        url: 'poorti/shipments/bulkShip',
+        method: 'POST',
+        data: { shipmentIds }
+      });
     },
   },
   persist: {

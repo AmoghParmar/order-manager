@@ -79,6 +79,7 @@
         >
           <ion-item lines="none">
             <ion-checkbox
+              v-if="selectMode"
               slot="start"
               :checked="selectedOrderIds.includes(order.id)"
               @click.stop
@@ -196,8 +197,11 @@ const props = defineProps<{
   emptyTitle: string;
   emptyMessage: string;
   globalActions?: QueueGlobalAction[];
+  status?: string | string[];
 }>();
-
+const emit = defineEmits<{
+  (e: 'clearFilters'): void;
+}>();
 const orderDetailStore = useOrderDetailStore();
 const orderTaskStore = useOrderTaskStore();
 const productStore = useProductStore();
@@ -261,6 +265,7 @@ function toSearchParams(page: number) {
     sort: 'orderDate desc',
     pageSize: PAGE_SIZE,
     pageIndex: page,
+    status: props.status,
   };
 }
 
@@ -444,7 +449,6 @@ function isVirtualShipGroup(shipGroup: any) {
 
   return facilityTypeId === 'VIRTUAL_FACILITY' || parentTypeId === 'VIRTUAL_FACILITY';
 }
-
 function clearFilters() {
   searchQuery.value = '';
   selectedOrderIds.value = [];
@@ -454,6 +458,7 @@ function clearFilters() {
     dateFrom: '',
     dateThru: '',
   };
+  emit('clearFilters');
 }
 
 function exitSelectMode() {
@@ -491,12 +496,10 @@ function handleOrderRowClick(order: Order) {
 function setOrderSelection(orderId: string, checked: boolean) {
   if (checked) {
     if (!selectedOrderIds.value.includes(orderId)) selectedOrderIds.value = [...selectedOrderIds.value, orderId];
-    selectMode.value = true;
     return;
   }
 
   selectedOrderIds.value = selectedOrderIds.value.filter((selectedOrderId) => selectedOrderId !== orderId);
-  if (!selectedOrderIds.value.length) selectMode.value = false;
 }
 
 function orderDetailLink(order: Order) {

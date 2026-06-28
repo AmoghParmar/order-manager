@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { api } from '@common';
-import { useOrderTaskStore } from './orderTask';
+import { useOrderTaskStore } from '@/store/orderTask';
 
 vi.mock('@common', () => ({
   api: vi.fn(),
@@ -60,5 +60,34 @@ describe('order task store', () => {
         statusId: 'TASK_COMPLETED',
       },
     });
+  });
+
+  it('rejects when cancelling order items fails', async () => {
+    const store = useOrderTaskStore();
+    const error = new Error('Request failed with status code 400');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(api).mockRejectedValueOnce(error);
+
+    await expect(store.cancelOrder('M104032', [{
+      orderItemSeqId: '01',
+      shipGroupSeqId: '00004',
+      reason: 'NO_VARIANCE_LOG',
+      comment: '',
+    }])).rejects.toThrow('Request failed with status code 400');
+
+    expect(api).toHaveBeenCalledWith({
+      url: 'oms/orders/M104032/items/cancel',
+      method: 'POST',
+      data: {
+        items: [{
+          orderItemSeqId: '01',
+          shipGroupSeqId: '00004',
+          reason: 'NO_VARIANCE_LOG',
+          comment: '',
+        }],
+      },
+    });
+    expect(errorSpy).toHaveBeenCalledWith('Failed to cancel the order', error);
+    errorSpy.mockRestore();
   });
 });

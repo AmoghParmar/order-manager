@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
-import { api, commonUtil } from "@common";
-import logger from "@/logger";
+import { api, commonUtil, logger } from "@common";
 
 type LoadStatus = "idle" | "loading" | "loaded" | "error";
 
@@ -30,7 +29,9 @@ const enumTypeIds = [
   "ORDER_HOLD_PURPOSE",
   "ORDER_RISK_LEVEL",
   "ORDER_RISK_RECOMMENDATION",
-  "RISK_FACT_SENTIMENT"
+  "RISK_FACT_SENTIMENT",
+  "PP_SORT_PARAM_TYPE",
+  "PP_FILTER_PRM_TYPE"
 ];
 
 const geoTypeEnumIds = ["GEOT_COUNTRY", "GEOT_STATE", "GEOT_PROVINCE"];
@@ -477,7 +478,7 @@ export const useSeedStore = defineStore("seed", {
       await this.loadDataset(this.shopifyShops, { url: "oms/shopifyShops/shops", method: "GET", params: { pageSize: 1000 } }, (shop) => shop.shopId);
     },
     async loadShopifyShopLocations() {
-      await this.loadDataset(this.shopifyShopLocations, { url: "oms/shopifyShops/locations", method: "GET", params: { pageSize: 1000 } }, (location) => compositeKey(location, ["shopId", "locationId"]));
+      await this.loadDataset(this.shopifyShopLocations, { url: "oms/shopifyShops/locations", method: "GET", params: { pageSize: 1000 } }, (location) => compositeKey(location, ["shopId", "facilityId"]));
     },
     async loadGeoAssocs(countryGeoId: string) {
       if (!countryGeoId) return;

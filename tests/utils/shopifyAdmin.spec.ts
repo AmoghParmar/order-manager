@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shopifyAdminOrderUrl, shopifyStoreHandle } from './shopifyAdmin';
+import { shopifyAdminOrderUrl, shopifyStoreHandle } from '@/utils/shopifyAdmin';
 
 describe('shopifyStoreHandle', () => {
   it('extracts the handle from a myshopify domain', () => {

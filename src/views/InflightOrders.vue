@@ -111,6 +111,7 @@
             lines="none"
           >
             <ion-checkbox
+              v-if="selectMode"
               slot="start"
               :checked="selectedIds.has(order.orderId)"
               @click.stop
@@ -223,7 +224,6 @@ import {
 } from '@ionic/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { DateTime } from 'luxon';
-import { useRoute } from 'vue-router';
 import { useCustomerServiceStore, BULK_ACTIONS } from '@/store/customerService';
 import { useOrderStore } from '@/store/order';
 import { useSeedStore } from '@/store/seed';
@@ -231,13 +231,14 @@ import type { BulkActionDefinition, WorkflowOrder } from '@/types/customerServic
 import EmptyState from '@/components/common/EmptyState.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 import { api, translate } from '@common';
+import router from '@/router';
 
 const bucket = 'inflight';
 const VIRTUAL_FACILITY_TYPE_ID = 'VIRTUAL_FACILITY';
 const store = useCustomerServiceStore();
 const orderStore = useOrderStore();
 const seedStore = useSeedStore();
-const route = useRoute();
+const route = router.currentRoute.value;
 const ionRouter = useIonRouter();
 const toastMessage = ref('');
 
@@ -431,13 +432,11 @@ function setOrderSelection(orderId: string, checked: boolean) {
 
   if (checked) {
     currentSelection.add(orderId);
-    selectMode.value = true;
   } else {
     currentSelection.delete(orderId);
   }
 
   store.setSelection(bucket, [...currentSelection]);
-  if (!currentSelection.size) selectMode.value = false;
 }
 
 function orderDetailLink(order: WorkflowOrder) {
