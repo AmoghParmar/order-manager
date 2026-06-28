@@ -55,7 +55,17 @@
             {{ option.description || option.enumName || option.enumId }}
           </ion-select-option>
         </ion-select>
-        <ion-select v-model="searchSort" label="Sort by order date" label-placement="stacked" interface="popover">
+        <ion-item lines="none">
+          <ion-toggle v-model="searchFilters.hasVirtualFacilityItems" justify="space-between">
+            {{ translate('Items at virtual facilities') }}
+          </ion-toggle>
+        </ion-item>
+        <ion-item lines="none">
+          <ion-toggle v-model="searchFilters.archivedOnly" justify="space-between">
+            {{ translate('Archived orders') }}
+          </ion-toggle>
+        </ion-item>
+        <ion-select v-model="searchSort" :label="translate('Sort by order date')" label-placement="stacked" interface="popover">
           <ion-select-option value="orderDate desc">{{ translate('Newest first') }}</ion-select-option>
           <ion-select-option value="orderDate asc">{{ translate('Oldest first') }}</ion-select-option>
         </ion-select>
@@ -118,19 +128,32 @@
           </ion-label>
 
           <ion-label class="tablet ion-text-start">
-            {{ createdDateLabel(order.orderDate) }}
-            <p>{{ translate('Ship') }} {{ shipTimeLeftLabel(order.orderDate) }}</p>
+            <template v-if="order.brokeredFacilityName">
+              <ion-chip class="brokered-facility-chip" outline>
+                <ion-label>{{ brokeredFacilityChipLabel(order) }}</ion-label>
+              </ion-chip>
+              <p>{{ brokeredProgressLabel(order) }}</p>
+            </template>
+            <template v-else>
+              <ion-note class="brokered-empty">{{ translate('Not brokered') }}</ion-note>
+            </template>
           </ion-label>
 
-          <ion-label class="tablet">
+          <ion-label class="tablet ion-text-start">
+            <p class="overline">{{ translate('Ordered') }}</p>
             {{ formatDateTime(order.orderDate) }}
-            <p>{{ orderedRelativeLabel(order.orderDate) }}</p>
+            <p v-if="orderedRelativeLabel(order.orderDate)">{{ orderedRelativeLabel(order.orderDate) }}</p>
           </ion-label>
 
           <ion-label class="queue-delivery ion-text-end">
+            <p class="overline">{{ translate('Estimated delivery date') }}</p>
             {{ estimatedDeliveryDateLabel(order) }}
-            <p>{{ translate('Estimated delivery date') }}</p>
-            <p v-if="estimatedDeliveryRelativeLabel(order)">{{ estimatedDeliveryRelativeLabel(order) }}</p>
+            <p
+              v-if="estimatedDeliveryRelativeLabel(order)"
+              :class="{ 'delivery-overdue': isDeliveryOverdue(order) }"
+            >
+              {{ isDeliveryOverdue(order) ? translate('Overdue') : '' }} {{ estimatedDeliveryRelativeLabel(order) }}
+            </p>
           </ion-label>
         </div>
       </ion-list>
@@ -165,6 +188,7 @@ import {
   IonButton,
   IonButtons,
   IonCheckbox,
+  IonChip,
   IonContent,
   IonFooter,
   IonHeader,
@@ -183,6 +207,7 @@ import {
   IonSelect,
   IonSelectOption,
   IonTitle,
+  IonToggle,
   IonToolbar,
   alertController,
   modalController,
@@ -345,6 +370,8 @@ function clearFilters() {
     productStoreId: selectedProductStoreId.value,
     dateFrom: '',
     dateThru: '',
+    hasVirtualFacilityItems: false,
+    archivedOnly: false,
   };
 }
 
@@ -415,48 +442,21 @@ function statusColor(statusId: string) {
   return commonUtil.getColorByDesc(label) || commonUtil.getColorByDesc(statusId) || commonUtil.getColorByDesc('default');
 }
 
-function createdDateLabel(value: string) {
-  const date = parseOrderDate(value);
-  if (!date?.isValid) return value || 'Date unavailable';
-
-  const now = DateTime.now();
-  if (date.hasSame(now, 'day')) {
-    const hoursAgo = Math.max(0, Math.floor(now.diff(date, 'hours').hours));
-    if (hoursAgo < 1) return 'Created less than 1h ago';
-    return `Created ${hoursAgo}h ago`;
-  }
-
-  return `Created ${date.toLocaleString(DateTime.DATE_MED)}`;
+function brokeredFacilityChipLabel(order: any) {
+  const splitCount = Number(order.brokeredFacilitySplitCount) || 0;
+  return splitCount > 0 ? `${order.brokeredFacilityName} +${splitCount}` : order.brokeredFacilityName;
 }
 
-function shipTimeLeftLabel(value: string) {
-  const date = parseOrderDate(value);
-  if (!date?.isValid) return 'time unavailable';
-
-  const shipBy = date.plus({ hours: 24 });
-  const minutesLeft = Math.ceil(shipBy.diffNow('minutes').minutes);
-
-  if (minutesLeft <= 0) return 'overdue';
-  if (minutesLeft < 60) return `in ${minutesLeft}m`;
-
-  const hours = Math.floor(minutesLeft / 60);
-  const minutes = minutesLeft % 60;
-  return minutes ? `in ${hours}h ${minutes}m` : `in ${hours}h`;
+function brokeredProgressLabel(order: any) {
+  const brokered = Number(order.brokeredItemCount) || 0;
+  const total = Number(order.totalItemCount) || 0;
+  return translate('{brokered}/{total} brokered', { brokered, total });
 }
 
-function parseOrderDate(value: string) {
-  if (!value) return undefined;
-
-  if (/^\d+$/.test(value)) {
-    const numericValue = Number(value);
-    return DateTime.fromMillis(value.length <= 10 ? numericValue * 1000 : numericValue);
-  }
-
-  return DateTime.fromISO(value);
-}
-
+// Urgency is derived from a REAL indexed date (estimatedDeliveryDate, falling back to
+// promisedDatetime when present) — not orderDate+24h, which was the order-created date.
 function estimatedDeliveryValue(order: any) {
-  return order.estimatedDeliveryDate || order.shipBeforeDate || order.shipByDate || '';
+  return order.estimatedDeliveryDate || order.promisedDatetime || '';
 }
 
 function estimatedDeliveryDateLabel(order: any) {
@@ -471,10 +471,15 @@ function estimatedDeliveryRelativeLabel(order: any) {
   return date?.toRelative() || '';
 }
 
+function isDeliveryOverdue(order: any) {
+  const date = dateFromValue(estimatedDeliveryValue(order));
+  return Boolean(date && date < DateTime.now());
+}
+
 function orderedRelativeLabel(orderDateValue: string) {
+  // The column already carries an "Ordered" overline, so this is just the relative delta.
   const date = dateFromValue(orderDateValue);
-  const relativeDate = date?.toRelative();
-  return relativeDate ? `${translate('Ordered')} ${relativeDate}` : '';
+  return date?.toRelative() || '';
 }
 
 function formatDateTime(value: string) {
@@ -533,5 +538,19 @@ function dateFromValue(value?: string | null) {
   max-width: 10rem;
   min-width: 10rem;
   width: 10rem;
+}
+
+.brokered-facility-chip {
+  margin-inline: 0;
+  max-width: 100%;
+}
+
+.brokered-empty {
+  font-size: 0.85em;
+}
+
+.delivery-overdue {
+  color: var(--ion-color-danger);
+  font-weight: 600;
 }
 </style>

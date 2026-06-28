@@ -342,12 +342,17 @@ export interface Order {
   deliveryMethod: string;
   priority: string;
   parkingUnitCount?: number;
+  brokeredFacilityName?: string;
+  brokeredFacilitySplitCount?: number;
+  brokeredItemCount?: number;
+  totalItemCount?: number;
   shippingAddress1?: string;
   shippingCity?: string;
   shippingStateProvinceGeoId?: string;
   shippingPostalCode?: string;
   shippingCountryGeoId?: string;
   estimatedDeliveryDate?: string;
+  promisedDatetime?: string;
   shipBeforeDate?: string;
   shipByDate?: string;
   queueReason?: string;

@@ -1,5 +1,11 @@
 {
   "#": "#",
+  "Archived orders": "Pedidos archivados",
+  "Items at virtual facilities": "Artículos en instalaciones virtuales",
+  "Not brokered": "Sin asignar",
+  "Overdue": "Atrasado",
+  "Sort by order date": "Ordenar por fecha del pedido",
+  "{brokered}/{total} brokered": "{brokered}/{total} asignados",
   "A store represents a company or a unique catalog of products. If your OMS is connected to multiple eCommerce stores selling different collections of products, you may have multiple Product Stores set up in HotWax Commerce.": "Una tienda representa una empresa o un catálogo único de productos. Si su OMS está conectada a múltiples tiendas de comercio electrónico que venden diferentes colecciones de productos, es posible que tenga configuradas varias tiendas de productos en HotWax Commerce.",
   "Add": "Add",
   "Add Attribute": "Add Attribute",
