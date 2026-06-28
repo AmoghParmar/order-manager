@@ -210,7 +210,6 @@ export const useOrderTaskStore = defineStore('orderTask', {
           this.holdStatus = 'error';
           this.holdError = 'Failed to load hold tasks. Please try again.';
         }
-        throw err;
       }
     },
     async fetchAddressValidationTasks(payload: { pageSize?: any; pageIndex?: any; currentUserPartyId?: string; createdDate_from?: number; createdDate_thru?: number; orderName?: string; orderName_op?: string; salesChannelEnumId?: string } = {}) {

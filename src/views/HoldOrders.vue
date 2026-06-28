@@ -146,7 +146,6 @@ const salesChannels = computed(() => seedStore.getEnumsByType('ORDER_SALES_CHANN
 const currentUserPartyId = computed(() => userStore.getUserProfile?.partyId || userStore.getUserProfile?.userId || '');
 
 const searchQuery = ref('');
-const swappable = ref(false);
 const assignee = ref('');
 const dateAfter = ref('');
 const dateBefore = ref('');
@@ -218,7 +217,6 @@ watch(heldTasks, () => {
 
 function clearFilters() {
   searchQuery.value = '';
-  swappable.value = false;
   assignee.value = '';
   dateAfter.value = '';
   dateBefore.value = '';
@@ -259,21 +257,16 @@ async function resolveSelectedTasks() {
 
 
 const fetchHoldTasks = async (pageSize?: any, pageIndex?: any) => {
-  // The store owns the loading/error status; swallow here so a failed fetch
-  // surfaces as the error state instead of an unhandled rejection.
-  try {
-    await orderTaskStore.fetchHoldTasks({
-      pageSize: pageSize ?? import.meta.env.VITE_VIEW_SIZE,
-      pageIndex: pageIndex ?? 0,
-      ...(dateAfter.value && { createdDate_from: new Date(dateAfter.value).getTime() }),
-      ...(dateBefore.value && { createdDate_thru: new Date(dateBefore.value).getTime() }),
-      ...(searchQuery.value && { orderName: searchQuery.value, orderName_op: 'like' }),
-      ...(orderChannel.value && { salesChannelEnumId: orderChannel.value }),
-      ...(assignee.value === 'me' && currentUserPartyId.value && { currentUserPartyId: currentUserPartyId.value }),
-    });
-  } catch {
-    // Status/error already recorded in the store.
-  }
+  // The store owns loading/error status and keeps failures in state.
+  await orderTaskStore.fetchHoldTasks({
+    pageSize: pageSize ?? import.meta.env.VITE_VIEW_SIZE,
+    pageIndex: pageIndex ?? 0,
+    ...(dateAfter.value && { createdDate_from: new Date(dateAfter.value).getTime() }),
+    ...(dateBefore.value && { createdDate_thru: new Date(dateBefore.value).getTime() }),
+    ...(searchQuery.value && { orderName: searchQuery.value, orderName_op: 'like' }),
+    ...(orderChannel.value && { salesChannelEnumId: orderChannel.value }),
+    ...(assignee.value === 'me' && currentUserPartyId.value && { currentUserPartyId: currentUserPartyId.value }),
+  });
 };
 
 async function loadMoreHoldTasks(event: any) {
