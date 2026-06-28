@@ -113,9 +113,8 @@
           </ion-item>
 
           <ion-label class="tablet ion-text-start">
-            {{ order.customerName || order.customerId || translate('Unknown customer') }}
-            <p v-if="customerAddressLine(order)">{{ customerAddressLine(order) }}</p>
-            <p v-if="customerAddressTrailingLine(order)">{{ customerAddressTrailingLine(order) }}</p>
+            {{ order.customerName || translate('Unknown customer') }}
+            <p v-if="order.customerId">{{ order.customerId }}</p>
           </ion-label>
 
           <ion-label class="tablet ion-text-start">
@@ -454,23 +453,6 @@ function parseOrderDate(value: string) {
   }
 
   return DateTime.fromISO(value);
-}
-
-function customerAddressLine(order: any) {
-  // Only the real shipping address — no id fallbacks, which would just repeat the
-  // order id / external id already shown in the first column.
-  return order.shippingAddress1 || '';
-}
-
-function customerAddressTrailingLine(order: any) {
-  const parts = [
-    order.shippingCity,
-    order.shippingStateProvinceGeoId,
-    order.shippingPostalCode,
-    order.shippingCountryGeoId
-  ].filter(Boolean);
-
-  return parts.length ? parts.join(' ') : '';
 }
 
 function estimatedDeliveryValue(order: any) {
