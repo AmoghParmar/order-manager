@@ -203,7 +203,7 @@
               <ion-card-title>{{ translate('Fraud risk') }}</ion-card-title>
             </ion-card-header>
             <ion-list lines="none">
-              <ion-item button detail @click="selectedSegment = 'risk'">
+              <ion-item button detail @click="selectedSegment = 'holds'">
                 <ion-icon slot="start" :icon="shieldOutline" :color="riskLevelColor(order.riskLevelEnumId)" />
                 <ion-label>
                   <p>{{ translate('Recommendation') }}</p>
@@ -227,9 +227,6 @@
         </ion-segment-button>
         <ion-segment-button value="holds">
           <ion-label>{{ translate('Holds') }}</ion-label>
-        </ion-segment-button>
-        <ion-segment-button value="risk">
-          <ion-label>{{ translate('Risk') }}</ion-label>
         </ion-segment-button>
         <ion-segment-button value="comms">
           <ion-label>{{ translate('Comms') }}</ion-label>
@@ -835,6 +832,57 @@
       </div>
 
       <div v-if="selectedSegment === 'holds'">
+        <div v-if="hasRiskContext" class="risk-summary">
+          <ion-list>
+            <ion-list-header>
+              <ion-label>{{ translate('Fraud risk') }}</ion-label>
+            </ion-list-header>
+            <ion-item lines="none" v-if="riskSummary.hasRiskSignal">
+              <ion-icon slot="start" :icon="shieldOutline" :color="riskLevelColor(order.riskLevelEnumId)" />
+              <ion-label>
+                {{ riskSummary.recommendation }}
+                <p>{{ translate('Recommendation') }}</p>
+              </ion-label>
+              <ion-badge slot="end" :color="riskLevelColor(order.riskLevelEnumId)">{{ riskSummary.level }}</ion-badge>
+            </ion-item>
+          </ion-list>
+
+          <ion-list v-if="riskAssessmentsStatus === 'loading'">
+            <ion-item lines="none">
+              <ion-label>{{ translate('Loading risk assessments...') }}</ion-label>
+            </ion-item>
+          </ion-list>
+
+          <ErrorState
+            v-else-if="riskAssessmentsStatus === 'error'"
+            :title="translate('Risk assessments failed to load')"
+            :message="riskAssessmentsError"
+          />
+
+          <ion-list v-else-if="riskAssessments.length">
+            <ion-list-header>
+              <ion-label>{{ translate('Assessment details') }}</ion-label>
+            </ion-list-header>
+            <ion-item v-for="risk in riskAssessments" :key="risk.providerId">
+              <ion-icon slot="start" :icon="informationCircleOutline" :color="riskLevelColor(risk.riskLevelEnumId)" />
+              <ion-label>
+                {{ risk.providerName || risk.providerId || translate('Risk provider') }}
+                <p>{{ seed.enumDescription(risk.riskLevelEnumId) }}</p>
+                <template v-for="fact in risk.facts || []" :key="fact.factSeqId">
+                  <p>{{ fact.description }} · {{ seed.enumDescription(fact.sentimentEnumId) }}</p>
+                </template>
+              </ion-label>
+              <ion-note slot="end">{{ formatDate(risk.createdDate) }}</ion-note>
+            </ion-item>
+          </ion-list>
+
+          <ion-list v-else>
+            <ion-item lines="none">
+              <ion-label>{{ translate('No risk assessments for this order') }}</ion-label>
+            </ion-item>
+          </ion-list>
+        </div>
+
         <template v-if="hasOrderHoldTasks">
           <BadAddressTaskCard v-for="task in orderAddressValidationTasks" :key="task.workEffortId" :task="task"
             @completed="reloadHoldTasks" />
@@ -845,58 +893,7 @@
           <HoldTaskCard v-for="task in orderHoldTasks" :key="task.workEffortId" :task="task"
             @completed="reloadHoldTasks" />
         </template>
-        <EmptyState v-else :title="translate('No holds')" :message="translate('No holds on this order')" />
-      </div>
-
-      <div v-if="selectedSegment === 'risk'">
-        <ion-list>
-          <ion-list-header>
-            <ion-label>{{ translate('Fraud risk') }}</ion-label>
-          </ion-list-header>
-          <ion-item lines="none">
-            <ion-icon slot="start" :icon="shieldOutline" :color="riskLevelColor(order.riskLevelEnumId)" />
-            <ion-label>
-              {{ riskSummary.recommendation }}
-              <p>{{ translate('Recommendation') }}</p>
-            </ion-label>
-            <ion-badge slot="end" :color="riskLevelColor(order.riskLevelEnumId)">{{ riskSummary.level }}</ion-badge>
-          </ion-item>
-        </ion-list>
-
-        <ion-list v-if="riskAssessmentsStatus === 'loading'">
-          <ion-item lines="none">
-            <ion-label>{{ translate('Loading risk assessments...') }}</ion-label>
-          </ion-item>
-        </ion-list>
-
-        <ErrorState
-          v-else-if="riskAssessmentsStatus === 'error'"
-          :title="translate('Risk assessments failed to load')"
-          :message="riskAssessmentsError"
-        />
-
-        <ion-list v-else-if="riskAssessments.length">
-          <ion-list-header>
-            <ion-label>{{ translate('Assessment details') }}</ion-label>
-          </ion-list-header>
-          <ion-item v-for="risk in riskAssessments" :key="risk.providerId">
-            <ion-icon slot="start" :icon="informationCircleOutline" :color="riskLevelColor(risk.riskLevelEnumId)" />
-            <ion-label>
-              {{ risk.providerName || risk.providerId || translate('Risk provider') }}
-              <p>{{ seed.enumDescription(risk.riskLevelEnumId) }}</p>
-              <template v-for="fact in risk.facts || []" :key="fact.factSeqId">
-                <p>{{ fact.description }} · {{ seed.enumDescription(fact.sentimentEnumId) }}</p>
-              </template>
-            </ion-label>
-            <ion-note slot="end">{{ formatDate(risk.createdDate) }}</ion-note>
-          </ion-item>
-        </ion-list>
-
-        <ion-list v-else>
-          <ion-item lines="none">
-            <ion-label>{{ translate('No risk assessments for this order') }}</ion-label>
-          </ion-item>
-        </ion-list>
+        <EmptyState v-else-if="!hasRiskContext" :title="translate('No holds')" :message="translate('No holds on this order')" />
       </div>
 
       <div v-if="selectedSegment === 'comms'">
@@ -1510,6 +1507,16 @@ const riskSummary = computed(() => {
   };
 });
 
+// Whether the merged Holds segment has any risk context to show (signal, in-flight/error
+// state, or assessments). Used to render the risk summary section and to suppress the
+// "No holds" empty state when only risk-review work exists.
+const hasRiskContext = computed(() =>
+  riskSummary.value.hasRiskSignal
+  || riskAssessmentsStatus.value === 'loading'
+  || riskAssessmentsStatus.value === 'error'
+  || riskAssessments.value.length > 0
+);
+
 const paymentReceivedTotal = computed(() =>
   (order.value?.payments || []).reduce((sum: number, payment: any) => sum + Number(payment.amount || 0), 0)
 );
@@ -1530,8 +1537,8 @@ watch(selectedSegment, (segment) => {
   if (!props.orderId) return;
   if (segment === 'holds') {
     orderTaskStore.fetchOrderHoldTasks(props.orderId);
+    orderDetailStore.fetchRiskAssessments(props.orderId);
   }
-  if (segment === 'risk') orderDetailStore.fetchRiskAssessments(props.orderId);
   if (segment === 'comms') orderDetailStore.fetchCommEvents(props.orderId);
 });
 
