@@ -1,5 +1,11 @@
 {
   "#": "#",
+  "Archived orders": "Archived orders",
+  "Items at virtual facilities": "Items at virtual facilities",
+  "Not brokered": "Not brokered",
+  "Overdue": "Overdue",
+  "Sort by order date": "Sort by order date",
+  "{brokered}/{total} brokered": "{brokered}/{total} brokered",
   "A store represents a company or a unique catalog of products. If your OMS is connected to multiple eCommerce stores selling different collections of products, you may have multiple Product Stores set up in HotWax Commerce.": "A store represents a company or a unique catalog of products. If your OMS is connected to multiple eCommerce stores selling different collections of products, you may have multiple Product Stores set up in HotWax Commerce.",
   "Add": "Add",
   "Add Attribute": "Add Attribute",
