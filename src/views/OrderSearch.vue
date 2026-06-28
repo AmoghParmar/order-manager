@@ -128,14 +128,14 @@
           </ion-label>
 
           <ion-label class="tablet ion-text-start">
-            <template v-if="order.brokeredFacilityName">
+            <template v-if="locationChipName(order)">
               <ion-chip class="brokered-facility-chip" outline>
-                <ion-label>{{ brokeredFacilityChipLabel(order) }}</ion-label>
+                <ion-label>{{ locationChipLabel(order) }}</ion-label>
               </ion-chip>
               <p>{{ brokeredProgressLabel(order) }}</p>
             </template>
             <template v-else>
-              <ion-note class="brokered-empty">{{ translate('Not brokered') }}</ion-note>
+              <ion-note>{{ translate('Not brokered') }}</ion-note>
             </template>
           </ion-label>
 
@@ -148,10 +148,7 @@
           <ion-label class="queue-delivery ion-text-end">
             <p class="overline">{{ translate('Estimated delivery date') }}</p>
             {{ estimatedDeliveryDateLabel(order) }}
-            <p
-              v-if="estimatedDeliveryRelativeLabel(order)"
-              :class="{ 'delivery-overdue': isDeliveryOverdue(order) }"
-            >
+            <p v-if="estimatedDeliveryRelativeLabel(order)">
               {{ isDeliveryOverdue(order) ? translate('Overdue') : '' }} {{ estimatedDeliveryRelativeLabel(order) }}
             </p>
           </ion-label>
@@ -442,9 +439,18 @@ function statusColor(statusId: string) {
   return commonUtil.getColorByDesc(label) || commonUtil.getColorByDesc(statusId) || commonUtil.getColorByDesc('default');
 }
 
-function brokeredFacilityChipLabel(order: any) {
-  const splitCount = Number(order.brokeredFacilitySplitCount) || 0;
-  return splitCount > 0 ? `${order.brokeredFacilityName} +${splitCount}` : order.brokeredFacilityName;
+function locationChipName(order: any) {
+  return order.brokeredFacilityName || order.dominantVirtualFacilityName || '';
+}
+
+function locationChipLabel(order: any) {
+  const splitCount = Number(
+    order.brokeredFacilityName
+      ? order.brokeredFacilitySplitCount
+      : order.dominantVirtualFacilitySplitCount
+  ) || 0;
+  const facilityName = locationChipName(order);
+  return splitCount > 0 ? `${facilityName} +${splitCount}` : facilityName;
 }
 
 function brokeredProgressLabel(order: any) {
@@ -545,12 +551,4 @@ function dateFromValue(value?: string | null) {
   max-width: 100%;
 }
 
-.brokered-empty {
-  font-size: 0.85em;
-}
-
-.delivery-overdue {
-  color: var(--ion-color-danger);
-  font-weight: 600;
-}
 </style>
