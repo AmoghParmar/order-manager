@@ -1,26 +1,17 @@
 <template>
-  <!--
-    Shared key/value row for order- and item-level attributes (issue #287).
-    Name sits at the start and the value trails on the same line when there is
-    room; on narrow widths the value wraps beneath the name. Description stays
-    secondary. Built from core Ionic + flexbox only (no ion-grid/row/col).
-  -->
-  <ion-item :lines="lines">
-    <ion-label class="attribute-kv">
-      <div class="attribute-kv__pair">
-        <span>{{ name }}</span>
-        <span class="attribute-kv__value">
-          {{ hasValue ? value : translate('Value not available') }}
-        </span>
-      </div>
-      <p v-if="description" class="attribute-kv__description">{{ description }}</p>
-    </ion-label>
+  <div class="attribute-kv">
+    <dl class="attribute-kv__terms">
+      <dt>{{ name }}</dt>
+      <dd class="attribute-kv__value">
+        {{ hasValue ? value : translate('Value not available') }}
+      </dd>
+      <dd v-if="description" class="attribute-kv__description">{{ description }}</dd>
+    </dl>
     <slot name="end" />
-  </ion-item>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { IonItem, IonLabel } from '@ionic/vue';
 import { computed } from 'vue';
 import { translate } from '@common';
 
@@ -28,11 +19,9 @@ const props = withDefaults(defineProps<{
   name: string;
   value?: string | null;
   description?: string;
-  lines?: 'full' | 'inset' | 'none';
 }>(), {
   value: '',
   description: '',
-  lines: 'none',
 });
 
 const hasValue = computed(() => {
@@ -42,19 +31,36 @@ const hasValue = computed(() => {
 </script>
 
 <style scoped>
-.attribute-kv__pair {
+.attribute-kv {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 16px;
+}
+
+.attribute-kv__terms {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 2px 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
 }
 
 .attribute-kv__value {
+  margin: 0;
   word-break: break-word;
 }
 
 .attribute-kv__description {
-  margin-top: 4px;
+  flex: 1 0 100%;
+  margin: 4px 0 0;
+}
+
+.attribute-kv > :slotted(*) {
+  flex: 0 0 auto;
 }
 </style>

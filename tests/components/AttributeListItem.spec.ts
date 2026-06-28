@@ -7,17 +7,21 @@ describe('AttributeListItem', () => {
 
   it('maps the name and value into a horizontal key/value pair', () => {
     // Name at the start, value trailing on the same row, both inside one
-    // wrapping flex container so they stack on narrow widths.
-    expect(source).toContain('class="attribute-kv__pair"');
-    expect(source).toContain('{{ name }}');
+    // native definition list so they stack on narrow widths.
+    expect(source).toContain('<dl class="attribute-kv__terms">');
+    expect(source).toContain('<dt>{{ name }}</dt>');
     expect(source).toContain('class="attribute-kv__value"');
     expect(source).toContain('hasValue ? value : translate(\'Value not available\')');
   });
 
-  it('uses flexbox rather than ion-grid for the layout', () => {
+  it('uses native HTML and flexbox rather than an ion-item layout', () => {
     expect(source).toContain('display: flex;');
     expect(source).toContain('flex-wrap: wrap;');
     expect(source).toContain('justify-content: space-between;');
+    expect(source).not.toContain('<ion-item');
+    expect(source).not.toContain('<ion-label');
+    expect(source).not.toContain('IonItem');
+    expect(source).not.toContain('IonLabel');
     expect(source).not.toContain('<ion-grid');
     expect(source).not.toContain('<ion-row');
     expect(source).not.toContain('<ion-col');
