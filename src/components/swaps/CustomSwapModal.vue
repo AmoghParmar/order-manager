@@ -117,6 +117,7 @@ const props = defineProps<{
   substituteProducts: any[];
   facilityId: string;
   selectedProductId?: string;
+  defaultSearchKeyword?: string;
 }>();
 
 const PAGE_SIZE = 20;
@@ -128,7 +129,7 @@ const selectedProductData = ref<any>(
 );
 
 // Search state
-const searchKeyword = ref('');
+const searchKeyword = ref((props.defaultSearchKeyword ?? '').trim());
 const searchResults = ref<any[]>([]);
 const isSearching = ref(false);
 const searchPageIndex = ref(0);
@@ -252,10 +253,17 @@ function save() {
 
 onMounted(async () => {
   const productIds = props.substituteProducts.map((p: any) => p.productId).filter(Boolean);
-  if (productIds.length) {
-    useProductMaster().init();
-    await useProductMaster().prefetch(productIds);
-  }
+  await Promise.all([
+    seedStore.loadFacilities(),
+    productIds.length
+      ? (async () => {
+          useProductMaster().init();
+          await useProductMaster().prefetch(productIds);
+        })()
+      : Promise.resolve()
+  ]);
+
+  if (searchKeyword.value.trim()) await searchProducts(0, false);
 });
 </script>
 

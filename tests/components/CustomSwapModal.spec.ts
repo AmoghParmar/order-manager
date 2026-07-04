@@ -8,6 +8,7 @@ describe('custom swap modal facility stock labels', () => {
   it('labels substitute and search stock as facility-scoped inventory', () => {
     expect(source).toContain("import { useSeedStore } from '@/store/seed';");
     expect(source).toContain('seedStore.facilityName(props.facilityId)');
+    expect(source).toContain('seedStore.loadFacilities()');
     expect(source).toContain('function facilityStockLabel');
     expect(source).toContain("translate('Available at {facility}: {count}'");
     expect(source).toContain("translate('Available: {count}'");
@@ -15,6 +16,13 @@ describe('custom swap modal facility stock labels', () => {
     expect(source).toContain('facilityStockLabel(product.inventoryConfig?.computedLastInventoryCount)');
     expect(source).not.toContain('<ion-note slot="end">{{ getSubstituteStock(product.productId)?.computedAtp ?? 0 }}</ion-note>');
     expect(source).not.toContain('<ion-note slot="end">{{ product.inventoryConfig?.computedLastInventoryCount ?? 0 }}</ion-note>');
+  });
+
+  it('seeds Product Search from the provided product context', () => {
+    expect(source).toContain('defaultSearchKeyword?: string;');
+    expect(source).toContain("const searchKeyword = ref((props.defaultSearchKeyword ?? '').trim());");
+    expect(source).toContain('if (searchKeyword.value.trim()) await searchProducts(0, false);');
+    expect(source).toContain("keyword: searchKeyword.value.trim()");
   });
 
   it('keeps the existing Ionic modal/list structure without grid layout', () => {
