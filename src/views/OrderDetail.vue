@@ -1023,7 +1023,7 @@ import SwapTaskCard from '@/components/tasks/SwapTaskCard.vue';
 import FraudTaskCard from '@/components/tasks/FraudTaskCard.vue';
 import HoldTaskCard from '@/components/tasks/HoldTaskCard.vue';
 import CloneOrderModal from '@/components/orders/CloneOrderModal.vue';
-import { api, commonUtil, DxpShopifyImg, translate, useSolrSearch } from '@common';
+import { api, commonUtil, DxpShopifyImg, logger, translate, useSolrSearch } from '@common';
 import { showToast, isKit, riskLevelColor } from '@/utils';
 import { OrderActionValidator } from '@/utils/OrderActionValidator';
 import { shopifyAdminOrderUrl } from '@/utils/shopifyAdmin';
@@ -1046,6 +1046,54 @@ const { isLoading: loading, error } = storeToRefs(orderDetailStore);
 
 const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);
 const customerPartyId = computed(() => orderDetailStore.customerPartyId);
+
+// Shopify Admin deep-link. The shop is resolved from the order's own shopifyShopOrder
+// record (the shop it actually came from — same source CloneOrderModal uses), never
+// inferred from the product store: a store can feed multiple shops, and an order
+// without the record didn't come from Shopify at all. No record / no myshopify domain
+// degrades to no link. The URL is a computed over the seed dataset so it appears
+// reactively even when the boot-time shops load finishes after the order renders.
+const shopifyOrderShopId = ref('');
+// Successful resolutions are memoized (the order→shop mapping is immutable): force
+// reloads skip the refetch — no link flicker, and a transient refetch failure can't
+// erase an already-resolved link. Not set on error, so the next loadOrder retries.
+let resolvedShopifyShop = { orderId: '', shopId: '' };
+
+const shopifyOrderId = computed(() => {
+  const identifications = orderDetailStore.current?.identifications || [];
+  return identifications.find((identification: any) => identification.orderIdentificationTypeId === 'SHOPIFY_ORD_ID')?.idValue ?? '';
+});
+
+const shopifyAdminUrl = computed(() => {
+  if (!shopifyOrderShopId.value || !shopifyOrderId.value) return '';
+  const shop: any = seed.shopifyShops.byId[shopifyOrderShopId.value];
+  return shop ? shopifyAdminOrderUrl(shop.myshopifyDomain || shop.domain, shopifyOrderId.value) : '';
+});
+
+async function resolveShopifyOrderShop(orderId: string) {
+  // Stale caller: a slow loadOrder for a previously viewed order must not clobber
+  // the state of the order now on screen.
+  if (orderId !== props.orderId) return;
+  if (resolvedShopifyShop.orderId === orderId) {
+    // Already resolved — re-assert rather than trust the ref: a racing resolver for
+    // another order may have cleared it before its stale response was discarded.
+    shopifyOrderShopId.value = resolvedShopifyShop.shopId;
+    return;
+  }
+  shopifyOrderShopId.value = '';
+  if (!shopifyOrderId.value) return;
+  seed.loadShopifyShops();
+  try {
+    const resp = await api({ url: `oms/orders/${orderId}/shopifyShopOrder`, method: 'GET' });
+    const rows: any[] = Array.isArray(resp.data) ? resp.data : (resp.data?.docs ?? []);
+    if (orderId !== props.orderId) return; // stale response after navigating to another order
+    shopifyOrderShopId.value = rows.find((row: any) => row.shopId)?.shopId || '';
+    resolvedShopifyShop = { orderId, shopId: shopifyOrderShopId.value };
+  } catch (error) {
+    logger.error('Failed to resolve the Shopify shop for the order', error);
+  }
+}
+
 /**
  * View model — adapts the raw order master-detail payload to the shape this template
  * already binds, joining IDs to labels through the seed store and product cache. The
@@ -1084,22 +1132,14 @@ const order = computed(() => {
       changeReason: entry.changeReason || '',
       at: entry.statusDatetime
     })),
-    identifications: (raw.identifications || []).map((identification: any) => {
-      // The SHOPIFY_ORD_ID identification value is the Shopify order id; pair it with
-      // the shop's myshopify domain (matched by product store) to deep-link into the
-      // Shopify Admin order screen. Mirrors the Moqui OMS get#OrderShopifyUrl service.
-      const shop = identification.orderIdentificationTypeId === 'SHOPIFY_ORD_ID'
-        ? seed.shopifyShopByProductStore(raw.productStoreId)
-        : null;
-      return {
-        orderIdentificationTypeId: identification.orderIdentificationTypeId,
-        typeLabel: seed.orderIdentificationTypeDescription(identification.orderIdentificationTypeId),
-        idValue: identification.idValue,
-        shopifyAdminUrl: shop
-          ? shopifyAdminOrderUrl(shop.myshopifyDomain || shop.domain, identification.idValue)
-          : ''
-      };
-    }),
+    identifications: (raw.identifications || []).map((identification: any) => ({
+      orderIdentificationTypeId: identification.orderIdentificationTypeId,
+      typeLabel: seed.orderIdentificationTypeDescription(identification.orderIdentificationTypeId),
+      idValue: identification.idValue,
+      // Deep-link into the Shopify Admin order screen; resolved per-order from its
+      // shopifyShopOrder record (see resolveShopifyOrderShop), never inferred.
+      shopifyAdminUrl: identification.orderIdentificationTypeId === 'SHOPIFY_ORD_ID' ? shopifyAdminUrl.value : ''
+    })),
     payments: (raw.paymentPreferences || []).map((payment: any) => ({
       id: payment.orderPaymentPreferenceId,
       paymentMethodTypeId: payment.paymentMethodTypeId,
@@ -1681,6 +1721,9 @@ async function loadOrder(orderId: string, force = false) {
   } else {
     await orderDetailStore.setCurrentOrder(orderId);
   }
+  // Fire-and-forget: the Shopify Admin link hydrates when it resolves; the page
+  // never waits on it.
+  resolveShopifyOrderShop(orderId);
   if (customerPartyId.value) {
     await customerStore.loadCustomerProfile(customerPartyId.value, force);
   }

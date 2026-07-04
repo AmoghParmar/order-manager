@@ -242,13 +242,14 @@ export const useProductStore = defineStore('productStore', {
           viewSize: 10
         })
 
-        // searchProducts returns an array of docs on hits, and {} when the
-        // catalog has none. An empty catalog is a normal state (e.g. a fresh
-        // OMS with nothing indexed yet), not an error.
-        this.settings.productIdentifier.sampleProducts = Array.isArray(resp.products) ? resp.products : []
-        this.shuffleProduct()
+        if (resp.products.length) {
+          this.settings.productIdentifier.sampleProducts = resp.products;
+          this.shuffleProduct()
+        } else {
+          throw resp
+        }
       } catch (error: any) {
-        console.error("Failed to fetch sample products", error)
+        console.error(error)
       }
     },
     shuffleProduct() {
