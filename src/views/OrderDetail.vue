@@ -3112,6 +3112,9 @@ ion-card-header ion-buttons {
 .customer-summary-card ion-card-header {
   align-items: center;
   display: flex;
+  /* Ionic's ion-card-header defaults to flex-direction: column; force row so the
+     name and "View details" sit across from each other instead of stacking. */
+  flex-direction: row;
   gap: var(--spacer-xs);
   justify-content: space-between;
 }
