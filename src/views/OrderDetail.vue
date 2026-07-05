@@ -1042,7 +1042,7 @@ import CloneOrderModal from '@/components/orders/CloneOrderModal.vue';
 import { api, commonUtil, DxpShopifyImg, logger, translate, useSolrSearch } from '@common';
 import { showToast, isKit, riskLevelColor } from '@/utils';
 import { OrderActionValidator } from '@/utils/OrderActionValidator';
-import { shopifyAdminOrderUrl } from '@/utils/shopifyAdmin';
+import { shopifyAdminOrderUrl, singleShopIdForProductStore } from '@/utils/shopifyAdmin';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useUserStore } from '@/store/user';
 import { useProductStore } from '@/store/productStore';
@@ -1063,12 +1063,15 @@ const { isLoading: loading, error } = storeToRefs(orderDetailStore);
 const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);
 const customerPartyId = computed(() => orderDetailStore.customerPartyId);
 
-// Shopify Admin deep-link. The shop is resolved from the order's own shopifyShopOrder
-// record (the shop it actually came from — same source CloneOrderModal uses), never
-// inferred from the product store: a store can feed multiple shops, and an order
-// without the record didn't come from Shopify at all. No record / no myshopify domain
-// degrades to no link. The URL is a computed over the seed dataset so it appears
-// reactively even when the boot-time shops load finishes after the order renders.
+// Shopify Admin deep-link. Primary source is the order's own shopifyShopOrder record
+// (the shop it actually came from — same source CloneOrderModal uses). That endpoint
+// isn't exposed by the connector yet (hotwax/mantle-shopify-connector#381), so until
+// it ships we fall back to inferring the shop from the order's product store, but ONLY
+// when exactly one Shopify shop maps to that store (see fallbackShopIdByProductStore) —
+// an ambiguous multi-shop store or an unknown store degrades to no link, so we never
+// point at the wrong store. No shop / no myshopify domain also degrades to no link. The
+// URL is a computed over the seed dataset so it appears reactively even when the
+// boot-time shops load finishes after the order renders.
 const shopifyOrderShopId = ref('');
 // Successful resolutions are memoized (the order→shop mapping is immutable): force
 // reloads skip the refetch — no link flicker, and a transient refetch failure can't
@@ -1080,9 +1083,24 @@ const shopifyOrderId = computed(() => {
   return identifications.find((identification: any) => identification.orderIdentificationTypeId === 'SHOPIFY_ORD_ID')?.idValue ?? '';
 });
 
+// Interim fallback until the connector exposes GET oms/orders/{id}/shopifyShopOrder
+// (hotwax/mantle-shopify-connector#381): infer the shop from the order's product store,
+// but ONLY when exactly one Shopify shop maps to it — 0 or >1 matches → '' (no link),
+// so we never link to the wrong store. Reactive over the seed dataset so it resolves
+// once the boot-time shops load completes. Skipped once the record-based id is known.
+const fallbackShopIdByProductStore = computed(() => {
+  if (shopifyOrderShopId.value) return '';
+  const productStoreId = orderDetailStore.current?.productStoreId;
+  if (!productStoreId) return '';
+  const shops = seed.shopifyShops.ids.map((id: string) => seed.shopifyShops.byId[id]);
+  return singleShopIdForProductStore(shops, productStoreId);
+});
+
 const shopifyAdminUrl = computed(() => {
-  if (!shopifyOrderShopId.value || !shopifyOrderId.value) return '';
-  const shop: any = seed.shopifyShops.byId[shopifyOrderShopId.value];
+  if (!shopifyOrderId.value) return '';
+  const shopId = shopifyOrderShopId.value || fallbackShopIdByProductStore.value;
+  if (!shopId) return '';
+  const shop: any = seed.shopifyShops.byId[shopId];
   return shop ? shopifyAdminOrderUrl(shop.myshopifyDomain || shop.domain, shopifyOrderId.value) : '';
 });
 
@@ -1105,8 +1123,13 @@ async function resolveShopifyOrderShop(orderId: string) {
     if (orderId !== props.orderId) return; // stale response after navigating to another order
     shopifyOrderShopId.value = rows.find((row: any) => row.shopId)?.shopId || '';
     resolvedShopifyShop = { orderId, shopId: shopifyOrderShopId.value };
-  } catch (error) {
-    logger.error('Failed to resolve the Shopify shop for the order', error);
+  } catch (error: any) {
+    // 404 is expected until the connector exposes this endpoint
+    // (hotwax/mantle-shopify-connector#381); the product-store fallback covers the
+    // link meanwhile. Only surface genuinely unexpected failures.
+    if (error?.response?.status !== 404) {
+      logger.error('Failed to resolve the Shopify shop for the order', error);
+    }
   }
 }
 

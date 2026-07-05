@@ -43,3 +43,20 @@ export function shopifyAdminOrderUrl(domain?: string | null, shopifyOrderId?: st
   if (!handle || !orderId) return '';
   return `${SHOPIFY_ADMIN_BASE}/${handle}/orders/${encodeURIComponent(orderId)}`;
 }
+
+/**
+ * Interim shop resolver used until the connector exposes the per-order shop record
+ * (hotwax/mantle-shopify-connector#381): the shopId of the *only* Shopify shop mapped
+ * to a product store, or '' when zero or more than one shop matches.
+ *
+ * Deliberately conservative — a product store can feed multiple shops, and linking to
+ * the wrong store is worse than no link — so ambiguity resolves to '' (no deep-link).
+ */
+export function singleShopIdForProductStore(
+  shops: Array<{ shopId?: string | null; productStoreId?: string | null } | null | undefined>,
+  productStoreId?: string | null
+): string {
+  if (!productStoreId) return '';
+  const matches = (shops ?? []).filter((shop) => shop && shop.productStoreId === productStoreId);
+  return matches.length === 1 ? (matches[0]!.shopId ?? '') : '';
+}
