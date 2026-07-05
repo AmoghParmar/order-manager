@@ -182,14 +182,14 @@
 
       <!-- ===== Dashboard ===== -->
       <div v-if="selectedSegment === 'dashboard'">
-        <!-- Open tasks — first page only; Load more is in the Tasks segment -->
+        <!-- Open tasks — first task only; full list is in the Tasks segment -->
         <div class="section-header">
           <h2>{{ translate('Open tasks') }}</h2>
           <ion-button fill="outline" size="small" @click="selectedSegment = 'tasks'">View all</ion-button>
         </div>
 
         <HoldTaskCard
-          v-for="task in customerTaskCards"
+          v-for="task in dashboardTaskCards"
           :key="task.workEffortId"
           :task="task"
           show-view-order-action
@@ -711,6 +711,7 @@ const allOrders = computed(() => {
 });
 const unfillableOrders = computed(() => recentOrdersSource.value.filter((o: CustomerOrderSummary) => o.isUnfillable).map(mapOrder));
 const customerTaskCards = computed(() => openTasks.value.map(mapCustomerTaskCard));
+const dashboardTaskCards = computed(() => customerTaskCards.value.slice(0, 1));
 const returnRows = computed(() => customerReturns.value.map(mapReturnRow));
 
 function mapCustomerTaskCard(task: CustomerTaskSummary) {
