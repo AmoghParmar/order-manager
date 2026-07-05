@@ -90,6 +90,19 @@ function buildVirtualLocationWorkCounts(facilities: { facilityId: string; facili
   return [...rows, ...dynamicRows];
 }
 
+function responseListCount(response: any): number {
+  const headerCount = response?.headers?.get?.('x-total-count')
+    ?? response?.headers?.['x-total-count']
+    ?? response?.headers?.['X-Total-Count'];
+  const fallbackCount = Array.isArray(response?.data) ? response.data.length : 0;
+  const countValue = headerCount !== undefined && headerCount !== null && String(headerCount).trim() !== ''
+    ? headerCount
+    : fallbackCount;
+  const count = Number(countValue);
+
+  return Number.isFinite(count) ? count : fallbackCount;
+}
+
 // Load-status keys for the funnel dashboard metric groups. Each group's fetch
 // transitions its status loading -> success/error so the Funnel view can show
 // per-section loading affordances and surface errors instead of false zeros.
@@ -355,9 +368,9 @@ export const useCustomerServiceStore = defineStore('customerService', {
           })
         ]);
 
-        const swapCount = Number(swapResp.headers?.['x-total-count'] || (Array.isArray(swapResp.data) ? swapResp.data.length : 0));
-        const addressCount = Number(addressResp.headers?.['x-total-count'] || (Array.isArray(addressResp.data) ? addressResp.data.length : 0));
-        const fraudCount = Number(fraudResp.headers?.['x-total-count'] || (Array.isArray(fraudResp.data) ? fraudResp.data.length : 0));
+        const swapCount = responseListCount(swapResp);
+        const addressCount = responseListCount(addressResp);
+        const fraudCount = responseListCount(fraudResp);
 
         this.holdTasks = {
           holdSubstituteCount: swapCount,
