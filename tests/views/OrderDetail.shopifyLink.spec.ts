@@ -13,10 +13,11 @@ describe('order detail Shopify Admin deep-link', () => {
     expect(view).toContain('shopifyAdminOrderUrl(');
   });
 
-  it('never infers the shop from the product store (PR #174 review)', () => {
-    // A product store can feed multiple Shopify shops; inferring by product store
-    // can deep-link into the wrong shop's admin. An order without a
-    // shopifyShopOrder record gets no link instead of a guessed one.
+  it('does not use the old unconstrained product-store shop getter', () => {
+    // Product-store fallback is allowed only through singleShopIdForProductStore,
+    // whose unit tests pin the 0-or-many-shops => no-link behavior.
+    expect(view).toContain('singleShopIdForProductStore');
+    expect(view).toContain('fallbackShopIdByProductStore');
     expect(view).not.toContain('shopifyShopByProductStore');
     expect(seed).not.toContain('shopifyShopByProductStore');
   });

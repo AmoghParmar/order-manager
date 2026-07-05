@@ -1175,8 +1175,8 @@ const order = computed(() => {
       orderIdentificationTypeId: identification.orderIdentificationTypeId,
       typeLabel: seed.orderIdentificationTypeDescription(identification.orderIdentificationTypeId),
       idValue: identification.idValue,
-      // Deep-link into the Shopify Admin order screen; resolved per-order from its
-      // shopifyShopOrder record (see resolveShopifyOrderShop), never inferred.
+      // Deep-link into the Shopify Admin order screen; prefer the per-order
+      // shopifyShopOrder record, with a constrained single-shop product-store fallback.
       shopifyAdminUrl: identification.orderIdentificationTypeId === 'SHOPIFY_ORD_ID' ? shopifyAdminUrl.value : ''
     })),
     payments: (raw.paymentPreferences || []).map((payment: any) => ({
