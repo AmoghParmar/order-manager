@@ -188,7 +188,13 @@
           <ion-button fill="outline" size="small" @click="selectedSegment = 'tasks'">View all</ion-button>
         </div>
 
-        <CustomerTaskSummaryCard v-for="task in openTasks" :key="task.workEffortId" :task="task" />
+        <HoldTaskCard
+          v-for="task in customerTaskCards"
+          :key="task.workEffortId"
+          :task="task"
+          show-view-order-action
+          @completed="refresh"
+        />
         <EmptyState
           v-if="tasksStatus === 'loaded' && !openTasks.length"
           :title="translate('No open tasks')"
@@ -502,7 +508,13 @@
           <h2>{{ translate('Open tasks') }}</h2>
         </div>
 
-        <CustomerTaskSummaryCard v-for="task in openTasks" :key="task.workEffortId" :task="task" />
+        <HoldTaskCard
+          v-for="task in customerTaskCards"
+          :key="task.workEffortId"
+          :task="task"
+          show-view-order-action
+          @completed="refresh"
+        />
 
         <EmptyState
           v-if="tasksStatus === 'loaded' && !openTasks.length"
@@ -550,7 +562,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { DxpShopifyImg, commonUtil, translate } from '@common';
 import {
   IonBackButton,
   IonButton,
@@ -580,7 +592,6 @@ import {
   alertController,
   modalController
 } from '@ionic/vue';
-import { DateTime } from 'luxon';
 import {
   addCircleOutline,
   chevronUp,
@@ -590,19 +601,20 @@ import {
   pricetagOutline,
   trashOutline
 } from 'ionicons/icons';
-import { commonUtil, DxpShopifyImg, translate } from '@common';
-import { useCustomerDetail } from '@/composables/useCustomerDetail';
-import { useProductCacheStore } from '@/store/productCache';
-import { useSeedStore } from '@/store/seed';
-import type { CustomerOrderSummary, CustomerReturnSummary } from '@/types/customer';
+import { DateTime } from 'luxon';
+import { computed, onMounted, ref, watch } from 'vue';
 import AddContactModal from '@/components/AddContactModal.vue';
 import AddRelationshipModal from '@/components/AddRelationshipModal.vue';
-import RelationshipHistoryModal from '@/components/RelationshipHistoryModal.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
-import CustomerTaskSummaryCard from '@/components/tasks/CustomerTaskSummaryCard.vue';
+import RelationshipHistoryModal from '@/components/RelationshipHistoryModal.vue';
+import HoldTaskCard from '@/components/tasks/HoldTaskCard.vue';
+import { useCustomerDetail } from '@/composables/useCustomerDetail';
 import router from '@/router';
 import { deleteCustomerDetails, indexCustomer } from '@/services/customer';
+import { useProductCacheStore } from '@/store/productCache';
+import { useSeedStore } from '@/store/seed';
+import type { CustomerOrderSummary, CustomerReturnSummary, CustomerTaskSummary } from '@/types/customer';
 
 const props = defineProps<{
   customerId: string;
@@ -639,6 +651,7 @@ const {
   lifetimeCurrency,
   customerSince: customerSinceRaw,
   load,
+  refresh,
   loadReturns,
   loadCommunications,
   loadMoreTasks,
@@ -697,7 +710,57 @@ const allOrders = computed(() => {
   return q ? mapped.filter((o) => matchesOrderQuery(o, q)) : mapped;
 });
 const unfillableOrders = computed(() => recentOrdersSource.value.filter((o: CustomerOrderSummary) => o.isUnfillable).map(mapOrder));
+const customerTaskCards = computed(() => openTasks.value.map(mapCustomerTaskCard));
 const returnRows = computed(() => customerReturns.value.map(mapReturnRow));
+
+function mapCustomerTaskCard(task: CustomerTaskSummary) {
+  const customerName = customer.value?.name || '';
+  const customerNameParts = nameParts(customerName);
+
+  return {
+    ...task,
+    grandTotal: Number(task.grandTotal || 0),
+    purposeDescription: seedDescribe(task.workEffortPurposeTypeId || task.workEffortTypeId)
+      || task.workEffortPurposeTypeId
+      || task.workEffortTypeId,
+    estimatedCompletionDate: task.dueDate ? formatLongDate(task.dueDate) : '',
+    resolutionComment: task.resolution || '',
+    customer: {
+      partyId: props.customerId,
+      firstName: customerNameParts.firstName,
+      lastName: customerNameParts.lastName,
+    },
+    customerPhone: contactValue('phone'),
+    customerEmail: contactValue('email'),
+    assignedParties: [
+      ...(task.assigneePartyId || task.assigneeName ? [{
+        partyId: task.assigneePartyId,
+        roleTypeId: 'TASK_ASSIGNEE',
+        fromDate: task.assigneeSince,
+        groupName: task.assigneeName,
+      }] : []),
+      ...(task.reporterPartyId || task.reporterName ? [{
+        partyId: task.reporterPartyId,
+        roleTypeId: 'TASK_REPORTER',
+        fromDate: task.reporterSince,
+        groupName: task.reporterName,
+      }] : []),
+    ],
+  };
+}
+
+function contactValue(key: string): string {
+  return contactSections.value.find((section) => section.key === key)?.values[0]?.display || '';
+}
+
+function nameParts(name: string): { firstName: string; lastName: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' '),
+  };
+}
 
 const segmentLabel = computed(() => {
   const labels: Record<string, string> = {
