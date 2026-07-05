@@ -184,65 +184,15 @@
       <div v-if="selectedSegment === 'dashboard'">
         <!-- Open tasks — first page only; Load more is in the Tasks segment -->
         <div class="section-header">
-          <h2>Open tasks</h2>
+          <h2>{{ translate('Open tasks') }}</h2>
           <ion-button fill="outline" size="small" @click="selectedSegment = 'tasks'">View all</ion-button>
         </div>
 
-        <ion-card v-for="task in openTasks" :key="task.workEffortId" class="task-card">
-          <ion-item lines="full">
-            <ion-checkbox slot="start" />
-            <ion-label>
-              <h2>{{ task.orderName || task.orderId || task.workEffortName }}</h2>
-              <p v-if="task.orderDate">{{ formatLongDate(task.orderDate) }}</p>
-            </ion-label>
-            <ion-chip slot="end" outline>{{ task.workEffortId }}</ion-chip>
-            <ion-note v-if="task.grandTotal != null" slot="end">{{ money(task.grandTotal) }}</ion-note>
-          </ion-item>
-
-          <div class="task-grid">
-            <div>
-              <p class="overline">Task</p>
-              <h3>{{ task.workEffortName }}</h3>
-              <p>{{ seedDescribe(task.workEffortPurposeTypeId || task.workEffortTypeId) }}</p>
-            </div>
-            <div>
-              <p class="overline">Status</p>
-              <h3>{{ seedDescribe(task.taskStatusId) || task.taskStatusId }}</h3>
-            </div>
-            <div v-if="task.dueDate">
-              <p class="overline">Due date</p>
-              <h3>{{ formatLongDate(task.dueDate) }}</h3>
-            </div>
-            <div>
-              <p class="overline">Assignee</p>
-              <h3>{{ task.assigneeName || 'Unassigned' }}</h3>
-              <p class="muted" v-if="task.assigneeSince">{{ formatLongDate(task.assigneeSince) }}</p>
-            </div>
-            <div>
-              <p class="overline">Reporter</p>
-              <h3>{{ task.reporterName || '—' }}</h3>
-              <p class="muted" v-if="task.reporterSince">{{ formatLongDate(task.reporterSince) }}</p>
-            </div>
-          </div>
-
-          <div class="task-grid" v-if="task.notes">
-            <div>
-              <p class="overline">Notes</p>
-              <p>{{ task.notes }}</p>
-            </div>
-          </div>
-
-          <div class="card-actions">
-            <ion-button v-if="task.taskStatusId !== 'TASK_COMPLETED' && task.taskStatusId !== 'TASK_CANCELLED'" fill="clear" size="small" @click="resolveTask(task)">Resolve task</ion-button>
-            <ion-button v-if="task.orderId" fill="clear" size="small" :router-link="`/orders/${task.orderId}`">
-              View order
-            </ion-button>
-          </div>
-        </ion-card>
+        <CustomerTaskSummaryCard v-for="task in openTasks" :key="task.workEffortId" :task="task" />
         <EmptyState
           v-if="tasksStatus === 'loaded' && !openTasks.length"
-          title="No open tasks"
-          message="This customer has no open tasks."
+          :title="translate('No open tasks')"
+          :message="translate('This customer has no open tasks.')"
         />
 
         <!-- Recent orders (real when present, placeholder until the Solr orders query lands) -->
@@ -450,9 +400,6 @@
                 {{ returnRow.title }}
                 <p>{{ returnRow.itemSummary }}</p>
               </ion-label>
-              <ion-chip slot="end" :color="returnStatusColor(ret.statusId)" outline>
-                {{ seedDescribe(ret.statusId) || ret.statusId }}
-              </ion-chip>
             </ion-item>
 
             <ion-label class="tablet ion-text-start">
@@ -552,69 +499,19 @@
       <!-- ===== Tasks segment ===== -->
       <div v-else-if="selectedSegment === 'tasks'">
         <div class="section-header">
-          <h2>Open tasks</h2>
+          <h2>{{ translate('Open tasks') }}</h2>
         </div>
 
-        <ion-card v-for="task in openTasks" :key="task.workEffortId" class="task-card">
-          <ion-item lines="full">
-            <ion-checkbox slot="start" />
-            <ion-label>
-              <h2>{{ task.orderName || task.orderId || task.workEffortName }}</h2>
-              <p v-if="task.orderDate">{{ formatLongDate(task.orderDate) }}</p>
-            </ion-label>
-            <ion-chip slot="end" outline>{{ task.workEffortId }}</ion-chip>
-            <ion-note v-if="task.grandTotal != null" slot="end">{{ money(task.grandTotal) }}</ion-note>
-          </ion-item>
-
-          <div class="task-grid">
-            <div>
-              <p class="overline">Task</p>
-              <h3>{{ task.workEffortName }}</h3>
-              <p>{{ seedDescribe(task.workEffortPurposeTypeId || task.workEffortTypeId) }}</p>
-            </div>
-            <div>
-              <p class="overline">Status</p>
-              <h3>{{ seedDescribe(task.taskStatusId) || task.taskStatusId }}</h3>
-            </div>
-            <div v-if="task.dueDate">
-              <p class="overline">Due date</p>
-              <h3>{{ formatLongDate(task.dueDate) }}</h3>
-            </div>
-            <div>
-              <p class="overline">Assignee</p>
-              <h3>{{ task.assigneeName || 'Unassigned' }}</h3>
-              <p class="muted" v-if="task.assigneeSince">{{ formatLongDate(task.assigneeSince) }}</p>
-            </div>
-            <div>
-              <p class="overline">Reporter</p>
-              <h3>{{ task.reporterName || '—' }}</h3>
-              <p class="muted" v-if="task.reporterSince">{{ formatLongDate(task.reporterSince) }}</p>
-            </div>
-          </div>
-
-          <div class="task-grid" v-if="task.notes">
-            <div>
-              <p class="overline">Notes</p>
-              <p>{{ task.notes }}</p>
-            </div>
-          </div>
-
-          <div class="card-actions">
-            <ion-button v-if="task.taskStatusId !== 'TASK_COMPLETED' && task.taskStatusId !== 'TASK_CANCELLED'" fill="clear" size="small" @click="resolveTask(task)">Resolve task</ion-button>
-            <ion-button v-if="task.orderId" fill="clear" size="small" :router-link="`/orders/${task.orderId}`">
-              View order
-            </ion-button>
-          </div>
-        </ion-card>
+        <CustomerTaskSummaryCard v-for="task in openTasks" :key="task.workEffortId" :task="task" />
 
         <EmptyState
           v-if="tasksStatus === 'loaded' && !openTasks.length"
-          title="No open tasks"
-          message="This customer has no open tasks."
+          :title="translate('No open tasks')"
+          :message="translate('This customer has no open tasks.')"
         />
         <div v-if="tasksHasMore" class="ion-text-center ion-padding">
           <ion-button fill="outline" size="small" :disabled="tasksStatus === 'loading'" @click="loadMoreTasks">
-            {{ tasksStatus === 'loading' ? 'Loading...' : 'Load more' }}
+            {{ tasksStatus === 'loading' ? translate('Loading...') : translate('Load more') }}
           </ion-button>
         </div>
       </div>
@@ -661,7 +558,6 @@ import {
   IonCard,
   IonCardHeader,
   IonCardTitle,
-  IonCheckbox,
   IonChip,
   IonContent,
   IonHeader,
@@ -694,7 +590,7 @@ import {
   pricetagOutline,
   trashOutline
 } from 'ionicons/icons';
-import { commonUtil, DxpShopifyImg } from '@common';
+import { commonUtil, DxpShopifyImg, translate } from '@common';
 import { useCustomerDetail } from '@/composables/useCustomerDetail';
 import { useProductCacheStore } from '@/store/productCache';
 import { useSeedStore } from '@/store/seed';
@@ -704,9 +600,9 @@ import AddRelationshipModal from '@/components/AddRelationshipModal.vue';
 import RelationshipHistoryModal from '@/components/RelationshipHistoryModal.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
+import CustomerTaskSummaryCard from '@/components/tasks/CustomerTaskSummaryCard.vue';
 import router from '@/router';
 import { deleteCustomerDetails, indexCustomer } from '@/services/customer';
-import { useOrderTaskStore } from '@/store/orderTask';
 
 const props = defineProps<{
   customerId: string;
@@ -714,7 +610,6 @@ const props = defineProps<{
 
 const selectedSegment = ref('dashboard');
 const seed = useSeedStore();
-const orderTaskStore = useOrderTaskStore();
 const productCache = useProductCacheStore();
 const recentOrdersQuery = ref('');
 const allOrdersQuery = ref('');
@@ -744,7 +639,6 @@ const {
   lifetimeCurrency,
   customerSince: customerSinceRaw,
   load,
-  refresh,
   loadReturns,
   loadCommunications,
   loadMoreTasks,
@@ -815,58 +709,6 @@ const segmentLabel = computed(() => {
   };
   return labels[selectedSegment.value] || 'Dashboard';
 });
-
-async function resolveTask(task: any) {
-  const statusId: string = task.taskStatusId;
-  const canComplete = statusId === 'TASK_IN_PROGRESS';
-  const canCancel = statusId === 'TASK_CREATED' || statusId === 'TASK_IN_PROGRESS' || statusId === 'TASK_ON_HOLD';
-
-  const buttons: any[] = [];
-
-  if (canComplete) {
-    buttons.push({
-      text: 'Complete task',
-      handler: () => {
-        void (async () => {
-          try {
-            await orderTaskStore.changeTaskStatus(task.workEffortId, 'TASK_COMPLETED');
-            await commonUtil.showToast('Task marked as completed.');
-            await refresh();
-          } catch {
-            await commonUtil.showToast('Failed to complete task. Please try again.');
-          }
-        })();
-      }
-    });
-  }
-
-  if (canCancel) {
-    buttons.push({
-      text: 'Cancel task',
-      role: 'destructive',
-      handler: () => {
-        void (async () => {
-          try {
-            await orderTaskStore.changeTaskStatus(task.workEffortId, 'TASK_CANCELLED');
-            await commonUtil.showToast('Task cancelled.');
-            await refresh();
-          } catch {
-            await commonUtil.showToast('Failed to cancel task. Please try again.');
-          }
-        })();
-      }
-    });
-  }
-
-  buttons.push({ text: 'Dismiss', role: 'cancel' });
-
-  const alert = await alertController.create({
-    header: 'Resolve task',
-    message: 'Choose how to resolve this task. Completing marks the work as done. Cancelling discards the task without taking further action.',
-    buttons,
-  });
-  await alert.present();
-}
 
 async function onDeleteCustomer() {
   const alert = await alertController.create({
