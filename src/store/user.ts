@@ -60,8 +60,6 @@ export const useUserStore = defineStore("user", {
         if (this.current.timeZone) {
           Settings.defaultZone = this.current.timeZone;
         }
-        // Profile fetch also runs when recovering a persisted session.
-        this.oms = cookieHelper().get("oms") || "";
         this.fetchStatus.profile = "success";
       } catch (error: any) {
         await showToast(translate("Failed to fetch user profile information"));
@@ -149,6 +147,7 @@ export const useUserStore = defineStore("user", {
     async postLogin() {
       try {
         await this.fetchUserProfile();
+        this.oms = cookieHelper().get("oms") || "";
         await this.fetchPermissions();
         await useProductStore().fetchProductStores();
         await useProductStore().fetchProductStorePreference();
