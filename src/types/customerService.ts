@@ -15,6 +15,8 @@ export interface WorkflowOrder {
   currencyUomId: string;
   itemCount: number;
   shipGroupSeqId: string;
+  shipmentId?: string;
+  shipmentStatusId?: string;
   shippingMethodTypeId: string;
   shipmentMethodDesc: string;
   carrierPartyId?: string;
@@ -42,7 +44,7 @@ export interface WorkflowFilters {
   salesChannelEnumId: string;
   facilityId: string;
   shipmentMethodTypeId: string;
-  priority: boolean | null;
+  priority: 'HIGH' | 'NORMAL' | 'LOW' | null;
   dateFrom: string;
   dateThru: string;
 }
@@ -51,6 +53,13 @@ export interface BulkActionDefinition {
   id: string;
   label: string;
   confirmText?: string;
+}
+
+export interface VirtualLocationWorkCount {
+  id: string;
+  label: string;
+  facilityIds: string[];
+  count: number;
 }
 
 export interface ProductStore {

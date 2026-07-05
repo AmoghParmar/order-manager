@@ -85,6 +85,7 @@
       <ion-list>
         <ion-list-header>
           <ion-checkbox
+            class="ion-margin-end"
             v-if="selectMode"
             :checked="allCurrentPageSelected"
             :indeterminate="someCurrentPageSelected && !allCurrentPageSelected"
@@ -110,6 +111,7 @@
             lines="none"
           >
             <ion-checkbox
+              v-if="selectMode"
               slot="start"
               :checked="selectedIds.has(order.orderId)"
               @click.stop
@@ -123,13 +125,12 @@
             </ion-label>
           </ion-item>
 
-          <ion-label class="tablet ion-text-start">
+          <ion-label class="tablet">
             {{ order.customerName || translate('Customer') }}
-            <p>{{ order.productStoreName }}</p>
             <p>{{ order.externalId }}</p>
           </ion-label>
 
-          <ion-label class="tablet ion-text-start">
+          <ion-label class="tablet">
             <p class="overline">{{ order.facilityName || order.facilityId || translate('Facility') }}</p>
             {{ order.shipmentMethodDesc || order.shippingMethodTypeId }}
             <p>{{ formatChannel(order.salesChannelEnumId) }}</p>
@@ -221,21 +222,23 @@ import {
 } from '@ionic/vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { DateTime } from 'luxon';
-import { useRoute } from 'vue-router';
 import { useCustomerServiceStore, BULK_ACTIONS } from '@/store/customerService';
 import { useOrderStore } from '@/store/order';
+import { useProductStore } from '@/store/productStore';
 import { useSeedStore } from '@/store/seed';
 import type { BulkActionDefinition, WorkflowOrder } from '@/types/customerService';
 import EmptyState from '@/components/common/EmptyState.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 import { api, commonUtil, translate } from '@common';
+import router from '@/router';
 
 const bucket = 'open';
 const VIRTUAL_FACILITY_TYPE_ID = 'VIRTUAL_FACILITY';
 const store = useCustomerServiceStore();
 const orderStore = useOrderStore();
+const productStore = useProductStore();
 const seedStore = useSeedStore();
-const route = useRoute();
+const route = router.currentRoute.value;
 const ionRouter = useIonRouter();
 const toastMessage = ref('');
 
@@ -276,6 +279,7 @@ const hasMore = computed(() => orderStore.workflowOrders[bucket].length < orderS
 const resultsSummary = computed(() =>
   `${orders.value.length} of ${orderTotal.value} ${orderTotal.value === 1 ? translate('order') : translate('orders')}`
 );
+const selectedProductStoreId = computed(() => productStore.getCurrentProductStore?.productStoreId || 'All');
 
 type DateFilterField = 'dateFrom' | 'dateThru';
 type FacilityOption = {
@@ -309,6 +313,9 @@ function applyRouteFilters() {
 }
 
 watch(() => route.query.facilityId, applyRouteFilters, { immediate: true });
+watch(selectedProductStoreId, () => {
+  filters.value.productStoreId = selectedProductStoreId.value;
+}, { immediate: true });
 
 function loadWorkflowOrders() {
   orderStore.fetchWorkflowOrders(bucket, filters.value);
@@ -386,6 +393,7 @@ watch(orders, () => {
 
 function clearFilters() {
   store.clearFilters(bucket);
+  filters.value.productStoreId = selectedProductStoreId.value;
 }
 
 function enterSelectMode() {
@@ -429,13 +437,11 @@ function setOrderSelection(orderId: string, checked: boolean) {
 
   if (checked) {
     currentSelection.add(orderId);
-    selectMode.value = true;
   } else {
     currentSelection.delete(orderId);
   }
 
   store.setSelection(bucket, [...currentSelection]);
-  if (!currentSelection.size) selectMode.value = false;
 }
 
 function orderDetailLink(order: WorkflowOrder) {
@@ -460,8 +466,12 @@ async function runAction(action: BulkActionDefinition) {
   }
 
   const count = selectedIds.value.size;
-  store.runBulkAction(bucket, action.id);
-  toastMessage.value = `${action.label} · ${count} ${count === 1 ? translate('order') : translate('orders')}`;
+  try {
+    await store.runBulkAction(bucket, action.id);
+    toastMessage.value = `${action.label} · ${count} ${count === 1 ? translate('order') : translate('orders')}`;
+  } catch {
+    toastMessage.value = translate('Failed to complete bulk action. Please try again.');
+  }
 }
 
 function formatChannel(channel: string) {
