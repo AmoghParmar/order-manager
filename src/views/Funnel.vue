@@ -612,11 +612,13 @@ import { translate, StatCard, Sparkline, commonUtil } from '@common';
 import { useCustomerServiceStore, type DashboardStatusKey } from '@/store/customerService';
 import { useProductStore } from '@/store/productStore';
 import { useSeedStore } from '@/store/seed';
-import { DateTime } from 'luxon';
+import { useUserStore } from '@/store/user';
+import { getDashboardDateFilter } from '@/utils/dashboardDate';
 
 const store = useCustomerServiceStore();
 const productStore = useProductStore() as any;
 const seedStore = useSeedStore();
+const userStore = useUserStore();
 
 // Per-section load status helpers. These drive loading affordances and error
 // states so the dashboard never renders default zeros/empty copy while a group
@@ -642,7 +644,7 @@ const facilityOrderVolume = computed(() => store.getFacilityOrderVolume);
 const facilityFulfillmentVelocity = computed(() => store.getFacilityFulfillmentVelocity);
 const facilityPartialFulfillments = computed(() => store.getFacilityPartialFulfillments);
 const unfillableTrend = computed(() => store.unfillableTrend);
-const todayDateStr = computed(() => DateTime.now().toFormat('yyyy-MM-dd'));
+const todayDateStr = computed(() => getDashboardDateFilter(userStore.current?.timeZone || userStore.current?.userTimeZone));
 const virtualLocationWorkRows = computed(() => store.getVirtualLocationCounts);
 
 const fulfillmentSyncData = computed(() => store.getFulfillmentSyncData);
