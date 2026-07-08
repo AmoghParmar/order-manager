@@ -9,7 +9,7 @@
         @keydown.stop
         @ionChange="emit('update:selected', $event.detail.checked)"
       />
-      <ion-thumbnail v-if="imageUrl" slot="start" v-image-preview="previewProduct" :key="imageUrl">
+      <ion-thumbnail v-if="showThumbnail || imageUrl" slot="start" v-image-preview="previewProduct" :key="imageUrl">
         <DxpShopifyImg :src="imageUrl" :key="imageUrl" size="small" />
       </ion-thumbnail>
       <ion-label>
@@ -74,6 +74,7 @@ withDefaults(defineProps<{
   secondary?: string;
   badgeLabel?: string;
   imageUrl?: string;
+  showThumbnail?: boolean;
   previewProduct?: any;
   selectable?: boolean;
   selected?: boolean;
@@ -93,6 +94,7 @@ withDefaults(defineProps<{
   secondary: '',
   badgeLabel: '',
   imageUrl: '',
+  showThumbnail: false,
   previewProduct: undefined,
   selectable: true,
   selected: false,

@@ -267,6 +267,7 @@
                 :secondary="groupSecondaryIdentifier(group)"
                 :badge-label="isKit(group) ? translate('Kit') : ''"
                 :image-url="getProduct(group.productId)?.mainImageUrl"
+                :show-thumbnail="true"
                 :preview-product="getProduct(group.productId)"
                 :selected="group.selected"
                 :quantity="group.totalQty"
