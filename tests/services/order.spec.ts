@@ -287,6 +287,27 @@ describe('virtual location count payload', () => {
     expect(filters).toContain('facilityId:(_NA_ OR REJECTED_ITM_PARKING OR UNFILLABLE_PARKING)');
   });
 
+  it('adds an order-item status filter when itemStatus is provided', () => {
+    const filters = virtualLocationFiltersOf({
+      productStoreId: 'STORE',
+      facilityIds: ['UNFILLABLE_PARKING'],
+      itemStatus: ['ITEM_CREATED', 'ITEM_APPROVED']
+    });
+
+    expect(filters).toContain('orderItemStatusId:(ITEM_CREATED OR ITEM_APPROVED)');
+    // order-header status filter is still applied alongside the item filter
+    expect(filters).toContain('orderStatusId:(ORDER_CREATED OR ORDER_APPROVED)');
+  });
+
+  it('omits the order-item status filter when itemStatus is not provided', () => {
+    const filters = virtualLocationFiltersOf({
+      productStoreId: 'STORE',
+      facilityIds: ['_NA_']
+    });
+
+    expect(filters.some((filter) => filter.startsWith('orderItemStatusId:'))).toBe(false);
+  });
+
   it('normalizes Solr facet buckets into facility order counts', async () => {
     mockSolrResponse({
       facets: {
