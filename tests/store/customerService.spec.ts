@@ -88,7 +88,7 @@ describe('customer service hold task counts', () => {
       url: 'oms/orders/tasks',
       method: 'GET',
       params: {
-        statusId: 'TASK_CREATED',
+        taskStatusId: 'TASK_CREATED',
         workEffortTypeId: 'REVIEW_RISK_ORDER',
         productStoreId: 'STORE_1',
         pageSize: 10000,
