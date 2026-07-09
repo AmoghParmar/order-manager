@@ -3241,7 +3241,6 @@ ion-card-header ion-buttons {
   }
 }
 .customer-summary-card ion-card-header {
-  align-items: center;
   display: flex;
   gap: var(--spacer-xs);
   justify-content: space-between;
