@@ -470,6 +470,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
         });
       } catch (err) {
         console.error('Failed to change the task status', err);
+        throw err;
       }
     },
     async parkOrder(orderId: string, shipGroupSeqId: string, facilityId: string, workEffortId?: string) {
