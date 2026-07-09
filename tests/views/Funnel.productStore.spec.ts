@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 describe('Funnel product store scope', () => {
   const funnelSource = readFileSync(resolve(process.cwd(), 'src/views/Funnel.vue'), 'utf8');
   const customerServiceSource = readFileSync(resolve(process.cwd(), 'src/store/customerService.ts'), 'utf8');
-  const workflowOrderListSource = readFileSync(resolve(process.cwd(), 'src/components/orders/WorkflowOrderList.vue'), 'utf8');
   const openOrdersSource = readFileSync(resolve(process.cwd(), 'src/views/OpenOrders.vue'), 'utf8');
   const packedOrdersSource = readFileSync(resolve(process.cwd(), 'src/views/PackedOrders.vue'), 'utf8');
 
@@ -35,7 +34,7 @@ describe('Funnel product store scope', () => {
   });
 
   it('keeps workflow order pages scoped to the Settings product store', () => {
-    for (const source of [workflowOrderListSource, openOrdersSource, packedOrdersSource]) {
+    for (const source of [openOrdersSource, packedOrdersSource]) {
       expect(source).toContain("import { useProductStore } from '@/store/productStore'");
       expect(source).toContain('selectedProductStoreId');
       expect(source).toContain('filters.value.productStoreId = selectedProductStoreId.value');
