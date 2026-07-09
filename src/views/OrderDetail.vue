@@ -2707,7 +2707,11 @@ async function rejectAndReleaseItem(item: any, productId: string) {
     await api({
       url: `oms/orders/${orderId}/items/${item.orderItemSeqId}/allocation`,
       method: 'POST',
-      data: { facilityId },
+      data: { facilityId,
+       orderFacilityChange:{
+       changeReasonEnumId:"RELEASED"
+      }
+      },
     });
     await showToast(translate('Item released to facility.'));
   } catch {
@@ -3080,7 +3084,11 @@ async function releaseSelectedItems(shipGroup: any) {
         api({
         url: `oms/orders/${orderId}/items/${orderItemSeqId}/allocation`,
         method: 'POST',
-        data: { facilityId },
+        data: { facilityId,
+         orderFacilityChange:{
+         changeReasonEnumId: "RELEASED"
+         }
+         },
         })
       )
     );
