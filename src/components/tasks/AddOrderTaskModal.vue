@@ -107,10 +107,6 @@ const props = defineProps<{
 }>();
 
 const seedStore = useSeedStore();
-
-// Poorti only excludes open hold tasks from ready-to-pick when the type is
-// RESOLVE_ONHOLD_ORDER, so this modal never offers the obsolete ORDER_HOLD
-// WorkEffort model (#345).
 const WORK_EFFORT_TYPE_ID = 'RESOLVE_ONHOLD_ORDER';
 
 const form = reactive({
