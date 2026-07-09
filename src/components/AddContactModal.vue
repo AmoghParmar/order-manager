@@ -304,7 +304,11 @@ const isValid = computed(() => {
 
 function sanitizeNumberInput(field: 'countryCode' | 'areaCode' | 'contactNumber', event: any) {
   const value = event.target.value || '';
-  form[field] = value.replace(/[^\d]/g, '');
+  const sanitized = value.replace(/[^\d]/g, '');
+  form[field] = sanitized;
+  if (event.target) {
+    event.target.value = sanitized;
+  }
 }
 
 function dismiss() {
