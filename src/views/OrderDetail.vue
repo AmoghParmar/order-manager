@@ -481,7 +481,7 @@
                 <ion-icon slot="start" :icon="compassOutline" />
                 <ion-label>
                   <p class="overline" v-if="timelineByShipGroup[shipGroup.id]?.firstBrokeredDate || timelineByShipGroup[shipGroup.id]?.firstReleasedDate">{{
-                    commonUtil.getRelativeTime(timelineByShipGroup[shipGroup.id]?.firstBrokeredDate || timelineByShipGroup[shipGroup.id]?.firstReleasedDate) }}</p>
+                    lifecycleStepLabel(timelineByShipGroup[shipGroup.id], 'brokered') }}</p>
                   {{ translate('Brokered') }}
                 </ion-label>
                 <ion-note slot="end">{{ formatTime(timelineByShipGroup[shipGroup.id]?.firstBrokeredDate) || formatTime(timelineByShipGroup[shipGroup.id]?.firstReleasedDate) ||
@@ -492,7 +492,7 @@
                 <ion-icon slot="start" :icon="mailOutline" />
                 <ion-label>
                   <p class="overline" v-if="timelineByShipGroup[shipGroup.id]?.picklistDate">{{
-                    commonUtil.getRelativeTime(timelineByShipGroup[shipGroup.id]?.picklistDate) }}</p>
+                    lifecycleStepLabel(timelineByShipGroup[shipGroup.id], 'pick') }}</p>
                   {{ translate('Pick') }}
                 </ion-label>
                 <ion-note slot="end">{{ formatTime(timelineByShipGroup[shipGroup.id]?.picklistDate) ||
@@ -503,7 +503,7 @@
                 <ion-icon slot="start" :icon="checkmarkOutline" />
                 <ion-label>
                   <p class="overline" v-if="timelineByShipGroup[shipGroup.id]?.packedDate">{{
-                    commonUtil.getRelativeTime(timelineByShipGroup[shipGroup.id]?.packedDate) }}</p>
+                    lifecycleStepLabel(timelineByShipGroup[shipGroup.id], 'pack') }}</p>
                   {{ translate('Pack') }}
                 </ion-label>
                 <ion-note slot="end">{{ formatTime(timelineByShipGroup[shipGroup.id]?.packedDate) ||
@@ -514,7 +514,7 @@
                 <ion-icon slot="start" :icon="sendOutline" />
                 <ion-label>
                   <p class="overline" v-if="timelineByShipGroup[shipGroup.id]?.shippedDate">{{
-                    commonUtil.getRelativeTime(timelineByShipGroup[shipGroup.id]?.shippedDate) }}</p>
+                    lifecycleStepLabel(timelineByShipGroup[shipGroup.id], 'ship') }}</p>
                   {{ translate('Ship') }}
                 </ion-label>
                 <ion-note slot="end">{{ formatTime(timelineByShipGroup[shipGroup.id]?.shippedDate) ||
@@ -2428,6 +2428,35 @@ function findTimeDiff(startTime: string | number | undefined, endTime: string | 
   if (timeDiff.minutes) diffString += `${Math.round(timeDiff.minutes)} minutes`;
 
   return diffString.trim() === '+' ? '' : diffString.trim();
+}
+
+type LifecycleStep = 'brokered' | 'pick' | 'pack' | 'ship';
+const LIFECYCLE_STEP_ORDER: LifecycleStep[] = ['brokered', 'pick', 'pack', 'ship'];
+
+function lifecycleStepValue(timeline: any, step: LifecycleStep) {
+  if (!timeline) return undefined;
+  if (step === 'brokered') return timeline.firstBrokeredDate || timeline.firstReleasedDate;
+  if (step === 'pick') return timeline.picklistDate;
+  if (step === 'pack') return timeline.packedDate;
+  return timeline.shippedDate;
+}
+
+// Overline for a ship-group lifecycle step. The first completed step shows its age
+// from now; every later completed step shows the elapsed time since the nearest
+// previous completed step (a "+ 30 minutes" delta), so the timeline reads as per-step
+// durations instead of repeating the same "months ago" on every step (#350). A missing
+// intermediate step is skipped, so the delta is measured from the closest prior
+// completed step rather than a gap.
+function lifecycleStepLabel(timeline: any, step: LifecycleStep) {
+  const value = lifecycleStepValue(timeline, step);
+  if (!value) return '';
+
+  const stepIndex = LIFECYCLE_STEP_ORDER.indexOf(step);
+  for (let index = stepIndex - 1; index >= 0; index--) {
+    const previousValue = lifecycleStepValue(timeline, LIFECYCLE_STEP_ORDER[index]);
+    if (previousValue) return findTimeDiff(previousValue, value);
+  }
+  return commonUtil.getRelativeTime(value);
 }
 
 function formatDate(value: string | number | undefined) {
