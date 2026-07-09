@@ -108,7 +108,7 @@ describe('order task store', () => {
         pageSize: 20,
         pageIndex: 0,
         riskLevelEnumId: 'RISK_HIGH',
-        statusId: 'TASK_CREATED',
+        taskStatusId: 'TASK_CREATED',
         workEffortTypeId: 'RESOLVE_ONHOLD_ORDER',
         workEffortPurposeTypeId: 'REVIEW_RISK_ORDER',
         productStoreId: 'STORE',
@@ -128,7 +128,7 @@ describe('order task store', () => {
         method: 'GET',
         params: {
           orderId: 'ORDER_1',
-          statusId: 'TASK_CREATED',
+          taskStatusId: 'TASK_CREATED',
           workEffortTypeId: 'RESOLVE_ONHOLD_ORDER',
           workEffortPurposeTypeId: 'REVIEW_RISK_ORDER',
           productStoreId: 'STORE',

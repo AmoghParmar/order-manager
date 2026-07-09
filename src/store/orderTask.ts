@@ -303,7 +303,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
           method: 'GET',
           params: {
             ...payload,
-            statusId: 'TASK_CREATED',
+            taskStatusId: 'TASK_CREATED',
             workEffortTypeId: HOLD_TASK_TYPE_ID,
             workEffortPurposeTypeId: FRAUD_RISK_PURPOSE_TYPE_ID,
             productStoreId,
@@ -401,7 +401,7 @@ export const useOrderTaskStore = defineStore('orderTask', {
             method: 'GET',
             params: {
               orderId,
-              statusId: 'TASK_CREATED',
+              taskStatusId: 'TASK_CREATED',
               workEffortTypeId: HOLD_TASK_TYPE_ID,
               workEffortPurposeTypeId: FRAUD_RISK_PURPOSE_TYPE_ID,
               productStoreId,
