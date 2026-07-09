@@ -10,6 +10,9 @@ interface TaskStatusCommunicationOptions {
   subject?: string;
 }
 
+const HOLD_TASK_TYPE_ID = 'RESOLVE_ONHOLD_ORDER';
+const FRAUD_RISK_PURPOSE_TYPE_ID = 'REVIEW_RISK_ORDER';
+
 // ── Per-task enrichment helpers ───────────────────────────────────────────────
 // Shared by both the queue list fetches and the order-scoped detail fetch so the
 // two paths stay in lockstep (no duplicated enrichment logic).
@@ -300,8 +303,9 @@ export const useOrderTaskStore = defineStore('orderTask', {
           method: 'GET',
           params: {
             ...payload,
-            taskStatusId: 'TASK_CREATED',
-            workEffortTypeId: 'REVIEW_RISK_ORDER',
+            statusId: 'TASK_CREATED',
+            workEffortTypeId: HOLD_TASK_TYPE_ID,
+            workEffortPurposeTypeId: FRAUD_RISK_PURPOSE_TYPE_ID,
             productStoreId,
           },
         });
@@ -397,8 +401,9 @@ export const useOrderTaskStore = defineStore('orderTask', {
             method: 'GET',
             params: {
               orderId,
-              taskStatusId: 'TASK_CREATED',
-              workEffortTypeId: 'REVIEW_RISK_ORDER',
+              statusId: 'TASK_CREATED',
+              workEffortTypeId: HOLD_TASK_TYPE_ID,
+              workEffortPurposeTypeId: FRAUD_RISK_PURPOSE_TYPE_ID,
               productStoreId,
             },
           });
