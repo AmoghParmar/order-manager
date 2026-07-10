@@ -81,7 +81,7 @@ export const useUserStore = defineStore("user", {
         let resp
         do {
           resp = await api({
-            url: "admin/user/permissions",
+            url: commonUtil.isMoqui() ? "admin/user/permissions" : "getPermissions",
             method: "get",
             baseURL: commonUtil.getOmsURL(),
             params: { viewIndex, viewSize }
