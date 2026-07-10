@@ -141,7 +141,7 @@ export async function searchCustomers(params: CustomerSearchParams = {}): Promis
   };
 
   if (searchTerm) {
-    payload.json.query = `${searchTerm}* OR "${searchTerm}"^100`;
+    payload.json.query = `*${searchTerm}* OR "${searchTerm}"^100`;
   }
 
   if (params.status && params.status !== 'All') {
