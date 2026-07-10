@@ -284,8 +284,8 @@ onMounted(async () => {
 const isValid = computed(() => {
   if (props.contactMechTypeId === 'EMAIL_ADDRESS') return form.infoString.trim().length > 0;
   if (props.contactMechTypeId === 'TELECOM_NUMBER') {
-    const isNum = (val: string) => /^\d+$/.test(val.trim());
-    const isOptionalNum = (val: string) => !val.trim() || /^\d+$/.test(val.trim());
+    const isNum = (val: string) => /^\+?[\d\s()-]+$/.test(val.trim());
+    const isOptionalNum = (val: string) => !val.trim() || /^\+?[\d\s()-]+$/.test(val.trim());
     return form.contactNumber.trim().length > 0 &&
       isNum(form.contactNumber) &&
       isOptionalNum(form.countryCode) &&
@@ -304,7 +304,7 @@ const isValid = computed(() => {
 
 function sanitizeNumberInput(field: 'countryCode' | 'areaCode' | 'contactNumber', event: any) {
   const value = event.target.value || '';
-  const sanitized = value.replace(/[^\d]/g, '');
+  const sanitized = value.replace(/[^\d+-]/g, '');
   form[field] = sanitized;
   if (event.target) {
     event.target.value = sanitized;
