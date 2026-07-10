@@ -305,14 +305,22 @@ function normalizeDateFilterValue(value: string | string[] | null | undefined) {
 }
 
 function applyRouteFilters() {
-  const facilityId = route.query.facilityId;
+  const facilityId = router.currentRoute.value.query.facilityId;
+  const dateFilter = router.currentRoute.value.query.dateFilter;
 
   if (typeof facilityId === 'string' && facilityId) {
     filters.value.facilityId = facilityId;
   }
+  if (typeof dateFilter === 'string' && dateFilter) {
+    filters.value.dateFrom = dateFilter;
+    filters.value.dateThru = dateFilter;
+  } else {
+    filters.value.dateFrom = '';
+    filters.value.dateThru = '';
+  }
 }
 
-watch(() => route.query.facilityId, applyRouteFilters, { immediate: true });
+watch(() => [router.currentRoute.value.query.facilityId, router.currentRoute.value.query.dateFilter], applyRouteFilters, { immediate: true });
 watch(selectedProductStoreId, () => {
   filters.value.productStoreId = selectedProductStoreId.value;
 }, { immediate: true });
