@@ -2974,7 +2974,6 @@ async function openCreateHoldTaskModal() {
       title: translate('Create hold task'),
       autoGenerateTaskName: true,
       defaultOrderName: currentOrder.orderName || currentOrder.id,
-      defaultWorkEffortTypeId: 'RESOLVE_ONHOLD_ORDER',
       defaultWorkEffortPurposeTypeId: 'ORD_HOLD_MANUAL',
     },
   });

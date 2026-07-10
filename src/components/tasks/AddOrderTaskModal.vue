@@ -39,20 +39,6 @@
       </ion-item>
       <ion-item>
         <ion-select
-          :label="requiredLabel('Task Type')"
-          label-placement="stacked"
-          interface="popover"
-          :placeholder="translate('Select Task Type')"
-          required
-          v-model="form.workEffortTypeId"
-        >
-          <ion-select-option v-for="option in taskTypes" :key="option.enumId" :value="option.enumId">
-            {{ option.description || option.enumName || option.enumId }}
-          </ion-select-option>
-        </ion-select>
-      </ion-item>
-      <ion-item>
-        <ion-select
           :label="requiredLabel('Task Purpose')"
           label-placement="stacked"
           interface="popover"
@@ -117,15 +103,15 @@ const props = defineProps<{
   shipGroups?: Array<{ id: string; label?: string }>;
   autoGenerateTaskName?: boolean;
   defaultOrderName?: string;
-  defaultWorkEffortTypeId?: string;
   defaultWorkEffortPurposeTypeId?: string;
 }>();
 
 const seedStore = useSeedStore();
+const WORK_EFFORT_TYPE_ID = 'RESOLVE_ONHOLD_ORDER';
 
 const form = reactive({
   workEffortName: '',
-  workEffortTypeId: props.defaultWorkEffortTypeId || '',
+  workEffortTypeId: WORK_EFFORT_TYPE_ID,
   workEffortPurposeTypeId: props.defaultWorkEffortPurposeTypeId || '',
   description: '',
 });
@@ -135,8 +121,7 @@ const form = reactive({
 const selectedShipGroupSeqIds = ref<string[]>(props.shipGroups?.map((shipGroup) => shipGroup.id) ?? []);
 const taskNameEdited = ref(false);
 
-const taskTypes = computed(() => seedStore.getEnumsByType('WorkEffortType'));
-const taskPurposes = computed(() => seedStore.getEnumsByParentType('WorkEffortPurposeType'));
+const taskPurposes = computed(() => seedStore.getEnumsByType(WORK_EFFORT_TYPE_ID));
 
 const generatedTaskName = computed(() => {
   if (!props.autoGenerateTaskName) return '';
@@ -156,8 +141,7 @@ const isValid = computed(() => {
 });
 
 onMounted(() => {
-  seedStore.loadEnumType('WorkEffortType');
-  seedStore.loadEnumsByParentType('WorkEffortPurposeType');
+  seedStore.loadEnumType(WORK_EFFORT_TYPE_ID);
 });
 
 watch(generatedTaskName, (taskName) => {
