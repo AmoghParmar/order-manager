@@ -81,15 +81,15 @@
             <ion-spinner name="crescent" />
           </template>
           <ion-list v-if="!fulfillmentProgressLoading" lines="none" class="hold-tasks-list">
-            <ion-item button :detail="true" :router-link="{ path: '/open', query: { dateFilter: todayDateStr } }">
+            <ion-item button :detail="true" :router-link="{ path: '/open', query: { dateFrom: todayDateStr } }">
               <ion-label>{{ translate("Open") }}</ion-label>
               <p slot="end">{{ formatCount(fulfillmentStats.brokeredOpenShipGroups) }} {{ translate("ship groups") }}</p>
             </ion-item>
-            <ion-item button :detail="true" :router-link="{ path: '/inflight', query: { dateFilter: todayDateStr } }">
+            <ion-item button :detail="true" :router-link="{ path: '/inflight', query: { dateFrom: todayDateStr } }">
               <ion-label>{{ translate("Picked") }}</ion-label>
               <p slot="end">{{ formatCount(fulfillmentStats.pickedShipGroups) }} {{ translate("ship groups") }}</p>
             </ion-item>
-            <ion-item button :detail="true" :router-link="{ path: '/packed', query: { dateFilter: todayDateStr } }">
+            <ion-item button :detail="true" :router-link="{ path: '/packed', query: { dateFrom: todayDateStr } }">
               <ion-label>{{ translate("Packed and shipped") }}</ion-label>
               <p slot="end">{{ formatCount(fulfillmentStats.packedAndShippedShipGroups) }} {{ translate("ship groups") }}</p>
             </ion-item>

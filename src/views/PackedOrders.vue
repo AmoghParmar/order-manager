@@ -306,21 +306,19 @@ function normalizeDateFilterValue(value: string | string[] | null | undefined) {
 
 function applyRouteFilters() {
   const facilityId = router.currentRoute.value.query.facilityId;
-  const dateFilter = router.currentRoute.value.query.dateFilter;
+  const dateFrom = router.currentRoute.value.query.dateFrom;
 
   if (typeof facilityId === 'string' && facilityId) {
     filters.value.facilityId = facilityId;
   }
-  if (typeof dateFilter === 'string' && dateFilter) {
-    filters.value.dateFrom = dateFilter;
-    filters.value.dateThru = dateFilter;
+  if (typeof dateFrom === 'string' && dateFrom) {
+    filters.value.dateFrom = dateFrom;
   } else {
     filters.value.dateFrom = '';
-    filters.value.dateThru = '';
   }
 }
 
-watch(() => [router.currentRoute.value.query.facilityId, router.currentRoute.value.query.dateFilter], applyRouteFilters, { immediate: true });
+watch(() => [router.currentRoute.value.query.facilityId, router.currentRoute.value.query.dateFrom], applyRouteFilters, { immediate: true });
 watch(selectedProductStoreId, () => {
   filters.value.productStoreId = selectedProductStoreId.value;
 }, { immediate: true });
