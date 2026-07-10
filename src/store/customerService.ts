@@ -20,6 +20,10 @@ import { fetchVirtualLocationOrderCounts, searchOrders } from '@/services/order'
 
 const CHANNELS = ['WEB_SALES_CHANNEL', 'POS_SALES_CHANNEL', 'MOBILE_SALES_CHANNEL', 'MARKETPLACE_CHANNEL'];
 const BROKERABLE_ORDER_STATUSES = ['ORDER_CREATED', 'ORDER_APPROVED'];
+// The Unfillable queue should only count orders whose parked item is still active
+// (created/approved) — not items that were since cancelled or completed.
+const UNFILLABLE_FACILITY_ID = 'UNFILLABLE_PARKING';
+const UNFILLABLE_ITEM_STATUSES = ['ITEM_CREATED', 'ITEM_APPROVED'];
 const GENERAL_OPS_PARKING_FACILITY_ID = 'GENERAL_OPS_PARKING';
 const REQUIRED_VIRTUAL_LOCATION_GROUPS = [
   { id: 'brokering', label: 'Brokering queue', facilityIds: ['_NA_'] },
@@ -418,12 +422,30 @@ export const useCustomerServiceStore = defineStore('customerService', {
       }
 
       try {
-        const counts = await fetchVirtualLocationOrderCounts({
-          productStoreId,
-          facilityIds: uniqueValues(facilities.map((facility) => facility.facilityId)),
-          status: BROKERABLE_ORDER_STATUSES
-        });
-        const countMap = new Map(counts.map((row) => [row.facilityId, row.count]));
+        const allFacilityIds = uniqueValues(facilities.map((facility) => facility.facilityId));
+        // Unfillable is counted with an extra item-status filter (item must be created/approved);
+        // the remaining virtual locations keep the order-status-only count.
+        const otherFacilityIds = allFacilityIds.filter((facilityId) => facilityId !== UNFILLABLE_FACILITY_ID);
+
+        const [otherCounts, unfillableCounts] = await Promise.all([
+          otherFacilityIds.length
+            ? fetchVirtualLocationOrderCounts({
+                productStoreId,
+                facilityIds: otherFacilityIds,
+                status: BROKERABLE_ORDER_STATUSES
+              })
+            : Promise.resolve([]),
+          allFacilityIds.includes(UNFILLABLE_FACILITY_ID)
+            ? fetchVirtualLocationOrderCounts({
+                productStoreId,
+                facilityIds: [UNFILLABLE_FACILITY_ID],
+                status: BROKERABLE_ORDER_STATUSES,
+                itemStatus: UNFILLABLE_ITEM_STATUSES
+              })
+            : Promise.resolve([])
+        ]);
+
+        const countMap = new Map([...otherCounts, ...unfillableCounts].map((row) => [row.facilityId, row.count]));
         this.virtualLocationCounts = buildVirtualLocationWorkCounts(facilities, countMap);
       } catch (error) {
         logger.error('Failed to fetch virtual location order counts', error);

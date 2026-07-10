@@ -34,6 +34,9 @@ export interface VirtualLocationCountParams {
   productStoreId?: string;
   facilityIds: string[];
   status?: string | string[];
+  // Order-item status filter (item docs carry `orderItemStatusId`, e.g. ITEM_CREATED /
+  // ITEM_APPROVED), as opposed to `status` above which filters the order header `orderStatusId`.
+  itemStatus?: string | string[];
 }
 
 export interface VirtualLocationOrderCount {
@@ -184,6 +187,14 @@ export function buildVirtualLocationCountsPayload(params: VirtualLocationCountPa
 
   if (statusIds.length === 1) filters.push(`orderStatusId:${escapeSolrValue(statusIds[0])}`);
   if (statusIds.length > 1) filters.push(`orderStatusId:(${statusIds.map(escapeSolrValue).join(' OR ')})`);
+
+  // Optional order-item status filter (item docs carry `orderItemStatusId`, e.g. ITEM_CREATED /
+  // ITEM_APPROVED). Used to restrict a facility's count to orders whose item at that location is
+  // still active — e.g. Unfillable should only count active items, not cancelled/completed ones.
+  const itemStatusIds = selectedStatuses(params.itemStatus);
+  if (itemStatusIds.length === 1) filters.push(`orderItemStatusId:${escapeSolrValue(itemStatusIds[0])}`);
+  if (itemStatusIds.length > 1) filters.push(`orderItemStatusId:(${itemStatusIds.map(escapeSolrValue).join(' OR ')})`);
+
   if (params.productStoreId && params.productStoreId !== 'All') filters.push(`productStoreId:${escapeSolrValue(params.productStoreId)}`);
 
   const facilityIds = [...new Set((params.facilityIds ?? []).filter((facilityId) => facilityId && facilityId !== 'All'))];
