@@ -382,7 +382,8 @@ export const useCustomerServiceStore = defineStore('customerService', {
             method: 'GET',
             params: {
               taskStatusId: 'TASK_CREATED',
-              workEffortTypeId: 'REVIEW_RISK_ORDER',
+              workEffortTypeId: 'RESOLVE_ONHOLD_ORDER',
+              workEffortPurposeTypeId: 'REVIEW_RISK_ORDER',
               productStoreId,
               pageSize: 10000,
             }
