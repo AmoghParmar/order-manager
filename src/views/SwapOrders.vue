@@ -182,7 +182,7 @@ const fetchSwapTasks = async (pageSize?: any, pageIndex?: any) => {
 
 async function loadSetupCandidates() {
   const productStoreId = selectedProductStoreId.value;
-  if (!productStoreId || productStoreId === 'All') {
+  if (!productStoreId) {
     setupCandidates.value = [];
     setupError.value = translate('Select a product store to review unfillable products.');
     return;

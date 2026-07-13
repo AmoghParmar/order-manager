@@ -268,7 +268,6 @@ export function buildUnfillableProductCandidatesPayload(productStoreId?: string,
         products: {
           type: 'terms',
           field: 'productId',
-          mincount: 1,
           limit,
           sort: 'count desc'
         }
@@ -285,10 +284,9 @@ export async function fetchUnfillableProductCandidates(productStoreId?: string, 
     || [];
   return buckets
     .map((bucket: any) => ({
-      productId: toStringValue(bucket.val ?? bucket.value),
+      productId: toStringValue(bucket.val),
       itemCount: toNumberValue(bucket.count)
     }))
-    .filter((candidate: UnfillableProductCandidate) => candidate.productId && candidate.itemCount > 0);
 }
 
 export function buildUnfillableShipGroupsForProductPayload(productStoreId: string, productId: string) {
