@@ -453,7 +453,10 @@
                   {{ adjustment.label }}
                   <p v-if="adjustment.detail">{{ adjustment.detail }}</p>
                 </ion-label>
-                <ion-label slot="end">{{ money(adjustment.amount, order.currency) }}</ion-label>
+                <ion-label slot="end" class="ion-text-end">
+                  {{ money(adjustment.amount, order.currency) }}
+                  <p v-if="adjustment.isIncluded">{{ translate('Included') }}</p>
+                </ion-label>
               </ion-item>
               <ion-item class="grand-total-row">
                 <ion-label>{{ translate('Grand total') }}</ion-label>
@@ -2158,13 +2161,20 @@ const paymentNetColor = computed(() => {
 const orderAdjustmentRows = computed(() =>
   // orderTotals.adjustments is already keyed by the resolved comment/description
   // (see adjustmentDisplayLabel in the orderDetail store) — no further lookup needed here.
-  Object.entries(orderTotals.value.adjustments)
-    .map(([label, amount]) => ({
+  [
+    ...Object.entries(orderTotals.value.adjustments).map(([label, amount]) => ({
       label,
       detail: shippingAdjustmentDetail(label),
-      amount: Number(amount)
+      amount: Number(amount),
+      isIncluded: false
+    })),
+    ...Object.entries((orderTotals.value as any).includedAdjustments || {}).map(([label, amount]) => ({
+      label,
+      detail: shippingAdjustmentDetail(label),
+      amount: Number(amount),
+      isIncluded: true
     }))
-    .filter((row) => row.amount !== 0)
+  ].filter((row) => row.amount !== 0)
 );
 
 const selectedSegment = ref('items');
@@ -3146,9 +3156,9 @@ function formatTime(value: string | number | undefined) {
 }
 
 function getGroupAdjustments(group: any) {
-  const adjs = orderDetailStore.adjustmentsByExternalId[group.externalId] || {};
-  return Object.entries(adjs)
-    .map(([comment, amount]) => ({ comment, amount: Number(amount) }))
+  const adjs = orderDetailStore.adjustmentsByExternalId[group.externalId] || [];
+  return adjs
+    .map((adj) => ({ comment: adj.label, amount: Number(adj.amount), isIncluded: adj.isIncluded }))
     .filter(adj => adj.amount !== 0);
 }
 
@@ -3183,7 +3193,7 @@ function groupLocationLabel(group: any): string {
 
 function getGroupAdjustmentRows(group: any): Array<{ label: string; amount: string }> {
   return getGroupAdjustments(group).map((adjustment) => ({
-    label: adjustment.comment,
+    label: adjustment.isIncluded ? `${adjustment.comment} (${translate('included')})` : adjustment.comment,
     amount: money(adjustment.amount, order.value?.currency || 'USD')
   }));
 }
@@ -3222,7 +3232,8 @@ function itemAdjustmentKey(adj: any, fallbackSeqId = ""): string {
     adj.shipGroupSeqId || "",
     adj.orderAdjustmentTypeId || "",
     itemAdjustmentLabel(adj),
-    Number(adj.amount || 0)
+    Number(adj.amount || 0),
+    Number(adj.amountAlreadyIncluded || 0)
   ].join("|");
 }
 
@@ -3238,8 +3249,16 @@ function itemAdjustmentSummaries(rawItem: any, orderItemSeqId: string): Array<{ 
     const key = itemAdjustmentKey(adj, orderItemSeqId);
     if (seen.has(key)) return;
     seen.add(key);
-    const comment = itemAdjustmentLabel(adj);
-    totals[comment] = (totals[comment] || 0) + Number(adj.amount || 0);
+
+    const amount = Number(adj.amount || 0);
+    const amountAlreadyIncluded = Number(adj.amountAlreadyIncluded || 0);
+    const isIncluded = amount === 0 && amountAlreadyIncluded > 0;
+    const value = isIncluded ? amountAlreadyIncluded : amount;
+    if (value === 0) return;
+
+    const baseLabel = itemAdjustmentLabel(adj);
+    const comment = isIncluded ? `${baseLabel} (${translate('included')})` : baseLabel;
+    totals[comment] = (totals[comment] || 0) + value;
   });
 
   return Object.entries(totals)
