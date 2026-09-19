@@ -538,12 +538,13 @@
               <div v-if="hasSelectedShipGroupOptions(shipGroup)"
                 class="ship-group-selected-options">
                 <ion-item v-if="shipGroup.giftMessage" button detail="false" lines="none"
-                  @click="openGiftModal(shipGroup)">
+                  :disabled="isShipGroupReadOnly(shipGroup)" @click="openGiftModal(shipGroup)">
                   <ion-label>
                     <p>{{ translate('Gift message') }}</p>
                     {{ shipGroup.giftMessage }}
                   </ion-label>
                   <ion-button
+                    v-if="!isShipGroupReadOnly(shipGroup)"
                     slot="end"
                     fill="clear"
                     color="medium"
@@ -554,7 +555,7 @@
                   </ion-button>
                 </ion-item>
                 <ion-item v-if="shipGroup.shipAfterDate || shipGroup.shipByDate" button detail="false" lines="none"
-                  @click="openShippingDatesModal(shipGroup)">
+                  :disabled="isShipGroupReadOnly(shipGroup)" @click="openShippingDatesModal(shipGroup)">
                   <ion-label>
                     <p class="outline">{{ translate('Ship after') }}</p>
                     {{ formatDate(shipGroup.shipAfterDate) }}
@@ -565,7 +566,7 @@
                   </ion-label>
                 </ion-item>
                 <ion-item v-if="shipGroup.estimatedShipDate || shipGroup.estimatedDeliveryDate" button detail="false"
-                  lines="none" @click="openDeliveryDatesModal(shipGroup)">
+                  lines="none" :disabled="isShipGroupReadOnly(shipGroup)" @click="openDeliveryDatesModal(shipGroup)">
                   <ion-label>
                     <p class="outline">{{ translate('Estimated ship date') }}</p>
                     {{ formatDate(shipGroup.estimatedShipDate) }}
@@ -576,7 +577,7 @@
                   </ion-label>
                 </ion-item>
                 <ion-item v-if="shipGroup.shippingInstructions" button detail="false" lines="none"
-                  @click="openInstructionModal(shipGroup)">
+                  :disabled="isShipGroupReadOnly(shipGroup)" @click="openInstructionModal(shipGroup)">
                   <ion-label>
                     <p class="outline">{{ translate('Instructions') }}</p>
                     {{ shipGroup.shippingInstructions }}
@@ -604,9 +605,7 @@
                     lifecycleStepLabel(lifecycleByShipGroup[shipGroup.id], 'pick') }}</p>
                   {{ translate('Pick') }}
                 </ion-label>
-                <ion-note slot="end">{{ formatTime(lifecycleByShipGroup[shipGroup.id]?.picklistDate) ||
-                  translate('Pending')
-                  }}</ion-note>
+                <ion-note slot="end">{{ lifecycleStepNote(shipGroup, lifecycleByShipGroup[shipGroup.id]?.picklistDate) }}</ion-note>
               </ion-item>
               <ion-item lines="none">
                 <ion-icon slot="start" :icon="cubeOutline" />
@@ -615,9 +614,7 @@
                     lifecycleStepLabel(lifecycleByShipGroup[shipGroup.id], 'pack') }}</p>
                   {{ translate('Pack') }}
                 </ion-label>
-                <ion-note slot="end">{{ formatTime(lifecycleByShipGroup[shipGroup.id]?.packedDate) ||
-                  translate('Pending')
-                  }}</ion-note>
+                <ion-note slot="end">{{ lifecycleStepNote(shipGroup, lifecycleByShipGroup[shipGroup.id]?.packedDate) }}</ion-note>
               </ion-item>
               <ion-item lines="none">
                 <ion-icon slot="start" :icon="sendOutline" />
@@ -626,9 +623,7 @@
                     lifecycleStepLabel(lifecycleByShipGroup[shipGroup.id], 'ship') }}</p>
                   {{ translate('Ship') }}
                 </ion-label>
-                <ion-note slot="end">{{ formatTime(lifecycleByShipGroup[shipGroup.id]?.shippedDate) ||
-                  translate('Pending')
-                  }}</ion-note>
+                <ion-note slot="end">{{ lifecycleStepNote(shipGroup, lifecycleByShipGroup[shipGroup.id]?.shippedDate) }}</ion-note>
               </ion-item>
             </div>
 
@@ -735,6 +730,7 @@
                   <ion-item lines="full">
                     <ion-select :label="translate('Carrier')" interface="popover"
                       :placeholder="translate('Select Carrier')"
+                      :disabled="isShipGroupActionDisabled(shipGroup, 'EDIT_CARRIER_METHOD')"
                       :value="getSelection(shipGroup.id, shipGroup).carrierId"
                       @ionChange="onCarrierChange(shipGroup.id, $event.detail.value)">
                       <ion-select-option v-for="carrier in availableCarriers" :key="carrier.partyId"
@@ -749,6 +745,7 @@
                   <ion-item lines="full">
                     <ion-select :label="translate('Shipping method')" interface="popover"
                       :placeholder="translate('Select Shipping Method')"
+                      :disabled="isShipGroupActionDisabled(shipGroup, 'EDIT_CARRIER_METHOD')"
                       :value="getSelection(shipGroup.id, shipGroup).methodId || undefined"
                       @ionChange="onMethodChange(shipGroup.id, $event.detail.value)">
                       <ion-select-option
@@ -770,7 +767,9 @@
                     <p slot="end" v-if="!isVirtualFacility(shipGroup) && shipGroupDistances[shipGroup.id]">
                       {{ shipGroupDistances[shipGroup.id] }} {{ translate('miles') }}
                     </p>
-                    <ion-button slot="end" fill="clear" color="medium" :id="'shipping-opt-trigger-' + shipGroup.id" :aria-label="translate('Shipping options')">
+                    <ion-button v-if="!isShipGroupActionDisabled(shipGroup, 'EDIT_ADDRESS')" slot="end" fill="clear"
+                      color="medium" :id="'shipping-opt-trigger-' + shipGroup.id"
+                      :aria-label="translate('Shipping options')">
                       <ion-icon slot="icon-only" :icon="ellipsisVertical" />
                     </ion-button>
                     <ion-popover :trigger="'shipping-opt-trigger-' + shipGroup.id" dismiss-on-select
@@ -778,7 +777,9 @@
                       <ion-content>
                         <ion-list>
                           <ion-list-header>{{ translate("Shipping address") }}</ion-list-header>
-                          <ion-item button detail="false" @click="openEditShippingAddress(shipGroup)">
+                          <ion-item button detail="false"
+                            :disabled="isShipGroupActionDisabled(shipGroup, 'EDIT_ADDRESS')"
+                            @click="openEditShippingAddress(shipGroup)">
                             <ion-icon :icon="createOutline" slot="end" />
                             {{ translate('Edit') }}
                           </ion-item>
@@ -871,8 +872,11 @@
                 :disabled="!inventoryTransferItemsForShipGroup(shipGroup).length"
                 @click="requestInventoryTransfersForShipGroup(shipGroup)"
               >{{ translate('Request transfer') }}</ion-button>
-              <ion-button fill="clear" @click="openAddTaskModal(shipGroup)">{{ translate('Add Task') }}</ion-button>
-              <ion-button v-if="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)" fill="clear" @click="openAddItemModal(shipGroup)">{{ translate('Add Items') }}</ion-button>
+              <ion-button fill="clear" :disabled="isShipGroupActionDisabled(shipGroup, 'ADD_TASK')"
+                @click="openAddTaskModal(shipGroup)">{{ translate('Add Task') }}</ion-button>
+              <ion-button v-if="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)" fill="clear"
+                :disabled="isShipGroupActionDisabled(shipGroup, 'ADD_ITEMS')"
+                @click="openAddItemModal(shipGroup)">{{ translate('Add Items') }}</ion-button>
             </div>
           <!-- Gift message modal -->
           <ion-modal :is-open="giftModalShipGroupId === shipGroup.id" @didDismiss="giftModalShipGroupId = null">
@@ -1133,6 +1137,7 @@ import { showToast, isKit, riskLevelColor, sentimentCounts } from '@/utils';
 import { OrderActionValidator } from '@/utils/OrderActionValidator';
 import { fulfillmentLineStatus, fulfillmentLineStatusColor } from '@/utils/fulfillmentLineStatus';
 import { countShipGroupHoldTasks } from '@/utils/orderHoldTasks';
+import { shipGroupItemStates as itemStatesFor } from '@/utils/shipGroupItemStates';
 import { shopifyAdminOrderUrl, singleShopIdForProductStore } from '@/utils/shopifyAdmin';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useUserStore } from '@/store/user';
@@ -1321,7 +1326,10 @@ const order = computed(() => {
           name: product?.parentProductName || product?.productName || item.itemDescription || item.productId,
           sku: product?.sku || item.productId,
           imageUrl: product?.mainImageUrl || '',
-          quantity: item.quantity
+          quantity: item.quantity,
+          // The card's progress and lifecycle read this: a group whose items are all terminal
+          // is finished no matter what the fulfillment timeline did or did not record.
+          statusId: item.statusId
         };
       })
     }))
@@ -1798,10 +1806,31 @@ function isShipGroupBrokered(shipGroup: any): boolean {
   return !isVirtualFacility(shipGroup) || !!shipGroupBrokeredDate(shipGroup);
 }
 
+/** Item-derived state for this group; see utils/shipGroupItemStates for why it is the authority. */
+function shipGroupItemStates(shipGroup: any) {
+  return itemStatesFor(shipGroup?.items);
+}
+
+/**
+ * A stopped group is read-only: its carrier, method, dates, gift message and instructions
+ * all describe a shipment that is no longer going to change. Reads the same `settled` the
+ * card's label uses, so the two cannot disagree.
+ */
+function isShipGroupReadOnly(shipGroup: any): boolean {
+  return shipGroupItemStates(shipGroup).settled;
+}
+
 function shipGroupProgress(shipGroup: any): number {
   // A counter sale is finished the moment it is recorded; there is no lifecycle to
   // measure and no timeline row to measure it from.
   if (isPosCompleted(shipGroup)) return 1;
+
+  // Item status wins for a stopped group; the timeline only describes one still in motion.
+  // One expression covers all three terminal cases: 1 when every item landed, 0 when none
+  // did, and the fraction in between.
+  const { total, fulfilled, settled } = shipGroupItemStates(shipGroup);
+  if (settled) return fulfilled / total;
+
   const tl = timelineByShipGroup.value[shipGroup.id];
   let progress = 0;
   if (isShipGroupBrokered(shipGroup)) progress += 0.25;
@@ -1811,10 +1840,18 @@ function shipGroupProgress(shipGroup: any): number {
   return progress;
 }
 
+/** A step that never got a date: still to come, or already behind us and simply not recorded. */
+function lifecycleStepNote(shipGroup: any, date: any): string {
+  return formatTime(date)
+    || (shipGroupItemStates(shipGroup).settled ? translate('No date') : translate('Pending'));
+}
+
 /** The brokered step's time, or why there is none: not brokered yet vs. brokered untimed. */
 function brokeredStepNote(shipGroup: any): string {
   return formatTime(shipGroupBrokeredDate(shipGroup))
-    || (isShipGroupBrokered(shipGroup) ? translate('No date') : translate('Pending'));
+    || (isShipGroupBrokered(shipGroup) || shipGroupItemStates(shipGroup).settled
+      ? translate('No date')
+      : translate('Pending'));
 }
 
 function isShipGroupExpanded(shipGroupId: string): boolean {
@@ -1876,13 +1913,24 @@ function shipGroupHeaderTitle(shipGroup: any): string {
 
 function shipGroupStatusLabel(shipGroup: any): string {
   if (isPosCompleted(shipGroup)) return translate('Sold in store');
-  if (isVirtualFacility(shipGroup)) return translate('Not Brokered');
+
+  // A stopped group is not a point on the way to shipping, so a percentage misreads it —
+  // and neither does where its items are parked. Cancelled items are routinely moved to a
+  // virtual facility such as REJECTED_ITM_PARKING, so the brokering label has to come after
+  // these checks or the card reads "Not Brokered" over a terminal-aware progress bar.
+  const { total, fulfilled, settled } = shipGroupItemStates(shipGroup);
+  if (settled && fulfilled === 0) return translate('Cancelled');
+  if (settled && fulfilled < total) return translate('Partially complete');
+
+  if (!settled && isVirtualFacility(shipGroup)) return translate('Not Brokered');
+
   // A physical facility is always at least brokered, so there is no 0% case left to
   // label — the old fallback here read "Brokered", which collided with the step name.
   return `${Math.round(shipGroupProgress(shipGroup) * 100)}% ${translate('Complete')}`;
 }
 
 function hasSelectableShipGroupOptions(shipGroup: any): boolean {
+  if (isShipGroupReadOnly(shipGroup)) return false;
   return !shipGroup.giftMessage
     || (!shipGroup.shipAfterDate && !shipGroup.shipByDate)
     || (!shipGroup.estimatedShipDate && !shipGroup.estimatedDeliveryDate)
