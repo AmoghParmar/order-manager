@@ -98,11 +98,14 @@
           <DateFilterSelect
             v-model="searchFilters.dateFrom"
             :label="translate('Order date from')"
+            :max="searchFilters.dateThru || today"
             outlined
           />
           <DateFilterSelect
             v-model="searchFilters.dateThru"
             :label="translate('Order date through')"
+            :min="searchFilters.dateFrom || undefined"
+            :max="today"
             outlined
           />
         </UniformFilterLayout>
@@ -197,6 +200,7 @@ import {
 } from '@ionic/vue';
 import { translate } from '@common';
 import { chevronDownOutline } from 'ionicons/icons';
+import { DateTime } from 'luxon';
 import { computed, onMounted, ref, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useOrderStore, DEFAULT_ORDER_SEARCH_SORT } from '@/store/order';
@@ -218,6 +222,8 @@ import { toSearchOrderRowViewModel } from '@/utils/orderRows';
 import { showToast } from '@/utils';
 import { HIDE_SHOPIFY_UNSYNCED_ACTIONS } from '@/config/featureFlags';
 import Actions from "@/authorization/actions";
+
+const today = computed(() => DateTime.now().toISODate()!);
 
 const orderStore = useOrderStore();
 const orderDetailStore = useOrderDetailStore();

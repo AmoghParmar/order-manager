@@ -39,24 +39,30 @@
       <DateFilterSelect
         :model-value="modelValue.orderDateFrom"
         :label="translate('Order date from')"
+        :max="modelValue.orderDateThru || today"
         outlined
         @update:modelValue="updateField('orderDateFrom', $event)"
       />
       <DateFilterSelect
         :model-value="modelValue.orderDateThru"
         :label="translate('Order date through')"
+        :min="modelValue.orderDateFrom || undefined"
+        :max="today"
         outlined
         @update:modelValue="updateField('orderDateThru', $event)"
       />
       <DateFilterSelect
         :model-value="modelValue.taskCreatedFrom"
         :label="translate('Task created from')"
+        :max="modelValue.taskCreatedThru || today"
         outlined
         @update:modelValue="updateField('taskCreatedFrom', $event)"
       />
       <DateFilterSelect
         :model-value="modelValue.taskCreatedThru"
         :label="translate('Task created through')"
+        :min="modelValue.taskCreatedFrom || undefined"
+        :max="today"
         outlined
         @update:modelValue="updateField('taskCreatedThru', $event)"
       />
@@ -136,12 +142,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { IonSelect, IonSelectOption } from '@ionic/vue';
+import { DateTime } from 'luxon';
 import { translate } from '@common';
 import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 import UniformFilterLayout from '@/components/common/UniformFilterLayout.vue';
 import type { OrderTaskFilters, TaskFilterOption } from '@/types/orderTaskFilters';
+
+const today = computed(() => DateTime.now().toISODate()!);
 
 const props = withDefaults(defineProps<{
   modelValue: OrderTaskFilters;

@@ -32,6 +32,8 @@
         presentation="date"
         :show-default-buttons="true"
         :value="modelValue || undefined"
+        :min="min || undefined"
+        :max="max || undefined"
         @ionChange="emit('update:modelValue', normalizeDate($event.detail.value))"
       />
     </ion-popover>
@@ -53,9 +55,13 @@ const props = withDefaults(defineProps<{
   modelValue: string;
   label: string;
   outlined?: boolean;
+  min?: string;
+  max?: string;
 }>(), {
   modelValue: '',
   outlined: false,
+  min: '',
+  max: '',
 });
 
 const emit = defineEmits<{

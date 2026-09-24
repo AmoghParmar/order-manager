@@ -16,6 +16,8 @@ describe('date filter select', () => {
     expect(source).toContain('<ion-datetime');
     expect(source).toContain('presentation="date"');
     expect(source).toContain(':show-default-buttons="true"');
+    expect(source).toContain(':min="min || undefined"');
+    expect(source).toContain(':max="max || undefined"');
     expect(source).toContain("emit('update:modelValue', normalizeDate($event.detail.value))");
     expect(source).toContain("translate('Select date')");
     expect(source).toContain('flex: 0 0 11rem;');

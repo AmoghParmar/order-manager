@@ -47,11 +47,14 @@
           <DateFilterSelect
             v-model="searchFilters.dateFrom"
             :label="translate('Order date from')"
+            :max="searchFilters.dateThru || today"
             outlined
           />
           <DateFilterSelect
             v-model="searchFilters.dateThru"
             :label="translate('Order date through')"
+            :min="searchFilters.dateFrom || undefined"
+            :max="today"
             outlined
           />
         </UniformFilterLayout>
@@ -146,6 +149,7 @@ import {
   useIonRouter,
 } from '@ionic/vue';
 import { api, translate } from '@common';
+import { DateTime } from 'luxon';
 import { computed, onMounted, ref, watch } from 'vue';
 import { searchOrders } from '@/services/order';
 import { useOrderDetailStore } from '@/store/orderDetail';
@@ -207,6 +211,7 @@ const seedStore = useSeedStore();
 const ionRouter = useIonRouter();
 
 const PAGE_SIZE = 50;
+const today = computed(() => DateTime.now().toISODate()!);
 
 const searchQuery = ref('');
 const searchFilters = ref({
