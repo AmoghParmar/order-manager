@@ -276,10 +276,10 @@
       <div v-if="selectedSegment === 'items'" class="order-items">
 
         <ion-list lines="none" class="order-items-list">
-          <ion-item lines="full" class="order-items-toolbar">
+          <ion-item v-if="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)" lines="full" class="order-items-toolbar">
             <ion-checkbox :checked="areAllSelected" justify="start" label-placement="end"
               @ionChange="toggleSelectAll($event.detail.checked)">{{ translate('Select all') }}</ion-checkbox>
-            <ion-button v-if="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)" slot="end" fill="outline" color="medium" @click="openAddItemFromItemsSegment">
+            <ion-button slot="end" fill="outline" color="medium" @click="openAddItemFromItemsSegment">
               {{ translate('Add items') }}
             </ion-button>
           </ion-item>
@@ -289,6 +289,7 @@
                    rendered directly with the product identity the rolled up header would carry. -->
               <OrderItemListRow
                 v-if="soleItem"
+                :selectable="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)"
                 :primary="groupPrimaryIdentifier(group)"
                 :secondary="groupSecondaryIdentifier(group)"
                 :badge-label="isKit(group) ? translate('Kit') : ''"
@@ -332,6 +333,7 @@
               <ion-accordion v-else :value="group.externalId">
                 <OrderItemListRow
                   slot="header"
+                  :selectable="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)"
                   :select-on-row-click="false"
                   :primary="groupPrimaryIdentifier(group)"
                   :secondary="groupSecondaryIdentifier(group)"
@@ -355,6 +357,7 @@
                       v-for="item in group.items"
                       :key="item.orderItemSeqId"
                       class="order-item-detail-entry"
+                      :selectable="!['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)"
                       :primary="`${translate('Item')} ${item.orderItemSeqId}`"
                       :secondary="item.externalId && item.externalId !== 'null' ? `${translate('External ID')}: ${item.externalId}` : ''"
                       :selected="item.selected"
@@ -687,7 +690,7 @@
                   <ion-item v-for="item in shipGroup.items" :key="item.id">
                     <!-- Selection only feeds the pull back / release actions, which a counter
                          sale does not have. -->
-                    <ion-checkbox v-if="!isPosCompleted(shipGroup)" slot="start" :checked="isItemSelected(shipGroup.id, item.id)"
+                    <ion-checkbox v-if="!isPosCompleted(shipGroup) && !['ORDER_CANCELLED', 'ORDER_COMPLETED'].includes(order?.statusId)" slot="start" :checked="isItemSelected(shipGroup.id, item.id)"
                       @ionChange="toggleItemSelection(shipGroup.id, item.id, $event.detail.checked)" />
                     <ion-thumbnail slot="start" v-image-preview="getProduct(item.productId)"
                       :key="getProduct(item.productId)?.mainImageUrl">
