@@ -60,15 +60,14 @@
       <DateFilterSelect
         :model-value="modelValue.dateFrom"
         :label="translate('Order date from')"
-        :max="modelValue.dateThru || today"
+        :max="modelValue.dateThru"
         outlined
         @update:modelValue="updateField('dateFrom', $event)"
       />
       <DateFilterSelect
         :model-value="modelValue.dateThru"
         :label="translate('Order date through')"
-        :min="modelValue.dateFrom || undefined"
-        :max="today"
+        :min="modelValue.dateFrom"
         outlined
         @update:modelValue="updateField('dateThru', $event)"
       />
@@ -77,16 +76,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import { IonSelect, IonSelectOption } from '@ionic/vue';
-import { DateTime } from 'luxon';
 import { translate } from '@common';
 import type { WorkflowFilters } from '@/types/customerService';
 import DateFilterSelect from '@/components/common/DateFilterSelect.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 import UniformFilterLayout from '@/components/common/UniformFilterLayout.vue';
-
-const today = computed(() => DateTime.now().toISODate()!);
 
 export interface WorkflowFilterOption {
   id: string;

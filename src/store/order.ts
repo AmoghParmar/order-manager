@@ -210,10 +210,6 @@ export const useOrderStore = defineStore('orders', {
       });
     },
     async runSearch() {
-      const { dateFrom, dateThru } = this.searchFilters;
-      if (dateFrom && dateThru && dateFrom > dateThru) {
-        return;
-      }
       this.pageIndex = 0;
       const result = await this.fetchSearchPage(0);
       this.searchResults = result.orders;

@@ -174,14 +174,4 @@ describe('order workflow store', () => {
     expect(store.workflowOrderEnrichment.open).toEqual({});
     expect(fetchOrderRowEnrichment).not.toHaveBeenCalled();
   });
-
-  it('skips searching when dateFrom is later than dateThru', async () => {
-    const store = useOrderStore();
-    store.searchFilters.dateFrom = '2026-09-25';
-    store.searchFilters.dateThru = '2026-09-23';
-
-    await store.runSearch();
-
-    expect(api).not.toHaveBeenCalled();
-  });
 });
