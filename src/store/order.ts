@@ -10,7 +10,7 @@ import type { Customer, Order, ReturnRecord, Shipment } from '@/types/order';
 import type { WorkflowOrder, WorkflowFilters } from '@/types/customerService';
 import { DEFAULT_WORKFLOW_ORDER_SORT, WORKFLOW_ORDER_SORT_ORDER_BY } from '@/types/customerService';
 import type { OrderRowEnrichment } from '@/types/orderRow';
-import { omDb } from '@/db/orderManagerDb';
+import { orderManagerDb } from '@/db/orderManagerDb';
 import { useProductStore } from './productStore';
 import { queueCountFetchers } from '@/services/navCounts';
 
@@ -26,8 +26,8 @@ export const DEFAULT_ORDER_SEARCH_SORT = 'orderDate asc';
 async function readOrderRowSeedRows() {
   try {
     const [productStores, shipmentMethods] = await Promise.all([
-      omDb().all('productStores'),
-      omDb().all('shipmentMethodTypes'),
+      orderManagerDb.entity(orderManagerDb.tables.productStores).all(),
+      orderManagerDb.entity(orderManagerDb.tables.shipmentMethodTypes).all(),
     ]);
 
     return {

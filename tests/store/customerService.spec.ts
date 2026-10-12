@@ -49,7 +49,10 @@ vi.mock('@/store/order', () => ({
 }));
 
 vi.mock('@/db/orderManagerDb', () => ({
-  omDb: () => ({ all: async () => [], get: async () => undefined }),
+  orderManagerDb: {
+    tables: new Proxy({}, { get: (_target, table) => table }),
+    entity: () => ({ all: async () => [], get: async () => undefined }),
+  },
 }));
 
 vi.mock('@/store/orderDetail', () => ({

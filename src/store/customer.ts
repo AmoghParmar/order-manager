@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 import { defineStore } from 'pinia';
-import { omDb } from '@/db/orderManagerDb';
+import { orderManagerDb } from '@/db/orderManagerDb';
 import {
   createPartyEmail,
   createPartyPostalAddress,
@@ -152,7 +152,7 @@ function triggerCustomerIndex(partyId: string): void {
 /** statusId -> statusAge, read straight from IndexedDB. */
 async function readStatusAges(): Promise<Map<string, number>> {
   try {
-    const statuses = await omDb().all('statuses');
+    const statuses = await orderManagerDb.entity(orderManagerDb.tables.statuses).all();
 
     return new Map(statuses.map((row: any) => [row.statusId, Number(row.statusAge ?? 0)]));
   } catch {

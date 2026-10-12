@@ -10,9 +10,10 @@
  * Pinia store) even though the worker never touches it, and Vite must emit that chunk as a
  * single iife. Hence the two entry points below:
  *
- *   getOrderManagerDb(omsInstance)  the instance is a parameter — worker-safe
- *   omDb()                          resolves the instance via a resolver the app registers
- *                                   at boot — main thread only
+ *   getOrderManagerDb(omsInstance)  the instance is a parameter — for the worker entry only,
+ *                                   which hands it to the sync harness
+ *   orderManagerDb.entity(table)    every read and write: resolves the instance via a resolver
+ *                                   the app registers at boot (useLiveEntity for live reads)
  *
  * Deep imports, not the `@common/db` barrel, for the same reason.
  */
@@ -20,7 +21,6 @@
 import { defineAppDb } from "@common/db/schema/defineAppDb";
 import { commonSchema } from "@common/db/seed/seedSchema";
 import type { BaseDB } from "@common/db/storage/baseDb";
-import type { DbClient } from "@common/db/storage/dbClient";
 
 /**
  * Order Manager reads only HotWax seed reference data, so it takes the whole common schema and
@@ -43,4 +43,3 @@ export const orderManagerDbName = (omsInstance: string): string => orderManagerD
 export const getOrderManagerDb = (omsInstance: string): BaseDB => orderManagerDb.get(omsInstance);
 export const setOmsInstanceResolver = (resolve: () => string): void =>
   orderManagerDb.setOmsInstanceResolver(resolve);
-export const omDb = (): DbClient => orderManagerDb.client();

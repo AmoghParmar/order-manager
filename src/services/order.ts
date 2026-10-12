@@ -1,5 +1,5 @@
 import { api, commonUtil, useSolrSearch } from '@common';
-import { omDb } from '@/db/orderManagerDb';
+import { orderManagerDb } from '@/db/orderManagerDb';
 import type { Order } from '@/types/order';
 import type {
   AllocationItemDocument,
@@ -787,7 +787,7 @@ export function summarizeBrokeredFacilities(docs: any[], facilityTypeRows: any[]
 /** Facility type rows, read straight from IndexedDB; unavailable means no parent types. */
 async function readFacilityTypes(): Promise<any[]> {
   try {
-    return await omDb().all('facilityTypes');
+    return await orderManagerDb.entity(orderManagerDb.tables.facilityTypes).all();
   } catch {
     return [];
   }

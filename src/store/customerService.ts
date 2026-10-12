@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { omDb } from '@/db/orderManagerDb';
+import { orderManagerDb } from '@/db/orderManagerDb';
 import { DateTime } from 'luxon';
 import { useOrderStore } from '@/store/order';
 import { api, commonUtil, logger, translate } from '@common';
@@ -281,7 +281,7 @@ function inBucket(order: WorkflowOrder, bucket: WorkflowBucket): boolean {
 /** Enums of one type, read straight from IndexedDB. */
 async function readEnumsByType(enumTypeId: string): Promise<any[]> {
   try {
-    return (await omDb().all('enums')).filter((row: any) => row.enumTypeId === enumTypeId);
+    return (await orderManagerDb.entity(orderManagerDb.tables.enums).all()).filter((row: any) => row.enumTypeId === enumTypeId);
   } catch {
     return [];
   }

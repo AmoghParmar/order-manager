@@ -228,7 +228,7 @@ import { useDbStatus } from '@common/db';
 import { useAuth } from '@common/composables/useAuth';
 import { useUserStore } from '@/store/user';
 import { useProductStore } from '@/store/productStore';
-import { getOrderManagerDb, orderManagerDb } from '@/db/orderManagerDb';
+import { orderManagerDb } from '@/db/orderManagerDb';
 import { resyncDomain, resyncReferenceData, syncService } from '@/services/appDbSync';
 import DxpProductIdentifier from "@/components/settings/DxpProductIdentifier.vue";
 import DxpAppVersionInfo from "@/components/settings/DxpAppVersionInfo.vue";
@@ -371,7 +371,7 @@ function clearSearch() {
 const {
   domains, refreshing, totalRows, oldestSyncedAt, lastSyncedAt, refreshDomain, refreshAll,
 } = useDbStatus(
-  orderManagerDb.raw(),
+  orderManagerDb.client(),
   orderManagerDb.statusCatalog,
   {
     resyncDomain,

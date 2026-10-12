@@ -21,7 +21,10 @@ vi.mock('@/composables/useOrderDetail', async (importOriginal) => {
 
 vi.mock('@/db/orderManagerDb', async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  omDb: () => ({ all: async () => [], get: async () => undefined }),
+  orderManagerDb: {
+    tables: new Proxy({}, { get: (_target, table) => table }),
+    entity: () => ({ all: async () => [], get: async () => undefined }),
+  },
 }));
 
 const ORDER_ID = 'M102510';

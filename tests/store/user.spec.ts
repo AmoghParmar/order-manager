@@ -164,7 +164,12 @@ describe('product store', () => {
     preference.resolve({ data: [{ preferenceValue: 'STORE_B' }] });
     await Promise.all([firstInitialization, concurrentInitialization]);
 
-    expect(api).toHaveBeenCalledTimes(2);
+    // Catalog, preference, then the preferred store's settings — selecting a store loads them.
+    expect(api).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(api).mock.calls[2][0]).toMatchObject({
+      url: '/oms/dataDocumentView',
+      data: { dataDocumentId: 'ProductStoreSetting', customParametersMap: { productStoreId: 'STORE_B' } },
+    });
     expect(productStore.getCurrentProductStore).toEqual({
       productStoreId: 'STORE_B',
       storeName: 'Store B',
