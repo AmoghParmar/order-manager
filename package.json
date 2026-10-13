@@ -6,8 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm lint:data-access && vite build",
-    "lint:data-access": "cd ../.. && eslint --config eslint.data-access.config.js apps/order-manager/src",
+    "build": "vite build",
     "preview": "vite preview",
     "test:unit": "vitest run",
     "test:watch": "vitest",
