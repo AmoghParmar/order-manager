@@ -10,5 +10,12 @@ export default [
       "@typescript-eslint/no-restricted-imports": "off",
       "no-restricted-syntax": "off"
     }
+  },
+  {
+    // TODO: move the api() calls in these pages into composables / stores, then remove this override.
+    files: ["src/**/*.vue"],
+    rules: {
+      "no-restricted-imports": "off"
+    }
   }
 ]
