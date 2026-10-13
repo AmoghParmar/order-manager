@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "eslint src && vite build",
     "preview": "vite preview",
     "test:unit": "vitest run",
     "test:watch": "vitest",
