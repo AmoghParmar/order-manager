@@ -1,6 +1,6 @@
 import { flushPromises } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, ref } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { alertController, modalController } from '@ionic/vue';
 import { useOrderActions } from '@/composables/useOrderActions';
@@ -42,14 +42,14 @@ function setup(items: EnrichedOrderItem[], checked: string[], canTransfer = true
   const selectedItemIds = ref(new Set<string>(checked));
   // The order's transfers have loaded, so an item without one can be told apart from one waiting on one.
   useOrderDetailStore().inventoryTransfersByOrderId.O1 = [];
-  const actions = useOrderActions({
+  const actions = effectScope().run(() => useOrderActions({
     order: ref(order),
     loadOrder: vi.fn(),
     selectedItemIds,
     selectedShipGroupItems: ref({}),
     selectedSegment: ref('items'),
     canRequestInventoryTransfer: ref(canTransfer),
-  });
+  }))!;
   return { actions, selectedItemIds };
 }
 

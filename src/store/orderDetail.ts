@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { api, commonUtil, logger, translate, useSolrSearch } from "@common";
-import { seedData } from "@common/db";
+import { emptySeedData, loadSeedData, type SeedData } from "@common/db";
+import { markRaw } from "vue";
 import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_SAMPLE_SIZE, useOrderDetail, type IssuanceLine } from "@/composables/useOrderDetail";
 import { useProductCacheStore } from "./productCache";
 import { useCustomerStore } from "./customer";
@@ -57,23 +58,23 @@ async function singleFlight(key: string, force: boolean, run: () => Promise<void
 const QUEUE_FACILITY_ID = "_NA_";
 
 /** Parking and queue facilities, where an item waits rather than being fulfilled. */
-export function isVirtualFacilityId(facilityId: string): boolean {
+export function isVirtualFacilityId(facilityId: string, seed: SeedData): boolean {
   if (!facilityId || facilityId === QUEUE_FACILITY_ID) return true;
-  const facilityTypeId = seedData.facility(facilityId)?.facilityTypeId;
+  const facilityTypeId = seed.facility(facilityId)?.facilityTypeId;
   return OrderActionValidator.isVirtualFacility({
     facilityId,
     facilityTypeId,
-    facilityParentTypeId: seedData.facilityType(facilityTypeId)?.parentTypeId,
+    facilityParentTypeId: seed.facilityType(facilityTypeId)?.parentTypeId,
   });
 }
 
 const newEntry = (): OrderEntry => ({ payload: null, status: "idle", loadedAt: "", error: "" });
 
-const adjustmentDisplayLabel = (adj: any) =>
-  adjustmentLabel(adj, seedData.orderAdjustmentTypeDescription, "OTHER_ADJUSTMENT");
+const adjustmentDisplayLabel = (adj: any, seed: SeedData) =>
+  adjustmentLabel(adj, seed.orderAdjustmentTypeDescription, "OTHER_ADJUSTMENT");
 
-const adjustmentUniqueKey = (adj: any, fallbackSeqId = "") =>
-  adjustmentKey(adj, adjustmentDisplayLabel(adj), fallbackSeqId);
+const adjustmentUniqueKey = (adj: any, seed: SeedData, fallbackSeqId = "") =>
+  adjustmentKey(adj, adjustmentDisplayLabel(adj, seed), fallbackSeqId);
 
 /**
  * Subtotal, adjustments grouped by label, and grand total. Sums the rows actually displayed
@@ -81,7 +82,7 @@ const adjustmentUniqueKey = (adj: any, fallbackSeqId = "") =>
  * which has been observed to exclude tax. Rounded to avoid floating-point drift
  * (e.g. 59 + 1.53 + 0.59 + 2.86 = 63.980000000000004).
  */
-function orderTotals(order: any) {
+function orderTotals(order: any, seed: SeedData) {
   if (!order) return { subtotal: 0, adjustments: {}, total: 0, includedAdjustments: {} };
 
   let subtotal = 0;
@@ -97,13 +98,13 @@ function orderTotals(order: any) {
   const seenAdjustments = new Set<string>();
 
   const recordAdjustment = (adj: any, fallbackSeqId = "") => {
-    const uniqueKey = adjustmentUniqueKey(adj, fallbackSeqId);
+    const uniqueKey = adjustmentUniqueKey(adj, seed, fallbackSeqId);
     if (seenAdjustments.has(uniqueKey)) return;
     seenAdjustments.add(uniqueKey);
 
     adjustmentsTotal += Number(adj.amount || 0);
     const { amount, isIncluded } = adjustmentAmount(adj);
-    const label = adjustmentDisplayLabel(adj);
+    const label = adjustmentDisplayLabel(adj, seed);
 
     // Included and excluded amounts stay in separate buckets: a label can carry both
     // (an included tax on one item, an ordinary one on another), and merging them would
@@ -207,8 +208,14 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     // Inventory transfers requested for the order's items, by Order Manager, the Transfers app
     // or the regional broker.
     inventoryTransfersByOrderId: {} as Record<string, any[]>,
+    // The seed tables the order page's labels and joins read, as one snapshot read with each order
+    // load (loadSeedData). It does not follow later changes; the next load reads it again.
+    seedSnapshot: null as SeedData | null,
   }),
   getters: {
+    /** The seed snapshot, or one that answers raw ids until the first order load has read it. */
+    seed: (state): SeedData => state.seedSnapshot ?? emptySeedData,
+
     /**
      * The order page's view model: the raw order document joined with the loaded auxiliary
      * sources (order events, issuance, risk, returns, transfers) and the seed,
@@ -230,7 +237,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
           riskAssessments: this.riskAssessmentsForOrder(orderId),
           returnedQtyBySeqId: this.returnedQtyByItemSeqIdByOrderId(orderId),
           inventoryTransfers: this.inventoryTransfersByOrderId[orderId] || [],
-        }, { seed: seedData, productCache: useProductCacheStore() });
+        }, { seed: this.seed, productCache: useProductCacheStore() });
       };
     },
 
@@ -294,7 +301,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         fulfillment: this.fulfillmentTimelineByOrderId[orderId] || [],
         returnHeadersById: this.returnHeadersById,
         exchangeChildren: this.exchangeChildrenByOrderId[orderId] || [],
-        isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId),
+        isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId, this.seed),
       });
     },
 
@@ -327,7 +334,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     },
 
     orderTotalsByOrderId(): (orderId: string) => ReturnType<typeof orderTotals> {
-      return (orderId: string) => orderTotals(this.byOrderId[orderId]?.payload);
+      return (orderId: string) => orderTotals(this.byOrderId[orderId]?.payload, this.seed);
     },
 
     allItemsByOrderId: (state) => (orderId: string) => {
@@ -373,12 +380,12 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         const recordAdj = (seqId: string, adj: any) => {
           const extId = seqIdToExtId[seqId] || seqId;
           if (!extId) return;
-          const uniqueKey = `${extId}:${adjustmentUniqueKey(adj, seqId)}`;
+          const uniqueKey = `${extId}:${adjustmentUniqueKey(adj, this.seed, seqId)}`;
           if (seenAdjustments.has(uniqueKey)) return;
           seenAdjustments.add(uniqueKey);
 
           const { amount, isIncluded } = adjustmentAmount(adj);
-          const label = adjustmentDisplayLabel(adj);
+          const label = adjustmentDisplayLabel(adj, this.seed);
           const bucketKey = isIncluded ? `${label}\u0000included` : label;
           const buckets = index[extId] ||= {};
           const bucket = buckets[bucketKey] ||= { label, amount: 0, isIncluded };
@@ -409,11 +416,21 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     shippingMethodsByCarrier(): (carrierPartyId: string) => any[] {
       return (carrierPartyId: string) => {
         const fromDetail = this.shippingMethods.filter((m: any) => m.partyId === carrierPartyId || m.carrierPartyId === carrierPartyId);
-        return fromDetail.length ? fromDetail : seedData.shipmentMethodsByCarrier(carrierPartyId);
+        return fromDetail.length ? fromDetail : this.seed.shipmentMethodsByCarrier(carrierPartyId);
       };
     },
   },
   actions: {
+    /** Read the seed snapshot again. A failed read keeps the last one: labels fall back, the order still loads. */
+    async loadSeed() {
+      try {
+        // markRaw: a snapshot of getters, not state to track field by field.
+        this.seedSnapshot = markRaw(await loadSeedData());
+      } catch (error) {
+        logger.error("Failed to read the seed tables for the order page", error);
+      }
+    },
+
     async fetchOrder(orderId: string, force = false) {
       if (!orderId) return;
 
@@ -428,7 +445,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       entry.error = "";
 
       try {
-        const resp = await useOrderDetail().getOrder(orderId);
+        const [resp] = await Promise.all([useOrderDetail().getOrder(orderId), this.loadSeed()]);
         if (commonUtil.hasError(resp)) throw resp.data;
 
         const payload = Array.isArray(resp.data) ? resp.data[0] : resp.data;

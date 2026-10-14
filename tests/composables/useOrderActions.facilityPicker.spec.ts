@@ -2,7 +2,7 @@ import { modalController } from "@ionic/vue";
 import { flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ref } from "vue";
+import { effectScope, ref } from "vue";
 import { useOrderActions } from "@/composables/useOrderActions";
 import type { EnrichedOrder, EnrichedOrderItem, EnrichedShipGroup } from "@/types/orderDetail";
 
@@ -27,14 +27,14 @@ function setup() {
     groupedItems: items.map((groupItem) => ({ externalId: groupItem.orderItemSeqId, items: [groupItem] })),
   } as unknown as EnrichedOrder;
 
-  return useOrderActions({
+  return effectScope().run(() => useOrderActions({
     order: ref(order),
     loadOrder: vi.fn(),
     selectedItemIds: ref(new Set<string>()),
     selectedShipGroupItems: ref({}),
     selectedSegment: ref("items"),
     canRequestInventoryTransfer: ref(true),
-  });
+  }))!;
 }
 
 /** The props the facility picker opened with, after the user closes it without choosing. */

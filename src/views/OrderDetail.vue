@@ -337,7 +337,7 @@ watch(() => routingItems.value.map((item) => `${item.orderItemSeqId}:${pairKey(i
 
 /** Available to promise at the item's location, only for items whose location is short. */
 const shortStock = computed(() => Object.fromEntries(routingItems.value
-  .filter((item) => isShortAtLocation(item, routingHistoryStore.stockByPair))
+  .filter((item) => isShortAtLocation(item, routingHistoryStore.stockByPair, seed))
   .map((item) => [item.orderItemSeqId, routingHistoryStore.stockByPair[pairKey(item.productId, item.facilityId)].atp])));
 
 const routingHistory = computed(() => routingHistoryStore.historyFor(props.orderId, routingItems.value));
@@ -377,6 +377,7 @@ const routingFlow = computed(() => order.value ? buildRoutingFlow({
   shipGroups: (order.value.shipGroups || []).map((group) => ({ id: group.id, facilityId: group.facilityId })),
   changes: routingHistoryStore.changesByOrderId[props.orderId] || [],
   importedAt: orderImportedAt.value,
+  seed,
 }) : undefined);
 
 /* ── Holds tab ────────────────────────────────────────────────────────── */

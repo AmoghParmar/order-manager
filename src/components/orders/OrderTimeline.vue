@@ -107,7 +107,7 @@ const context = computed<TimelineContext>(() => {
     statusDescription: (statusId: string) => seed.statusDescription(statusId),
     describe: (value: string) => seed.enumDescription(value),
     enumDescription: (enumId: string) => seed.enumDescription(enumId),
-    isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId),
+    isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId, seed),
     itemTotal: Object.keys(shipGroupOfItem).length,
     shipGroupOfItem,
     posShipGroupIds: new Set(props.order.shipGroups.filter((shipGroup) => shipGroup.isPosCompleted).map((shipGroup) => shipGroup.id)),

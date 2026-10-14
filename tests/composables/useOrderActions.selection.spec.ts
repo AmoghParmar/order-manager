@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, ref } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { modalController } from '@ionic/vue';
 import { api } from '@common';
@@ -33,13 +33,13 @@ function setup(isVirtual: boolean, items: EnrichedOrderItem[], checked: string[]
   } as unknown as EnrichedOrder;
   const loadOrder = vi.fn();
   const selectedShipGroupItems = ref<Record<string, string[]>>({ '00001': checked });
-  const actions = useOrderActions({
+  const actions = effectScope().run(() => useOrderActions({
     order: ref(order),
     loadOrder,
     selectedItemIds: ref(new Set<string>()),
     selectedShipGroupItems,
     selectedSegment: ref('ship-groups'),
-  });
+  }))!;
   return { actions, shipGroup, loadOrder, selectedShipGroupItems };
 }
 

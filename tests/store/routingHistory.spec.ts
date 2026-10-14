@@ -4,6 +4,13 @@ import { fetchLocationStock, fetchRoutingChanges, fetchStockMovements } from "@/
 import { useRoutingHistoryStore } from "@/store/routingHistory";
 
 vi.mock("@common", () => ({ logger: { error: vi.fn() } }));
+// The facility seed snapshot: one parking lot whose id does not follow the *_PARKING convention.
+vi.mock("@common/db", () => ({
+  loadSeedData: vi.fn(async () => ({
+    facility: (facilityId: string) => (facilityId === "LOT" ? { facilityId, facilityTypeId: "PARKING_LOT" } : undefined),
+    facilityType: (facilityTypeId: string) => (facilityTypeId === "PARKING_LOT" ? { facilityTypeId, parentTypeId: "VIRTUAL_FACILITY" } : undefined),
+  })),
+}));
 vi.mock("@/services/routingHistory", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/services/routingHistory")>()),
   fetchRoutingChanges: vi.fn(),
@@ -72,6 +79,19 @@ describe("routing history store", () => {
     // The failed reload is retried on the next visit.
     await store.loadRoutingHistory(ORDER_ID, items);
     expect(store.changesByOrderId[ORDER_ID]).toHaveLength(2);
+  });
+
+  it("reads stock only at real locations, telling them apart by the facility seed snapshot", async () => {
+    const store = useRoutingHistoryStore();
+
+    await store.fetchItemLocationStock([
+      { orderItemSeqId: "01", productId: "P1", facilityId: "WH" },
+      { orderItemSeqId: "02", productId: "P1", facilityId: "LOT" },
+      { orderItemSeqId: "03", productId: "P1", facilityId: "REJECTED_ITM_PARKING" },
+    ]);
+
+    expect(fetchLocationStock).toHaveBeenCalledWith([{ productId: "P1", facilityId: "WH" }]);
+    expect(store.facilitySeed?.facility("LOT")?.facilityTypeId).toBe("PARKING_LOT");
   });
 
   it("shows an error when the first load fails", async () => {

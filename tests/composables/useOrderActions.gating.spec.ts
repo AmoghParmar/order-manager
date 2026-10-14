@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, ref } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { useOrderActions } from '@/composables/useOrderActions';
 import type { EnrichedOrder, EnrichedOrderItem, EnrichedShipGroup } from '@/types/orderDetail';
@@ -18,13 +18,13 @@ function orderWith(statusId: string, shipGroup: Partial<EnrichedShipGroup>): Enr
 }
 
 function actionsFor(order: EnrichedOrder, selectedShipGroupItems: Record<string, string[]> = {}) {
-  return useOrderActions({
+  return effectScope().run(() => useOrderActions({
     order: ref(order),
     loadOrder: vi.fn(),
     selectedItemIds: ref(new Set<string>()),
     selectedShipGroupItems: ref(selectedShipGroupItems),
     selectedSegment: ref('ship-groups'),
-  });
+  }))!;
 }
 
 describe('useOrderActions gating', () => {

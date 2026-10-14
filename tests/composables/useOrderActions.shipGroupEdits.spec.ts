@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, ref } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { api } from '@common';
 import { showToast } from '@/utils';
@@ -25,13 +25,13 @@ function setup(items: EnrichedOrderItem[] = [item('01', 'ITEM_APPROVED')]) {
     groupedItems: items.map((groupItem) => ({ externalId: groupItem.orderItemSeqId, items: [groupItem] })),
   } as unknown as EnrichedOrder;
   const loadOrder = vi.fn();
-  const actions = useOrderActions({
+  const actions = effectScope().run(() => useOrderActions({
     order: ref(order),
     loadOrder,
     selectedItemIds: ref(new Set<string>()),
     selectedShipGroupItems: ref({}),
     selectedSegment: ref('ship-groups'),
-  });
+  }))!;
   return { actions, shipGroup, loadOrder };
 }
 

@@ -1,17 +1,15 @@
 import { DateTime } from "luxon";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { summariseIssuance } from "@/utils/inventoryIssuance";
 import {
-  buildRoutingHistory, isShortAtLocation, isStockLocation, movementRequests, noInventoryImpact, routingEventKind, ruleLabel, stockAt,
+  type FacilitySeed, buildRoutingHistory, isShortAtLocation, isStockLocation, movementRequests, noInventoryImpact, routingEventKind, ruleLabel, stockAt,
 } from "@/utils/routingHistory";
 
 // One seeded facility: a parking lot whose id does not follow the *_PARKING convention.
-vi.mock("@common/db", () => ({
-  useSeedData: () => ({
-    facility: (facilityId: string) => facilityId === "PARKING" ? { facilityId, facilityTypeId: "PARKING_LOT" } : undefined,
-    facilityType: (facilityTypeId: string) => facilityTypeId === "PARKING_LOT" ? { facilityTypeId, parentTypeId: "VIRTUAL_FACILITY" } : undefined,
-  }),
-}));
+const seed: FacilitySeed = {
+  facility: (facilityId: string) => facilityId === "PARKING" ? { facilityId, facilityTypeId: "PARKING_LOT" } : undefined,
+  facilityType: (facilityTypeId: string) => facilityTypeId === "PARKING_LOT" ? { facilityTypeId, parentTypeId: "VIRTUAL_FACILITY" } : undefined,
+} as FacilitySeed;
 
 // Shaped on a real order: brokered to the warehouse on the one unit an inventory reset had added,
 // then a later reset took the warehouse to -1 while the item was still reserved there.
@@ -46,6 +44,7 @@ describe("routing history", () => {
   it("shows the stock a brokering saw, and what happened to that stock afterwards", () => {
     const [history] = buildRoutingHistory({
       orderId: ORDER_ID,
+      seed,
       items: [item],
       changes: [brokered],
       movements: { [`${PRODUCT}|${WAREHOUSE}`]: { rows, truncated: false } },
@@ -77,6 +76,7 @@ describe("routing history", () => {
     });
     const [history] = buildRoutingHistory({
       orderId: ORDER_ID,
+      seed,
       items: [{ ...item, facilityId: "UNFILLABLE_PARKING" }],
       changes: [unfillable("u1", "2026-10-09T21:31:49Z"), unfillable("u2", "2026-10-09T21:50:47Z")],
       movements: {},
@@ -89,33 +89,33 @@ describe("routing history", () => {
 
   it("asks for each location the item touched, from the earliest change there", () => {
     const rejected = { ...brokered, orderFacilityChangeId: "fc2", fromFacilityId: WAREHOUSE, facilityId: "REJECTED_ITM_PARKING", changeReasonEnumId: "NOT_IN_STOCK", changeDatetime: t("2026-10-09T21:28:41Z") };
-    expect(movementRequests([{ ...item, facilityId: "REJECTED_ITM_PARKING" }], [brokered, rejected])).toEqual([
+    expect(movementRequests([{ ...item, facilityId: "REJECTED_ITM_PARKING" }], [brokered, rejected], seed)).toEqual([
       { productId: PRODUCT, facilityId: WAREHOUSE, sinceMillis: brokered.changeDatetime },
     ]);
   });
 
   it("flags only open items at a real location with negative stock", () => {
     const stock = { [`${PRODUCT}|${WAREHOUSE}`]: { atp: -1, qoh: 1 } };
-    expect(isShortAtLocation(item, stock)).toBe(true);
-    expect(isShortAtLocation({ ...item, statusId: "ITEM_COMPLETED" }, stock)).toBe(false);
-    expect(isShortAtLocation({ ...item, facilityId: "UNFILLABLE_PARKING" }, stock)).toBe(false);
-    expect(isShortAtLocation(item, { [`${PRODUCT}|${WAREHOUSE}`]: { atp: 0, qoh: 1 } })).toBe(false);
-    expect(isStockLocation("_NA_")).toBe(false);
+    expect(isShortAtLocation(item, stock, seed)).toBe(true);
+    expect(isShortAtLocation({ ...item, statusId: "ITEM_COMPLETED" }, stock, seed)).toBe(false);
+    expect(isShortAtLocation({ ...item, facilityId: "UNFILLABLE_PARKING" }, stock, seed)).toBe(false);
+    expect(isShortAtLocation(item, { [`${PRODUCT}|${WAREHOUSE}`]: { atp: 0, qoh: 1 } }, seed)).toBe(false);
+    expect(isStockLocation("_NA_", seed)).toBe(false);
   });
 
   it("knows a virtual location by its facility type, whatever its id", () => {
-    expect(isStockLocation("PARKING")).toBe(false);
-    expect(isStockLocation("REJECTED_ITM_PARKING")).toBe(false);
-    expect(isStockLocation(WAREHOUSE)).toBe(true);
+    expect(isStockLocation("PARKING", seed)).toBe(false);
+    expect(isStockLocation("REJECTED_ITM_PARKING", seed)).toBe(false);
+    expect(isStockLocation(WAREHOUSE, seed)).toBe(true);
   });
 
   it("calls a Shopify sync's move into a parking lot parked, not allocated", () => {
     const shopifySync = { changeReasonEnumId: "ALLOCATED", fromFacilityId: "UNFILLABLE_PARKING", comments: "Shopify sync: could not reopen in-progress fulfillment order" };
-    expect(routingEventKind({ ...shopifySync, facilityId: "REJECTED_ITM_PARKING" })).toBe("parked");
-    expect(routingEventKind({ ...shopifySync, facilityId: "PARKING" })).toBe("parked");
-    expect(routingEventKind({ ...shopifySync, facilityId: WAREHOUSE })).toBe("allocated");
+    expect(routingEventKind({ ...shopifySync, facilityId: "REJECTED_ITM_PARKING" }, seed)).toBe("parked");
+    expect(routingEventKind({ ...shopifySync, facilityId: "PARKING" }, seed)).toBe("parked");
+    expect(routingEventKind({ ...shopifySync, facilityId: WAREHOUSE }, seed)).toBe("allocated");
     // Back to the brokering queue is not parking.
-    expect(routingEventKind({ ...shopifySync, facilityId: "_NA_" })).toBe("requeued");
+    expect(routingEventKind({ ...shopifySync, facilityId: "_NA_" }, seed)).toBe("requeued");
   });
 
   it("gives each unit of a split line its own stock change, not its siblings'", () => {
@@ -127,6 +127,7 @@ describe("routing history", () => {
     }));
     const history = buildRoutingHistory({
       orderId: ORDER_ID,
+      seed,
       items: units.map((seq) => ({ ...item, orderItemSeqId: seq })),
       changes: units.map((seq) => ({ ...brokered, orderFacilityChangeId: `fc-${seq}`, orderItemSeqId: seq })),
       movements: { [`${PRODUCT}|${WAREHOUSE}`]: { rows: unitRows, truncated: false } },
@@ -153,10 +154,11 @@ describe("routing history", () => {
     };
     const importedAt = t("2026-08-17T08:19:24.324Z");
 
-    expect(movementRequests([sale], [], importedAt)).toEqual([{ productId: PRODUCT, facilityId: STORE, sinceMillis: importedAt }]);
+    expect(movementRequests([sale], [], seed, importedAt)).toEqual([{ productId: PRODUCT, facilityId: STORE, sinceMillis: importedAt }]);
 
     const [history] = buildRoutingHistory({
       orderId: ORDER_ID,
+      seed,
       items: [sale],
       changes: [],
       movements: { [`${PRODUCT}|${STORE}`]: { rows: [returnRow, issuanceRow], truncated: false } },
@@ -173,6 +175,7 @@ describe("routing history", () => {
   it("shows only today's stock for an item with neither a routing arrival nor an issuance", () => {
     const [history] = buildRoutingHistory({
       orderId: ORDER_ID,
+      seed,
       items: [item],
       changes: [],
       movements: { [`${PRODUCT}|${WAREHOUSE}`]: { rows, truncated: false } },
@@ -201,6 +204,7 @@ describe("routing history", () => {
     const reservation = movement("141001", "2026-08-17T13:11:36.117Z", { orderId: ORDER_ID, orderItemSeqId: "01", reasonEnumId: "INV_RES_CREATE", availableToPromiseDiff: -1, quantityOnHandDiff: 0 });
     const [history] = buildRoutingHistory({
       orderId: ORDER_ID,
+      seed,
       items: [item],
       changes: [allocated],
       movements: { [`${PRODUCT}|${WAREHOUSE}`]: { rows: [reservation], truncated: false } },
@@ -214,6 +218,7 @@ describe("routing history", () => {
     const sql = (millis: number) => DateTime.fromMillis(millis).toFormat("yyyy-MM-dd HH:mm:ss.SSS");
     const input = {
       orderId: ORDER_ID,
+      seed,
       items: [item],
       changes: [brokered],
       movements: { [`${PRODUCT}|${WAREHOUSE}`]: { rows, truncated: false } },

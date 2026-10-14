@@ -1,4 +1,4 @@
-import { useSeedData } from "@common/db";
+import type { SeedData } from "@common/db";
 import { type LocationStock, type ProductFacilityPair, pairKey } from "@/services/routingHistory";
 import { toMillis } from "@/utils/format";
 import { isIssuanceRow, summariseIssuance } from "@/utils/inventoryIssuance";
@@ -101,21 +101,26 @@ const bySequence = (a: any, b: any) => movementAt(a) - movementAt(b) ||
 const VIRTUAL_FACILITY = "VIRTUAL_FACILITY";
 
 /**
+ * The seed lookups that tell a stock location from a virtual one: a component's `useSeedData()`, or
+ * a store's `loadSeedData()` snapshot. Null while a store's snapshot has not been read.
+ */
+export type FacilitySeed = Pick<SeedData, "facility" | "facilityType"> | null;
+
+/**
  * Virtual locations (no facility yet, the parking lots) hold no stock to show. The facility's type
  * decides; the id convention is only the fallback for a facility the seed has not loaded.
  */
-export function isStockLocation(facilityId?: string): boolean {
+export function isStockLocation(facilityId: string | undefined, seed: FacilitySeed): boolean {
   if(!facilityId || facilityId === "_NA_") {return false;}
-  const seed = useSeedData();
-  const facility = seed.facility(facilityId);
-  if(facility) {
+  const facility = seed?.facility(facilityId);
+  if(seed && facility) {
     return facility.facilityTypeId !== VIRTUAL_FACILITY && seed.facilityType(facility.facilityTypeId)?.parentTypeId !== VIRTUAL_FACILITY;
   }
 
   return !facilityId.endsWith("_PARKING");
 }
 
-export function routingEventKind(row: any): RoutingEventKind {
+export function routingEventKind(row: any, seed: FacilitySeed): RoutingEventKind {
   switch (row.changeReasonEnumId) {
     case "BROKERED": return "brokered";
     case "RELEASED": return "released";
@@ -124,7 +129,7 @@ export function routingEventKind(row: any): RoutingEventKind {
     case "ALLOCATED":
       if(row.facilityId === "_NA_") {return "requeued";}
 
-      return isStockLocation(row.facilityId) ? "allocated" : "parked";
+      return isStockLocation(row.facilityId, seed) ? "allocated" : "parked";
     case "PARKED": return "parked";
     case "UNFILLABLE": return "unfillable";
     case "SHOPIFY_CANCELLATION": return "cancelled";
@@ -152,9 +157,9 @@ export function changeActor(row: any): string {
 }
 
 /** Where a change's stock is read: the location an item arrived at, or the one it left. */
-function stockLocationOf(event: Pick<RoutingEvent, "kind" | "fromFacilityId" | "toFacilityId">): string {
-  if(ARRIVALS.includes(event.kind)) {return isStockLocation(event.toFacilityId) ? event.toFacilityId : "";}
-  if(DEPARTURES.includes(event.kind)) {return isStockLocation(event.fromFacilityId) ? event.fromFacilityId : "";}
+function stockLocationOf(event: Pick<RoutingEvent, "kind" | "fromFacilityId" | "toFacilityId">, seed: FacilitySeed): string {
+  if(ARRIVALS.includes(event.kind)) {return isStockLocation(event.toFacilityId, seed) ? event.toFacilityId : "";}
+  if(DEPARTURES.includes(event.kind)) {return isStockLocation(event.fromFacilityId, seed) ? event.fromFacilityId : "";}
 
   return "";
 }
@@ -216,13 +221,13 @@ export function stockAt(rows: any[], facilityId: string, at: number, orderId: st
   return { facilityId, before: balance.atp, after: balance.atp, onHand: balance.qoh, exact: false };
 }
 
-function eventsForItem(changes: any[], item: RoutingItem): RoutingEvent[] {
+function eventsForItem(changes: any[], item: RoutingItem, seed: FacilitySeed): RoutingEvent[] {
   const events: RoutingEvent[] = [];
   changes
     .filter((row) => row.orderItemSeqId === item.orderItemSeqId)
     .forEach((row) => {
       const at = changeAt(row);
-      const kind = routingEventKind(row);
+      const kind = routingEventKind(row, seed);
       const previous = events[events.length - 1];
       // Routing retries an unfillable item every run; one line per run would bury everything else.
       if(kind === "unfillable" && previous?.kind === "unfillable") {
@@ -290,18 +295,18 @@ function issuanceAt(item: RoutingItem, orderId: string, page: MovementPage | und
  * The product and location pairs whose movements the history needs, each from the earliest moment it
  * matters. An item that was never routed (sold at a counter) is read from when the order came in.
  */
-export function movementRequests(items: RoutingItem[], changes: any[], importedAt?: number): Array<ProductFacilityPair & { sinceMillis: number }> {
+export function movementRequests(items: RoutingItem[], changes: any[], seed: FacilitySeed, importedAt?: number): Array<ProductFacilityPair & { sinceMillis: number }> {
   const requests = new Map<string, ProductFacilityPair & { sinceMillis: number }>();
   const want = (productId: string, facilityId: string, at: number) => {
-    if(!productId || !isStockLocation(facilityId)) {return;}
+    if(!productId || !isStockLocation(facilityId, seed)) {return;}
     const key = pairKey(productId, facilityId);
     const existing = requests.get(key);
     if(!existing || at < existing.sinceMillis) {requests.set(key, { productId, facilityId, sinceMillis: at });}
   };
   items.forEach((item) => {
-    const events = eventsForItem(changes, item);
-    events.forEach((event) => want(item.productId, stockLocationOf(event), event.at));
-    if(isStockLocation(item.facilityId)) {
+    const events = eventsForItem(changes, item, seed);
+    events.forEach((event) => want(item.productId, stockLocationOf(event, seed), event.at));
+    if(isStockLocation(item.facilityId, seed)) {
       const arrival = [...events].reverse().find((event) => ARRIVALS.includes(event.kind) && event.toFacilityId === item.facilityId);
       want(item.productId, item.facilityId, arrival?.at ?? importedAt ?? Date.now());
     }
@@ -316,19 +321,20 @@ export function buildRoutingHistory(input: {
   changes: any[];
   movements: Record<string, MovementPage>;
   stock: Record<string, LocationStock>;
+  seed: FacilitySeed;
 }): ItemRoutingHistory[] {
-  const { orderId, items, changes, movements, stock } = input;
+  const { orderId, items, changes, movements, stock, seed } = input;
 
   return items.map((item) => {
-    const events = eventsForItem(changes, item);
+    const events = eventsForItem(changes, item, seed);
     events.forEach((event) => {
-      const facilityId = stockLocationOf(event);
+      const facilityId = stockLocationOf(event, seed);
       const page = facilityId ? movements[pairKey(item.productId, facilityId)] : undefined;
       event.stock = page ? stockAt(page.rows, facilityId, event.at, orderId, item.orderItemSeqId) : null;
     });
 
     let since: SinceBlock | null = null;
-    if(isStockLocation(item.facilityId)) {
+    if(isStockLocation(item.facilityId, seed)) {
       const key = pairKey(item.productId, item.facilityId);
       const page = movements[key];
       const issuance = issuanceAt(item, orderId, page);
@@ -383,8 +389,8 @@ export function noInventoryImpact(item: RoutingItem, history: ItemRoutingHistory
 }
 
 /** An item still waiting to ship from a real location that now has less than nothing to promise. */
-export function isShortAtLocation(item: RoutingItem, stock: Record<string, LocationStock>): boolean {
-  if(!isStockLocation(item.facilityId)) {return false;}
+export function isShortAtLocation(item: RoutingItem, stock: Record<string, LocationStock>, seed: FacilitySeed): boolean {
+  if(!isStockLocation(item.facilityId, seed)) {return false;}
   if(item.statusId && ["ITEM_COMPLETED", "ITEM_CANCELLED", "ITEM_REJECTED"].includes(item.statusId)) {return false;}
   const atp = stock[pairKey(item.productId, item.facilityId)]?.atp;
 
