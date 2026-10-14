@@ -58,13 +58,13 @@ async function singleFlight(key: string, force: boolean, run: () => Promise<void
 const QUEUE_FACILITY_ID = "_NA_";
 
 /** Parking and queue facilities, where an item waits rather than being fulfilled. */
-export function isVirtualFacilityId(facilityId: string, seed: SeedData): boolean {
+export function isVirtualFacilityId(facilityId: string, facilities: any[], facilityTypes: any[]): boolean {
   if (!facilityId || facilityId === QUEUE_FACILITY_ID) return true;
-  const facilityTypeId = seed.facility(facilityId)?.facilityTypeId;
+  const facilityTypeId = facilities.find((row) => row.facilityId === facilityId)?.facilityTypeId;
   return OrderActionValidator.isVirtualFacility({
     facilityId,
     facilityTypeId,
-    facilityParentTypeId: seed.facilityType(facilityTypeId)?.parentTypeId,
+    facilityParentTypeId: facilityTypes.find((row) => row.facilityTypeId === facilityTypeId)?.parentTypeId,
   });
 }
 
@@ -301,7 +301,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         fulfillment: this.fulfillmentTimelineByOrderId[orderId] || [],
         returnHeadersById: this.returnHeadersById,
         exchangeChildren: this.exchangeChildrenByOrderId[orderId] || [],
-        isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId, this.seed),
+        isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId, this.seed.facilities(), this.seed.facilityTypes()),
       });
     },
 

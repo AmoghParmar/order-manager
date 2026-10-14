@@ -1,5 +1,5 @@
 import { logger } from "@common";
-import { loadSeedData } from "@common/db";
+import { loadSeedData, type SeedData } from "@common/db";
 import { defineStore } from "pinia";
 import { markRaw } from "vue";
 import {
@@ -7,7 +7,7 @@ import {
   pairKey
 } from "@/services/routingHistory";
 import {
-  type FacilitySeed, type ItemRoutingHistory, type MovementPage, type RoutingItem,
+  type ItemRoutingHistory, type MovementPage, type RoutingItem,
   buildRoutingHistory, isStockLocation, movementRequests
 } from "@/utils/routingHistory";
 
@@ -26,7 +26,7 @@ interface RoutingHistoryState {
    * The facility seed tables, read once per load (`loadSeedData`), which tell a stock location from
    * a virtual one. Null until the first load; until then the facility id convention decides.
    */
-  facilitySeed: FacilitySeed;
+  facilitySeed: SeedData | null;
 }
 
 export interface LoadRoutingOptions {
@@ -58,14 +58,15 @@ export const useRoutingHistoryStore = defineStore("routingHistory", {
       changes: state.changesByOrderId[orderId] || [],
       movements: state.movementsByPair,
       stock: state.stockByPair,
-      seed: state.facilitySeed,
+      facilities: state.facilitySeed?.facilities() ?? [],
+      facilityTypes: state.facilitySeed?.facilityTypes() ?? [],
     }),
     statusFor: (state) => (orderId: string): LoadStatus | undefined => state.statusByOrderId[orderId],
     cutoffFor: (state) => (productStoreId?: string): number | null => (productStoreId && state.cutoffByProductStore[productStoreId]) || null,
   },
   actions: {
     /** Read the facility seed tables again, so locations are told apart by their current types. */
-    async loadFacilitySeed(): Promise<FacilitySeed> {
+    async loadFacilitySeed(): Promise<SeedData> {
       // markRaw: a snapshot of getters, not state to track field by field.
       this.facilitySeed = markRaw(await loadSeedData(["facilities", "facilityTypes"]));
 
@@ -76,7 +77,7 @@ export const useRoutingHistoryStore = defineStore("routingHistory", {
     async fetchItemLocationStock(items: RoutingItem[]) {
       const seed = await this.loadFacilitySeed();
       const pairs = items
-        .filter((item) => item.productId && isStockLocation(item.facilityId, seed))
+        .filter((item) => item.productId && isStockLocation(item.facilityId, seed.facilities(), seed.facilityTypes()))
         .map((item) => ({ productId: item.productId, facilityId: item.facilityId }));
       if(!pairs.length) {return;}
       try {
@@ -108,7 +109,7 @@ export const useRoutingHistoryStore = defineStore("routingHistory", {
         try {
           const [changes, seed] = await Promise.all([fetchRoutingChanges(orderId), this.loadFacilitySeed()]);
           this.changesByOrderId[orderId] = changes;
-          const requests = movementRequests(items, changes, seed, importedAt);
+          const requests = movementRequests(items, changes, seed.facilities(), seed.facilityTypes(), importedAt);
           if(productStoreId && !(productStoreId in this.cutoffByProductStore)) {
             // Only explains empty timelines, so a failure leaves them unexplained rather than failing the load.
             this.cutoffByProductStore[productStoreId] = await fetchInventoryCutoff(productStoreId).catch((err) => {

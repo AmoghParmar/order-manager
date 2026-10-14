@@ -20,7 +20,8 @@ describe("routing flow", () => {
       shipGroups: [{ id: "00001", facilityId: "_NA_" }, { id: "00002", facilityId: "100000" }, { id: "00003", facilityId: "100007" }],
       changes,
       importedAt: t("2026-10-08T16:59:45Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
 
     expect(flow.columns.map((column) => column.kind)).toEqual(["imported", "brokered"]);
@@ -51,7 +52,8 @@ describe("routing flow", () => {
         change("c5", "01", "00004", "_NA_", "UNFILLABLE_PARKING", "UNFILLABLE", "2026-10-09T21:50:47Z"),
       ],
       importedAt: t("2026-10-02T22:51:48Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
 
     expect(flow.columns.map((column) => [column.kind, column.attempts])).toEqual([
@@ -78,7 +80,8 @@ describe("routing flow", () => {
         change("e", "01", "00004", "REJECTED_ITM_PARKING", "UNFILLABLE_PARKING", "UNFILLABLE", "2026-10-09T21:40:46Z"),
       ],
       importedAt: t("2026-09-23T17:46:00Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
 
     expect(flow.columns.map((column) => [column.kind, column.attempts])).toEqual([
@@ -97,7 +100,8 @@ describe("routing flow", () => {
         change("c", "02", "00003", "100000", "REJECTED_ITM_PARKING", "NOT_IN_STOCK", "2026-10-03T10:00:00Z"),
       ],
       importedAt: t("2026-10-01T09:59:00Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
 
     expect(flow.nodes.map((node) => [node.id, node.orderItemSeqIds.join()])).toEqual([
@@ -123,7 +127,8 @@ describe("routing flow", () => {
       // Newest first, as the endpoint returns them, so the order has to come from the timestamps.
       changes: [...moves].reverse().map(([id, item, shipGroup, from, to, reason, iso]) => ({ ...change(id, item, shipGroup, from, to, reason, iso), changeDatetime: at(iso) })),
       importedAt: t("2026-10-08T16:59:45Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
 
     const flow = build(sql);
@@ -144,7 +149,8 @@ describe("routing flow", () => {
         change("q3", "01", "00001", "_NA_", "_NA_", "ALLOCATED", "2026-10-04T10:00:00Z"),
       ],
       importedAt: t("2026-10-01T09:59:00Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
 
     expect(flow.nodes.map((node) => node.id)).toEqual(["0-00001", "1-00004", "2-00001"]);
@@ -159,7 +165,8 @@ describe("routing flow", () => {
       shipGroups: [{ id: "00001", facilityId: "_NA_" }, { id: "00002", facilityId: "100000" }, { id: "00003", facilityId: "100007" }],
       changes: items.map((item) => change(`b${item.orderItemSeqId}`, item.orderItemSeqId, item.shipGroupSeqId, "_NA_", item.shipGroupSeqId === "00002" ? "100000" : "100007", "BROKERED", "2026-10-08T17:02:00Z")),
       importedAt: t("2026-10-08T16:59:45Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
 
     expect(estimateFlowHeight([5, 1])).toBe(layoutRoutingFlow(flow, ROUTING_FLOW_SIZE).height);
@@ -172,7 +179,8 @@ describe("routing flow", () => {
       shipGroups: [{ id: "00001", facilityId: "100005" }],
       changes: [],
       importedAt: t("2026-10-01T09:59:00Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
     expect(flow.nodes).toEqual([expect.objectContaining({ id: "0-00001", isCurrent: true })]);
     expect(flow.edges).toEqual([]);
@@ -187,7 +195,8 @@ describe("routing flow", () => {
         change("b", "02", "00003", "_NA_", "100007", "BROKERED", "2026-10-01T10:00:00Z"),
       ],
       importedAt: t("2026-10-01T09:59:00Z"),
-      seed: null,
+      facilities: [],
+      facilityTypes: [],
     });
     const layout = layoutRoutingFlow(flow, { cardWidth: 200, columnGap: 100, headerHeight: 40, rowHeight: 50, cardGap: 20, top: 30, left: 10 });
     expect(layout.positions["0-00001"]).toEqual({ x: 10, y: 30, height: 140 });

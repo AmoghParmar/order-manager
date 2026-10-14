@@ -9,6 +9,8 @@ vi.mock("@common/db", () => ({
   loadSeedData: vi.fn(async () => ({
     facility: (facilityId: string) => (facilityId === "LOT" ? { facilityId, facilityTypeId: "PARKING_LOT" } : undefined),
     facilityType: (facilityTypeId: string) => (facilityTypeId === "PARKING_LOT" ? { facilityTypeId, parentTypeId: "VIRTUAL_FACILITY" } : undefined),
+    facilities: () => [{ facilityId: "LOT", facilityTypeId: "PARKING_LOT" }],
+    facilityTypes: () => [{ facilityTypeId: "PARKING_LOT", parentTypeId: "VIRTUAL_FACILITY" }],
   })),
 }));
 vi.mock("@/services/routingHistory", async (importOriginal) => ({
