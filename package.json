@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "eslint src && vite build",
+    "build": "eslint src && pnpm check:wiring && vite build",
+    "check:wiring": "vitest run tests/db/appDbWiring.spec.ts",
     "preview": "vite preview",
     "test:unit": "vitest run",
     "test:watch": "vitest",
