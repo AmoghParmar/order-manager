@@ -39,9 +39,10 @@
 import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonListHeader, IonSpinner, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
 import { ref, onMounted } from 'vue';
-import { api, logger, translate } from '@common';
+import { logger, translate } from '@common';
 import { useSeedData } from '@common/db';
 import { useProductCacheStore } from '@/store/productCache';
+import { useStockStore } from '@/store/stock';
 
 const seed = useSeedData();
 
@@ -59,12 +60,7 @@ function closeModal() {
 async function fetchProductFacilities() {
   isLoading.value = true;
   try {
-    const resp = await api({
-      url: 'oms/productFacilities',
-      method: 'GET',
-      params: { productId: props.productId }
-    });
-    facilityStock.value = Array.isArray(resp.data) ? resp.data : resp.data?.list ?? [];
+    facilityStock.value = await useStockStore().fetchProductFacilities(props.productId);
   } catch (error) {
     logger.error('Failed to fetch product facilities', error);
   } finally {

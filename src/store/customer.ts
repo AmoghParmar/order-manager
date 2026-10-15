@@ -1,30 +1,27 @@
 import { DateTime } from 'luxon';
 import { defineStore } from 'pinia';
-import { omDb } from '@/db/orderManagerDb';
+import { api, useSolrSearch } from '@common';
 import {
-  createPartyEmail,
-  createPartyPostalAddress,
-  createPartyRelationship,
-  createPartyTelecomNumber,
-  ensurePartyRole,
-  expirePartyContactMech,
-  expirePartyRelationship,
-  findShopifyDuplicateParties,
-  indexCustomer,
-  updatePartyEmail,
-  updatePartyPostalAddress,
-  updatePartyTelecomNumber,
-  getCustomerCommunications,
-  getCustomerOrdersFromSolr,
-  getCustomerProfile,
-  getCustomerRelationships,
-  getCustomerTasks,
-  getOrderProgressStatuses,
-  getPartyNames
-} from '@/services/customer';
-import { listReturns } from '@/services/returns';
-import { useProductMaster } from '@/composables/useProductMaster';
-import { commonUtil, translate } from '@common';
+  asList,
+  buildCustomerOrdersPayload,
+  buildCustomerSearchPayload,
+  normalizeCustomerCommunication,
+  normalizeCustomerProfile,
+  normalizeCustomerRelationship,
+  normalizeCustomerTask,
+  orderProgressStatuses,
+  partyNameRow,
+  summarizeCustomerOrderGroup,
+  type CustomerOrdersResult,
+  type CustomerSearchParams,
+  type CustomerSearchResult,
+  type RelationshipInput,
+  type RelationshipKey
+} from '@/utils/customer';
+import { toStringValue } from '@/utils/orderDocs';
+import { useReturnsStore } from '@/store/returns';
+import { useProductCacheStore } from '@/store/productCache';
+import { translate } from '@common';
 import type {
   ContactSection,
   CustomerCommunicationSummary,
@@ -37,6 +34,7 @@ import type {
   SourceEntry
 } from '@/types/customer';
 import type { ReturnSummary } from '@/types/returns';
+import type { Customer } from '@/types/order';
 
 // Relationship taxonomy for splitting the Relationships card vs the Merged
 // contacts (duplicate) card. Personal types are the blood-relative set seeded
@@ -101,24 +99,6 @@ function isContactActive(fromDate?: string, thruDate?: string): boolean {
   return isActiveThru(thruDate);
 }
 
-// Order/ship-group progress: target = (#statuses x 100); current = sum of each status's
-// StatusItem.statusAge. Robust to whatever statuses exist (order items now, shipment items
-// when the order payload includes them). Capped at 1.
-function computeProgress(statusIds: string[], statusAge: (statusId: string) => number): number {
-  if (!statusIds.length) return 0;
-  const target = statusIds.length * 100;
-  const current = statusIds.reduce((sum, statusId) => sum + statusAge(statusId), 0);
-  return target ? Math.min(current / target, 1) : 0;
-}
-
-// Color the progress bar by the least-progressed (min statusAge) status via the shared
-// status-color map: all complete -> success, in progress -> primary/medium, cancelled -> danger.
-function progressStatusColor(statusIds: string[], statusAge: (statusId: string) => number): string {
-  if (!statusIds.length) return 'medium';
-  const rep = statusIds.reduce((min, statusId) => (statusAge(statusId) < statusAge(min) ? statusId : min), statusIds[0]);
-  return commonUtil.getStatusColor(rep);
-}
-
 function relationshipKey(relationship: CustomerRelationship): string {
   return [
     relationship.partyIdFrom,
@@ -146,18 +126,7 @@ function allRelationships(profile: CustomerProfile | null, loadedRelationships: 
 }
 
 function triggerCustomerIndex(partyId: string): void {
-  indexCustomer(partyId).catch((e) => console.error(`[customer index] failed for ${partyId}:`, e));
-}
-
-/** statusId -> statusAge, read straight from IndexedDB. */
-async function readStatusAges(): Promise<Map<string, number>> {
-  try {
-    const statuses = await omDb().all('statuses');
-
-    return new Map(statuses.map((row: any) => [row.statusId, Number(row.statusAge ?? 0)]));
-  } catch {
-    return new Map();
-  }
+  useCustomerStore().indexCustomer(partyId).catch((e) => console.error(`[customer index] failed for ${partyId}:`, e));
 }
 
 export const useCustomerStore = defineStore('customerDetail', {
@@ -326,6 +295,304 @@ export const useCustomerStore = defineStore('customerDetail', {
   },
 
   actions: {
+    async searchCustomers(params: CustomerSearchParams = {}): Promise<CustomerSearchResult> {
+      const resp = await useSolrSearch().runSolrQuery(buildCustomerSearchPayload(params));
+      return {
+        customers: resp?.data?.response?.docs ?? [],
+        total: resp?.data?.response?.numFound ?? 0
+      };
+    },
+
+    async getPartyNames(partyIds: string[]): Promise<Array<{ partyId: string; name: string; partyTypeId: string }>> {
+      if (!partyIds.length) return [];
+      const response = await api({
+        url: 'oms/parties',
+        method: 'get',
+        params: { partyId_op: 'in', partyId: partyIds.join(',') }
+      });
+      return asList(response.data).map(partyNameRow);
+    },
+
+    /**
+     * Customer 360 profile read. Calls GET /oms/customers/{partyId} (the Party
+     * `customerDetail` entity master) and flattens the nested master into the
+     * CustomerProfile shape the detail store/getters consume. Bounded profile only -
+     * orders, tasks, returns, and communications are separate paginated calls.
+     */
+    async getCustomerProfile(partyId: string): Promise<CustomerProfile> {
+      const response = await api({
+        url: `oms/customers/${partyId}`,
+        method: 'get'
+      });
+      return normalizeCustomerProfile(response.data, partyId);
+    },
+
+    /**
+     * Customer orders + lifetime aggregates from Solr (enterpriseSearch core,
+     * docType:ORDER, customerPartyId). Goes through the backend-aware useSolrSearch
+     * (Moqui search/query vs OFBiz runSolrQuery). Order docs
+     * are per-item, so we group by orderId. We PAGE THROUGH every group so the lifetime
+     * value/count are accurate regardless of order volume (ngroups = order count; one
+     * grandTotal per group summed = lifetime value). A Solr stats/facet sum can replace
+     * this loop later for performance.
+     */
+    async getCustomerOrdersFromSolr(partyId: string, params: { pageSize?: number } = {}): Promise<CustomerOrdersResult> {
+      const { runSolrQuery } = useSolrSearch();
+      const pageSize = params.pageSize ?? 200;
+      const maxPages = 50; // safety cap (~10k orders)
+
+      const orders: CustomerOrderSummary[] = [];
+      let lifetimeOrders = 0;
+      let currencyUom = 'USD';
+
+      for (let page = 0; page < maxPages; page++) {
+        const response = await runSolrQuery(buildCustomerOrdersPayload(partyId, page, pageSize));
+
+        const grouped = response.data?.grouped?.orderId;
+        const groups: any[] = grouped?.groups || [];
+        lifetimeOrders = Number(grouped?.ngroups ?? (page * pageSize + groups.length));
+        if (!groups.length) break;
+
+        groups.forEach((group) => orders.push(summarizeCustomerOrderGroup(group)));
+
+        if (orders.length >= lifetimeOrders) break;
+      }
+
+      // Fetch grandTotal and currencyUom from the Orders REST API for all orders,
+      // since grandTotal is not indexed in the Solr ORDER doc.
+      let lifetimeValue = 0;
+      if (orders.length) {
+        try {
+          const orderIds = orders.map((o) => o.orderId).join(',');
+          const ordersRes = await api({
+            url: 'oms/orders',
+            method: 'get',
+            params: { orderId_op: 'in', orderId: orderIds, pageSize: orders.length }
+          });
+          const orderHeaders: any[] = asList(ordersRes.data);
+          const totalsById: Record<string, { grandTotal: number; currencyUom: string }> = {};
+          orderHeaders.forEach((h: any) => {
+            const id = toStringValue(h.orderId);
+            if (id) totalsById[id] = { grandTotal: Number(h.grandTotal || 0), currencyUom: toStringValue(h.currencyUom) || 'USD' };
+          });
+          orders.forEach((order) => {
+            const totals = totalsById[order.orderId];
+            if (totals) {
+              order.grandTotal = totals.grandTotal;
+              currencyUom = totals.currencyUom || currencyUom;
+            }
+            lifetimeValue += order.grandTotal;
+          });
+        } catch {
+          // Best-effort — lifetime value stays 0 if the batch call fails
+        }
+      }
+
+      // Earliest order date (orders are sorted desc) - "customer since" fallback.
+      const firstOrderDate = orders.reduce((min, order) => {
+        if (!order.orderDate) return min;
+        return !min || order.orderDate < min ? order.orderDate : min;
+      }, '');
+
+      return { orders, lifetimeOrders, lifetimeValue, currencyUom, firstOrderDate };
+    },
+
+    /**
+     * Current statuses that drive an order's progress, hydrated from the official get-order API
+     * (GET oms/orders?orderId=... - the same path the order detail page uses), NOT from Solr.
+     * The caller maps each status to StatusItem.statusAge to compute the progress percentage.
+     */
+    async getOrderProgressStatuses(orderId: string): Promise<string[]> {
+      const response = await api({ url: 'oms/orders', method: 'get', params: { orderId, dependentLevels: 1 } });
+      return orderProgressStatuses(Array.isArray(response.data) ? response.data[0] : response.data);
+    },
+
+    /** Customer tasks via GET /oms/workEffortPartyAssignments (WorkEffortPartyDetail). */
+    async getCustomerTasks(
+      partyId: string,
+      params: { taskStatusId?: string; pageSize?: number; pageIndex?: number; orderByField?: string } = {}
+    ): Promise<CustomerTaskSummary[]> {
+      const response = await api({
+        url: 'oms/workEffortPartyAssignments',
+        method: 'get',
+        params: {
+          partyId,
+          roleTypeId: 'CUSTOMER',
+          taskStatusId: params.taskStatusId,
+          pageSize: params.pageSize ?? 20,
+          pageIndex: params.pageIndex ?? 0,
+          orderByField: params.orderByField
+        }
+      });
+      return asList(response.data).map(normalizeCustomerTask);
+    },
+
+    /**
+     * Customer relationships from the dedicated /oms/partyRelationships endpoint (both
+     * directions, merged). Used instead of the Party master's nested relationshipsFrom/To
+     * because relationship-based master finds are cached and miss newly-created rows; the
+     * direct entity-list query stays fresh.
+     */
+    async getCustomerRelationships(partyId: string): Promise<CustomerRelationship[]> {
+      const [fromRes, toRes] = await Promise.all([
+        api({ url: 'oms/partyRelationships', method: 'get', params: { partyIdFrom: partyId } }),
+        api({ url: 'oms/partyRelationships', method: 'get', params: { partyIdTo: partyId } })
+      ]);
+
+      const seen = new Set<string>();
+      const merged: CustomerRelationship[] = [];
+      [...asList(fromRes.data), ...asList(toRes.data)].forEach((row) => {
+        const relationship = normalizeCustomerRelationship(row);
+        const key = [relationship.partyIdFrom, relationship.partyIdTo, relationship.roleTypeIdFrom, relationship.roleTypeIdTo, relationship.fromDate].join('|');
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push(relationship);
+      });
+      return merged;
+    },
+
+    async createPartyRelationship(input: RelationshipInput): Promise<void> {
+      await api({
+        url: 'oms/partyRelationships',
+        method: 'post',
+        data: {
+          roleTypeIdFrom: 'CUSTOMER',
+          roleTypeIdTo: 'CUSTOMER',
+          ...input
+        }
+      });
+    },
+
+    async expirePartyRelationship(key: RelationshipKey, thruDate: number): Promise<void> {
+      await api({
+        url: 'oms/partyRelationships',
+        method: 'put',
+        data: { ...key, thruDate }
+      });
+    },
+
+    async createPartyEmail(partyId: string, data: { infoString: string; contactMechPurposeTypeId?: string }): Promise<void> {
+      await api({ url: `oms/customers/${partyId}/emails`, method: 'post', data: { partyId, ...data } });
+    },
+
+    async updatePartyEmail(partyId: string, contactMechId: string, data: { infoString: string; contactMechPurposeTypeId?: string }): Promise<void> {
+      await api({ url: `oms/customers/${partyId}/emails`, method: 'put', data: { partyId, contactMechId, ...data } });
+    },
+
+    async createPartyTelecomNumber(partyId: string, data: { contactNumber: string; countryCode?: string; areaCode?: string; contactMechPurposeTypeId?: string }): Promise<void> {
+      await api({ url: `oms/customers/${partyId}/telecomNumbers`, method: 'post', data: { partyId, ...data } });
+    },
+
+    async updatePartyTelecomNumber(partyId: string, contactMechId: string, data: { contactNumber: string; countryCode?: string; areaCode?: string; contactMechPurposeTypeId?: string }): Promise<void> {
+      await api({ url: `oms/customers/${partyId}/telecomNumbers`, method: 'put', data: { partyId, contactMechId, ...data } });
+    },
+
+    async createPartyPostalAddress(partyId: string, data: { address1: string; city: string; postalCode: string; address2?: string; stateProvinceGeoId?: string; countryGeoId?: string; contactMechPurposeTypeId?: string }): Promise<void> {
+      await api({ url: `oms/customers/${partyId}/postalAddresses`, method: 'post', data: { partyId, ...data } });
+    },
+
+    async updatePartyPostalAddress(partyId: string, contactMechId: string, data: { address1: string; city: string; postalCode: string; address2?: string; stateProvinceGeoId?: string; countryGeoId?: string; contactMechPurposeTypeId?: string }): Promise<void> {
+      await api({ url: `oms/customers/${partyId}/postalAddresses`, method: 'put', data: { partyId, contactMechId, ...data } });
+    },
+
+    async expirePartyContactMech(partyId: string, contactMechId: string): Promise<void> {
+      await api({ url: `oms/customers/${partyId}/contactMechs/${contactMechId}`, method: 'delete', data: { partyId, contactMechId } });
+    },
+
+    async getCustomerCommunications(partyId: string): Promise<CustomerCommunicationSummary[]> {
+      const [fromRes, toRes] = await Promise.all([
+        api({ url: 'oms/customers/communications', method: 'get', params: { partyIdFrom: partyId, orderByField: '-entryDate', pageSize: 100 } }),
+        api({ url: 'oms/customers/communications', method: 'get', params: { partyIdTo: partyId, orderByField: '-entryDate', pageSize: 100 } })
+      ]);
+      const seen = new Set<string>();
+      const results: CustomerCommunicationSummary[] = [];
+      for (const doc of [...asList(fromRes.data), ...asList(toRes.data)]) {
+        const id = toStringValue(doc.communicationEventId);
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          results.push(normalizeCustomerCommunication(doc));
+        }
+      }
+      return results.sort((a, b) => (b.entryDate || '').localeCompare(a.entryDate || ''));
+    },
+
+    async searchShopifyCustomers(shopId: string, searchText: string): Promise<Customer[]> {
+      const response = await api({
+        url: 'oms/shopify/customers',
+        method: 'get',
+        params: {
+          shopId,
+          searchText
+        }
+      });
+      return response.data?.customers || [];
+    },
+
+    async createShopifyCustomer(shopId: string, customerData: any): Promise<any> {
+      const response = await api({
+        url: 'oms/shopify/customers',
+        method: 'post',
+        data: {
+          shopId,
+          ...customerData
+        }
+      });
+      return response.data;
+    },
+
+    async getShopifyShops(params: { productStoreId: string }): Promise<any[]> {
+      const response = await api({
+        url: 'oms/shopifyShops/shops',
+        method: 'get',
+        params
+      });
+      return response.data || [];
+    },
+
+    async findShopifyDuplicateParties(partyId: string, shopifyIdValue: string): Promise<Array<{ partyId: string; name: string }>> {
+      const response = await api({
+        url: 'oms/parties/identifications',
+        method: 'get',
+        params: {
+          partyIdentificationTypeId: 'SHOPIFY_CUST_ID',
+          idValue: shopifyIdValue,
+          partyId,
+          partyId_not: 'Y'
+        }
+      });
+      const partyIds = asList(response.data)
+        .map((item: any) => toStringValue(item.partyId))
+        .filter(Boolean);
+      if (!partyIds.length) return [];
+      const names = await this.getPartyNames(partyIds);
+      const nameMap: Record<string, string> = {};
+      names.forEach((n) => { if (n.partyId) nameMap[n.partyId] = n.name; });
+      return partyIds.map((id) => ({ partyId: id, name: nameMap[id] || id }));
+    },
+
+    async ensurePartyRole(partyId: string, roleTypeId: string): Promise<void> {
+      await api({
+        url: `oms/parties/${partyId}/roles`,
+        method: 'post',
+        data: { partyId, roleTypeId }
+      });
+    },
+
+    async deleteCustomerDetails(partyId: string): Promise<void> {
+      await api({
+        url: `oms/customers/${partyId}`,
+        method: 'delete'
+      });
+    },
+
+    async indexCustomer(partyId: string): Promise<void> {
+      await api({
+        url: 'oms/search/index/customer',
+        method: 'post',
+        data: { partyId }
+      });
+    },
+
     setCurrentCustomer(partyId: string) {
       this.currentPartyId = partyId;
       return this.loadCustomerDashboard(partyId);
@@ -350,7 +617,7 @@ export const useCustomerStore = defineStore('customerDetail', {
 
       this.profilesById[partyId] = { ...(existing || newSource<CustomerProfile | null>(null)), status: 'loading', error: '' };
       try {
-        const profile = await getCustomerProfile(partyId);
+        const profile = await this.getCustomerProfile(partyId);
         this.profilesById[partyId] = {
           payload: profile,
           status: 'loaded',
@@ -376,21 +643,15 @@ export const useCustomerStore = defineStore('customerDetail', {
 
       this.recentOrdersByPartyId[partyId] = { ...(existing || newSource<CustomerOrderSummary[]>([])), status: 'loading', error: '' };
       try {
-        const result = await getCustomerOrdersFromSolr(partyId, { pageSize: 100 });
+        const result = await this.getCustomerOrdersFromSolr(partyId, { pageSize: 100 });
 
         // Real progress for the rendered cards: hydrate each via the official get-order API
-        // (not Solr) and compute from order-item (+ shipment-item) status ages.
-        // statusAge is stamped into each card's progress value, so read the rows up front.
-        const ageByStatusId = await readStatusAges();
+        // (not Solr). The page words progress from these statuses' ages (useCustomerDetail).
         const displayCount = 12;
         await Promise.all(result.orders.slice(0, displayCount).map(async (order) => {
           try {
-            const statusIds = await getOrderProgressStatuses(order.orderId);
-            if (statusIds.length) {
-              order.progressValue = computeProgress(statusIds, (statusId) => ageByStatusId.get(statusId) ?? 0);
-              order.progressPercent = Math.round(order.progressValue * 100);
-              order.progressColor = progressStatusColor(statusIds, (statusId) => ageByStatusId.get(statusId) ?? 0);
-            }
+            const statusIds = await this.getOrderProgressStatuses(order.orderId);
+            if (statusIds.length) order.progressStatusIds = statusIds;
           } catch {
             // keep the Solr status fallback on a per-order failure
           }
@@ -404,7 +665,7 @@ export const useCustomerStore = defineStore('customerDetail', {
           total: result.lifetimeOrders
         };
         const orderProductIds = result.orders.flatMap((o) => o.items.map((item) => item.productId)).filter(Boolean);
-        if (orderProductIds.length) useProductMaster().prefetch(orderProductIds).catch(() => {});
+        if (orderProductIds.length) useProductCacheStore().prefetch(orderProductIds).catch(() => {});
         this.lifetimeByPartyId[partyId] = {
           orders: result.lifetimeOrders,
           value: result.lifetimeValue,
@@ -429,7 +690,7 @@ export const useCustomerStore = defineStore('customerDetail', {
       const pageSize = Number(import.meta.env.VITE_VIEW_SIZE) || 10;
       this.tasksByPartyId[partyId] = { ...(existing || newSource<CustomerTaskSummary[]>([])), status: 'loading', error: '' };
       try {
-        const tasks = await getCustomerTasks(partyId, { taskStatusId: 'TASK_CREATED', pageSize, pageIndex: 0 });
+        const tasks = await this.getCustomerTasks(partyId, { taskStatusId: 'TASK_CREATED', pageSize, pageIndex: 0 });
         this.tasksByPartyId[partyId] = {
           payload: tasks,
           status: 'loaded',
@@ -458,7 +719,7 @@ export const useCustomerStore = defineStore('customerDetail', {
       const nextPage = (existing.pageIndex ?? 0) + 1;
       this.tasksByPartyId[partyId] = { ...existing, status: 'loading', error: '' };
       try {
-        const more = await getCustomerTasks(partyId, { taskStatusId: 'TASK_CREATED', pageSize, pageIndex: nextPage });
+        const more = await this.getCustomerTasks(partyId, { taskStatusId: 'TASK_CREATED', pageSize, pageIndex: nextPage });
         this.tasksByPartyId[partyId] = {
           payload: [...(existing.payload || []), ...more],
           status: 'loaded',
@@ -480,7 +741,7 @@ export const useCustomerStore = defineStore('customerDetail', {
 
       this.returnsByPartyId[partyId] = { ...(existing || newSource<ReturnSummary[]>([])), status: 'loading', error: '' };
       try {
-        const result = await listReturns({ fromPartyId: partyId, pageIndex: 0, pageSize: 100 });
+        const result = await useReturnsStore().listReturns({ fromPartyId: partyId, pageIndex: 0, pageSize: 100 });
         const returns = result.items;
         this.returnsByPartyId[partyId] = {
           payload: returns,
@@ -506,7 +767,7 @@ export const useCustomerStore = defineStore('customerDetail', {
 
       this.communicationsByPartyId[partyId] = { ...(existing || newSource<CustomerCommunicationSummary[]>([])), status: 'loading', error: '' };
       try {
-        const comms = await getCustomerCommunications(partyId);
+        const comms = await this.getCustomerCommunications(partyId);
         this.communicationsByPartyId[partyId] = {
           payload: comms,
           status: 'loaded',
@@ -531,7 +792,7 @@ export const useCustomerStore = defineStore('customerDetail', {
       )];
       if (!missing.length) return;
       try {
-        const results = await getPartyNames(missing);
+        const results = await this.getPartyNames(missing);
         results.forEach((result) => {
           if (result.partyId) this.partyNamesById[result.partyId] = result.name;
         });
@@ -547,7 +808,7 @@ export const useCustomerStore = defineStore('customerDetail', {
 
       this.relationshipsByPartyId[partyId] = { ...(existing || newSource<CustomerRelationship[]>([])), status: 'loading', error: '' };
       try {
-        const relationships = await getCustomerRelationships(partyId);
+        const relationships = await this.getCustomerRelationships(partyId);
         this.relationshipsByPartyId[partyId] = {
           payload: relationships,
           status: 'loaded',
@@ -568,11 +829,11 @@ export const useCustomerStore = defineStore('customerDetail', {
 
     async addContact(partyId: string, contactMechTypeId: string, data: Record<string, string>) {
       if (contactMechTypeId === 'EMAIL_ADDRESS') {
-        await createPartyEmail(partyId, data as any);
+        await this.createPartyEmail(partyId, data as any);
       } else if (contactMechTypeId === 'TELECOM_NUMBER') {
-        await createPartyTelecomNumber(partyId, data as any);
+        await this.createPartyTelecomNumber(partyId, data as any);
       } else if (contactMechTypeId === 'POSTAL_ADDRESS') {
-        await createPartyPostalAddress(partyId, data as any);
+        await this.createPartyPostalAddress(partyId, data as any);
       }
       await this.loadCustomerProfile(partyId, true);
       triggerCustomerIndex(partyId);
@@ -580,28 +841,28 @@ export const useCustomerStore = defineStore('customerDetail', {
 
     async updateContact(partyId: string, contactMechTypeId: string, contactMechId: string, data: Record<string, string>) {
       if (contactMechTypeId === 'EMAIL_ADDRESS') {
-        await updatePartyEmail(partyId, contactMechId, data as any);
+        await this.updatePartyEmail(partyId, contactMechId, data as any);
       } else if (contactMechTypeId === 'TELECOM_NUMBER') {
-        await updatePartyTelecomNumber(partyId, contactMechId, data as any);
+        await this.updatePartyTelecomNumber(partyId, contactMechId, data as any);
       } else if (contactMechTypeId === 'POSTAL_ADDRESS') {
-        await updatePartyPostalAddress(partyId, contactMechId, data as any);
+        await this.updatePartyPostalAddress(partyId, contactMechId, data as any);
       }
       await this.loadCustomerProfile(partyId, true);
       triggerCustomerIndex(partyId);
     },
 
     async expireContact(partyId: string, contactMechId: string) {
-      await expirePartyContactMech(partyId, contactMechId);
+      await this.expirePartyContactMech(partyId, contactMechId);
       await this.loadCustomerProfile(partyId, true);
       triggerCustomerIndex(partyId);
     },
 
     async createRelationship(input: { partyIdFrom: string; partyIdTo: string; partyRelationshipTypeId: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: number; comments?: string }) {
       await Promise.all([
-        ensurePartyRole(input.partyIdFrom, input.roleTypeIdFrom),
-        ensurePartyRole(input.partyIdTo, input.roleTypeIdTo)
+        this.ensurePartyRole(input.partyIdFrom, input.roleTypeIdFrom),
+        this.ensurePartyRole(input.partyIdTo, input.roleTypeIdTo)
       ]);
-      await createPartyRelationship(input);
+      await this.createPartyRelationship(input);
       const partyId = this.currentPartyId || input.partyIdFrom;
       await Promise.all([
         this.loadCustomerProfile(partyId, true),
@@ -611,7 +872,7 @@ export const useCustomerStore = defineStore('customerDetail', {
     },
 
     async expireRelationship(key: { partyIdFrom: string; partyIdTo: string; roleTypeIdFrom: string; roleTypeIdTo: string; fromDate: string }, thruDate: number) {
-      await expirePartyRelationship(key, thruDate);
+      await this.expirePartyRelationship(key, thruDate);
       await Promise.all([
         this.loadCustomerProfile(this.currentPartyId, true),
         this.loadCustomerRelationships(this.currentPartyId, true)
@@ -637,7 +898,7 @@ export const useCustomerStore = defineStore('customerDetail', {
       );
 
       try {
-        const candidates = await findShopifyDuplicateParties(partyId, shopifyId.idValue);
+        const candidates = await this.findShopifyDuplicateParties(partyId, shopifyId.idValue);
         this.mergableDuplicatesByPartyId[partyId] = candidates.filter((c) => !alreadyMergedIds.has(c.partyId));
       } catch {
         this.mergableDuplicatesByPartyId[partyId] = [];
@@ -646,10 +907,10 @@ export const useCustomerStore = defineStore('customerDetail', {
 
     async mergeContact(currentPartyId: string, duplicatePartyId: string) {
       await Promise.all([
-        ensurePartyRole(currentPartyId, 'CUSTOMER'),
-        ensurePartyRole(duplicatePartyId, 'CUSTOMER')
+        this.ensurePartyRole(currentPartyId, 'CUSTOMER'),
+        this.ensurePartyRole(duplicatePartyId, 'CUSTOMER')
       ]);
-      await createPartyRelationship({
+      await this.createPartyRelationship({
         partyIdFrom: duplicatePartyId,
         partyIdTo: currentPartyId,
         partyRelationshipTypeId: 'DUPLICATE',

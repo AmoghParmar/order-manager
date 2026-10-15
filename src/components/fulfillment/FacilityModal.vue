@@ -54,7 +54,8 @@
 import { IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonRadio, IonRadioGroup, IonSearchbar, IonSpinner, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline } from 'ionicons/icons';
 import { onMounted, ref } from 'vue';
-import { api, logger, translate } from '@common';
+import { logger, translate } from '@common';
+import { useOrderStore } from '@/store/order';
 
 type Facility = {
   facilityId: string;
@@ -102,12 +103,7 @@ function preventSpecialCharacters(event: any) {
 async function fetchVirtualFacilities() {
   isLoading.value = true;
   try {
-    const resp = await api({
-      url: 'admin/facilities',
-      method: 'GET',
-      params: { parentTypeId: 'VIRTUAL_FACILITY' }
-    });
-    facilities.value = resp.data || [];
+    facilities.value = await useOrderStore().fetchVirtualFacilities();
     filteredFacilities.value = facilities.value;
   } catch (error) {
     logger.error('Failed to fetch virtual facilities', error);

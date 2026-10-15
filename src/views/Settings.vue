@@ -223,13 +223,13 @@
 import { IonAvatar, IonBadge, IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardSubtitle, IonCardTitle, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonItem, IonItemDivider, IonLabel, IonList, IonListHeader, IonMenuButton, IonModal, IonPage, IonRadio, IonRadioGroup, IonSearchbar, IonSelect, IonSelectOption, IonSpinner, IonTitle, IonToolbar } from '@ionic/vue';
 import { checkmarkCircle, closeCircle, closeOutline, openOutline, saveOutline, syncOutline } from 'ionicons/icons';
 import { computed, onBeforeMount, ref } from 'vue';
-import { api, commonUtil, cookieHelper, i18n, translate } from '@common';
+import { commonUtil, cookieHelper, i18n, translate } from '@common';
 import { useDbStatus } from '@common/db';
 import { useAuth } from '@common/composables/useAuth';
 import { useUserStore } from '@/store/user';
 import { useProductStore } from '@/store/productStore';
-import { getOrderManagerDb, orderManagerDb } from '@/db/orderManagerDb';
-import { resyncDomain, resyncReferenceData, syncService } from '@/services/appDbSync';
+import { orderManagerDb } from '@/db/orderManagerDb';
+import { resyncDomain, resyncReferenceData, syncService } from '@/db/appDbSync';
 import DxpProductIdentifier from "@/components/settings/DxpProductIdentifier.vue";
 import DxpAppVersionInfo from "@/components/settings/DxpAppVersionInfo.vue";
 import Actions from "@/authorization/actions";
@@ -297,18 +297,7 @@ async function checkOmsConnection() {
     return;
   }
 
-  try {
-    await api({
-      url: commonUtil.isMoqui() ? "admin/user/permissions" : "getPermissions",
-      method: "GET",
-      baseURL: commonUtil.getOmsURL(),
-      params: { viewIndex: 0, viewSize: 1 },
-      timeout: 3000,
-    });
-    isOmsOffline.value = false;
-  } catch (error: any) {
-    isOmsOffline.value = !error?.response;
-  }
+  isOmsOffline.value = !(await userStore.isOmsReachable());
 }
 
 function setCurrentProductStore(event: CustomEvent) {
@@ -371,7 +360,7 @@ function clearSearch() {
 const {
   domains, refreshing, totalRows, oldestSyncedAt, lastSyncedAt, refreshDomain, refreshAll,
 } = useDbStatus(
-  orderManagerDb.raw(),
+  orderManagerDb.client(),
   orderManagerDb.statusCatalog,
   {
     resyncDomain,

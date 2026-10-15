@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useOrderDetailStore } from '@/store/orderDetail';
+import { useOrder } from '@/composables/useOrder';
 import { api } from '@common';
-import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_SAMPLE_SIZE, useOrderDetail } from '@/composables/useOrderDetail';
+import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_SAMPLE_SIZE } from '@/utils/orderDetailQueries';
+
+// useOrder joins over the seed tables; these specs read them empty, so labels answer raw ids.
+vi.mock('@common/db', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return { ...actual, useSeedData: () => actual.emptySeedData };
+});
+vi.mock('@/store/order', () => ({ useOrderStore: () => ({}) }));
 
 vi.mock('@common', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -14,14 +22,13 @@ vi.mock('@common', async (importOriginal) => {
   };
 });
 
-vi.mock('@/composables/useOrderDetail', async (importOriginal) => {
-  const actual = await importOriginal<any>();
-  return { ...actual, useOrderDetail: vi.fn() };
-});
 
 vi.mock('@/db/orderManagerDb', async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  omDb: () => ({ all: async () => [], get: async () => undefined }),
+  orderManagerDb: {
+    tables: new Proxy({}, { get: (_target, table) => table }),
+    entity: () => ({ all: async () => [], get: async () => undefined }),
+  },
 }));
 
 const ORDER_ID = 'M102510';
@@ -35,8 +42,9 @@ function orderEntryWithStatuses(statuses: any[]) {
   return { payload: { statuses }, status: 'loaded' as const, loadedAt: '', error: '' };
 }
 
+/** Replaces the store's own fetch actions on the store instance, so its loaders call these. */
 function mockOrderDetail(overrides: Record<string, any> = {}) {
-  vi.mocked(useOrderDetail).mockReturnValue({
+  Object.assign(useOrderDetailStore(), {
     getOrder: vi.fn(),
     getCommunicationEvents: vi.fn(),
     getRiskAssessments: vi.fn(),
@@ -44,13 +52,12 @@ function mockOrderDetail(overrides: Record<string, any> = {}) {
     getUnfillableAttempts: vi.fn().mockResolvedValue({ data: [] }),
     getInventoryIssuance: vi.fn().mockResolvedValue([]),
     ...overrides,
-  } as any);
+  });
 }
 
 describe('order detail event sources', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    vi.mocked(useOrderDetail).mockReset();
     mockOrderDetail();
   });
 
@@ -66,7 +73,7 @@ describe('order detail event sources', () => {
       { orderItemSeqId: '03', changeReasonEnumId: 'RELEASED', fromFacilityId: '_NA_', facilityId: 'BROADWAY', changeDatetime: '2026-06-26 14:17:51.901' },
     ];
 
-    const events = store.orderEventsByOrderId(ORDER_ID);
+    const events = useOrder().orderEvents(ORDER_ID);
 
     expect(events.map((event) => event.kind)).toEqual(['orderStatus', 'move']);
     expect(events[1]).toMatchObject({ move: 'released', orderItemSeqIds: ['01', '02', '03'], isFirst: true });
@@ -75,7 +82,7 @@ describe('order detail event sources', () => {
   it('has no events when the order document has not loaded', () => {
     const store = useOrderDetailStore();
 
-    expect(store.orderEventsByOrderId(ORDER_ID)).toEqual([]);
+    expect(useOrder().orderEvents(ORDER_ID)).toEqual([]);
   });
 
   it('counts one failed brokering run as one attempt however many items it touched', async () => {
@@ -268,7 +275,7 @@ describe('order detail event sources', () => {
     await store.fetchOrderEvents(ORDER_ID);
 
     // Statuses come off the document, so a failed sibling call cannot take them out.
-    const events = store.orderEventsByOrderId(ORDER_ID);
+    const events = useOrder().orderEvents(ORDER_ID);
     expect(events.filter((event) => event.kind === 'orderStatus')).toHaveLength(1);
     expect(events.filter((event) => event.kind === 'move')).toEqual([]);
     expect(store.unfillableAttemptsByOrderId(ORDER_ID)).toMatchObject({ count: 1 });
@@ -312,11 +319,11 @@ describe('order detail event sources', () => {
 
 describe('getFacilityChanges', () => {
   it('reads the newest moves first, so a full page drops the oldest', async () => {
-    const { useOrderDetail: realUseOrderDetail } = await vi.importActual<any>('@/composables/useOrderDetail');
+    setActivePinia(createPinia());
     vi.mocked(api).mockReset();
     vi.mocked(api).mockResolvedValue({ data: [] });
 
-    await realUseOrderDetail().getFacilityChanges(ORDER_ID);
+    await useOrderDetailStore().getFacilityChanges(ORDER_ID);
 
     expect(vi.mocked(api).mock.calls[0][0]).toMatchObject({ params: { orderByField: '-changeDatetime', pageSize: FACILITY_CHANGE_PAGE_SIZE } });
   });
@@ -324,7 +331,7 @@ describe('getFacilityChanges', () => {
 
 describe('getInventoryIssuance', () => {
   it('reads each line\'s inventory item from ProductFacility, then its issuance rows for the order', async () => {
-    const { useOrderDetail: realUseOrderDetail } = await vi.importActual<any>('@/composables/useOrderDetail');
+    setActivePinia(createPinia());
     vi.mocked(api).mockReset();
     vi.mocked(api).mockImplementation(async ({ url }: any) => {
       // The `in` filters cross both products with both facilities, so one row is not a line.
@@ -336,7 +343,7 @@ describe('getInventoryIssuance', () => {
       return { data: [{ inventoryItemId: url.split('/')[2], orderItemSeqId: '01', itemIssuanceId: 'X' }] };
     });
 
-    const rows = await realUseOrderDetail().getInventoryIssuance(ORDER_ID, [
+    const rows = await useOrderDetailStore().getInventoryIssuance(ORDER_ID, [
       { productId: 'P1', facilityId: 'F1' },
       { productId: 'P2', facilityId: 'F2' },
     ]);
@@ -348,10 +355,10 @@ describe('getInventoryIssuance', () => {
   });
 
   it('makes no call for an order with no issued lines', async () => {
-    const { useOrderDetail: realUseOrderDetail } = await vi.importActual<any>('@/composables/useOrderDetail');
+    setActivePinia(createPinia());
     vi.mocked(api).mockReset();
 
-    expect(await realUseOrderDetail().getInventoryIssuance(ORDER_ID, [])).toEqual([]);
+    expect(await useOrderDetailStore().getInventoryIssuance(ORDER_ID, [])).toEqual([]);
     expect(api).not.toHaveBeenCalled();
   });
 });

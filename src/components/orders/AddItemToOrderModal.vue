@@ -62,9 +62,10 @@
 import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonSearchbar, IonSpinner, IonThumbnail, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { checkmarkCircle, closeOutline } from 'ionicons/icons';
 import { ref, computed } from 'vue';
-import { api, commonUtil, DxpShopifyImg, translate } from '@common';
+import { commonUtil, DxpShopifyImg, translate } from '@common';
 import { useSolrSearch } from '@common/composables/useSolrSearch';
 import { showToast } from '@/utils';
+import { useOrderDetailStore } from '@/store/orderDetail';
 import { useProductStore } from '@/store/productStore';
 
 const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);
@@ -109,16 +110,7 @@ async function onSearch() {
 async function addToOrder(product: any) {
   addingProductId.value = product.productId;
   try {
-    await api({
-      url: `oms/orders/${props.orderId}/addItem`,
-      method: 'POST',
-      data: {
-        orderId: props.orderId,
-        shipGroupSeqId: props.shipGroupSeqId,
-        productId: product.productId,
-        quantity: 1,
-      },
-    });
+    await useOrderDetailStore().addItemToOrder(props.orderId, props.shipGroupSeqId, product.productId, 1);
     // Mark as added and stay open for more additions
     addedProductIds.value = new Set([...addedProductIds.value, product.productId]);
     await showToast(translate('Item added to order successfully.'));

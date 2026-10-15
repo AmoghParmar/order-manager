@@ -4,7 +4,8 @@
  * Configures the generic setupAppDbSync helper with Order Manager's database and worker.
  */
 
-import { createSyncService, setupAppDbSync } from "@common/db";
+import { setupAppDbSync } from "@common/db/sync/setupAppDbSync";
+import { createSyncService } from "@common/db/sync/syncService";
 import { orderManagerDb } from "@/db/orderManagerDb";
 import appSyncWorkerUrl from "../workers/appSync.worker.ts?worker&url";
 

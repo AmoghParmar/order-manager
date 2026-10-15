@@ -149,9 +149,8 @@ import {
   modalController,
   useIonRouter,
 } from '@ionic/vue';
-import { api, translate } from '@common';
+import { translate } from '@common';
 import { computed, onMounted, ref, watch } from 'vue';
-import { searchOrders } from '@/services/order';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useOrderStore } from '@/store/order';
 import { useOrderTaskStore } from '@/store/orderTask';
@@ -209,6 +208,11 @@ const emit = defineEmits<{
 }>();
 const orderDetailStore = useOrderDetailStore();
 const orderStore = useOrderStore();
+
+/** Facility type rows for the order rows' virtual-location checks; none while they cannot be read. */
+function facilityTypeRows() {
+  return seed.getFacilityTypes().catch(() => []);
+}
 const orderTaskStore = useOrderTaskStore();
 const productStore = useProductStore();
 const userStore = useUserStore();
@@ -310,7 +314,7 @@ async function runSearch() {
   loading.value = true;
   error.value = '';
   try {
-    const result = await searchOrders(toSearchParams(0));
+    const result = await orderStore.queryOrders(toSearchParams(0), await facilityTypeRows());
     pageIndex.value = 0;
     searchResults.value = result.orders;
     searchTotal.value = result.total;
@@ -331,7 +335,7 @@ async function loadMore(event: CustomEvent) {
   if (!loading.value && hasMore.value) {
     try {
       const nextPageIndex = pageIndex.value + 1;
-      const result = await searchOrders(toSearchParams(nextPageIndex));
+      const result = await orderStore.queryOrders(toSearchParams(nextPageIndex), await facilityTypeRows());
       pageIndex.value = nextPageIndex;
       searchResults.value = [...searchResults.value, ...result.orders];
       searchTotal.value = result.total;
@@ -464,7 +468,7 @@ async function brokerableShipGroupsForOrders(orderIds: string[]) {
   const shipGroupsByOrder = await Promise.all(
     orderIds.map(async (orderId) => ({
       orderId,
-      shipGroups: await fetchOrderShipGroups(orderId),
+      shipGroups: await orderDetailStore.fetchOrderShipGroups(orderId),
     }))
   );
 
@@ -474,11 +478,6 @@ async function brokerableShipGroupsForOrders(orderIds: string[]) {
       .map((shipGroup) => ({ orderId, shipGroupSeqId: shipGroupSeqId(shipGroup) }))
       .filter((shipGroup) => shipGroup.shipGroupSeqId)
   );
-}
-
-async function fetchOrderShipGroups(orderId: string) {
-  const response = await api({ url: `oms/orders/${orderId}/shipGroups`, method: 'GET' });
-  return Array.isArray(response.data) ? response.data : (response.data?.docs || response.data?.shipGroups || []);
 }
 
 function shipGroupSeqId(shipGroup: any) {

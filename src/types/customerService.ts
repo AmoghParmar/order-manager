@@ -7,7 +7,6 @@ export interface WorkflowOrder {
   statusId: string;
   orderDate: string;
   productStoreId: string;
-  productStoreName: string;
   salesChannelEnumId: string;
   customerName: string;
   customerPartyId: string;
@@ -18,7 +17,6 @@ export interface WorkflowOrder {
   shipmentId?: string;
   shipmentStatusId?: string;
   shippingMethodTypeId: string;
-  shipmentMethodDesc: string;
   carrierPartyId?: string;
   priority: 'HIGH' | 'NORMAL' | 'LOW';
   facilityId: string | null;
@@ -135,4 +133,11 @@ export interface FulfillmentProgress {
   pickedShipGroupsCount: number;
   packedShipGroupsCount: number;
   shippedShipGroupsCount: number;
+}
+
+export interface SortRule {
+  /** The sort field: a PP_SORT_PARAM_TYPE enum's enumCode. */
+  id: string;
+  sequenceNum: number;
+  conditionSeqId: string;
 }

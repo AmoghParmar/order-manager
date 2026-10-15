@@ -4,7 +4,7 @@ import { api, translate } from '@common';
 import { useSeedData } from '@common/db';
 import { showToast } from '@/utils';
 import { OrderActionValidator, type FooterActionView, type ShipGroupActionId } from '@/utils/OrderActionValidator';
-import { isInventoryTransferEligibleItem } from '@/services/inventoryTransfers';
+import { isInventoryTransferEligibleItem } from '@/utils/inventoryTransfers';
 import { useProductIdentity } from '@/composables/useProductIdentity';
 import { useCustomerStore } from '@/store/customer';
 import { useOrderDetailStore } from '@/store/orderDetail';

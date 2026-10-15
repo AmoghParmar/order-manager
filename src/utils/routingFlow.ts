@@ -62,22 +62,22 @@ type ItemMove = { row: any; at: number; attempts: number };
  * "sent back to the queue, still unfillable" loop, become one move with an attempt count. A move
  * that leaves the item in the ship group it is already in changes nothing on the graph.
  */
-function foldMoves(rows: any[]): ItemMove[] {
+function foldMoves(rows: any[], facilities: any[], facilityTypes: any[]): ItemMove[] {
   const moves: ItemMove[] = [];
   rows.forEach((row, index) => {
     const previous = moves[moves.length - 1];
-    const kind = routingEventKind(row);
+    const kind = routingEventKind(row, facilities, facilityTypes);
     if(previous && previous.row.shipGroupSeqId === row.shipGroupSeqId) {
-      if(kind === routingEventKind(previous.row)) {previous.attempts += 1;}
+      if(kind === routingEventKind(previous.row, facilities, facilityTypes)) {previous.attempts += 1;}
 
       return;
     }
     const next = rows[index + 1];
     // A system detour between two unfillable attempts (back to the queue, or a Shopify sync moving
     // it) is routing retrying. A person's move, or a move to a real location, always shows.
-    const systemDetour = previous && routingEventKind(previous.row) === "unfillable" &&
-      !row.changeUserLogin && !isStockLocation(row.facilityId);
-    if(systemDetour && next && routingEventKind(next) === "unfillable" && next.shipGroupSeqId === previous.row.shipGroupSeqId) {
+    const systemDetour = previous && routingEventKind(previous.row, facilities, facilityTypes) === "unfillable" &&
+      !row.changeUserLogin && !isStockLocation(row.facilityId, facilities, facilityTypes);
+    if(systemDetour && next && routingEventKind(next, facilities, facilityTypes) === "unfillable" && next.shipGroupSeqId === previous.row.shipGroupSeqId) {
       // Skip the detour; the next attempt then folds into the previous one as a retry.
       return;
     }
@@ -103,8 +103,10 @@ export function buildRoutingFlow(input: {
   shipGroups: FlowShipGroup[];
   changes: any[];
   importedAt: number;
+  facilities: any[];
+  facilityTypes: any[];
 }): RoutingFlow {
-  const { items, shipGroups, changes, importedAt } = input;
+  const { items, shipGroups, changes, importedAt, facilities, facilityTypes } = input;
   const facilityOf = (shipGroupSeqId: string) => shipGroups.find((group) => group.id === shipGroupSeqId)?.facilityId || "";
 
   const movesByItem = new Map<string, ItemMove[]>();
@@ -112,7 +114,7 @@ export function buildRoutingFlow(input: {
     const rows = changes
       .filter((row) => row.orderItemSeqId === item.orderItemSeqId)
       .sort((a, b) => changeAt(a) - changeAt(b));
-    movesByItem.set(item.orderItemSeqId, foldMoves(rows));
+    movesByItem.set(item.orderItemSeqId, foldMoves(rows, facilities, facilityTypes));
   });
 
   // Steps: moves a minute apart from the step's first move happen together.
@@ -162,7 +164,7 @@ export function buildRoutingFlow(input: {
     // The last move per item in this step decides where it ends up.
     const finalMove = new Map<string, (typeof step)[number]>();
     step.forEach((move) => finalMove.set(move.orderItemSeqId, move));
-    const kinds = new Set([...finalMove.values()].map((move) => routingEventKind(move.row)));
+    const kinds = new Set([...finalMove.values()].map((move) => routingEventKind(move.row, facilities, facilityTypes)));
     columns.push({
       index: column,
       at: step[0].at,
@@ -200,7 +202,7 @@ export function buildRoutingFlow(input: {
       const to = location.get(orderItemSeqId);
       if(!from || !to || from.nodeId === to.nodeId) {return;}
       const move = finalMove.get(orderItemSeqId);
-      const kind: FlowEdgeKind = move ? routingEventKind(move.row) : "stayed";
+      const kind: FlowEdgeKind = move ? routingEventKind(move.row, facilities, facilityTypes) : "stayed";
       const reasonEnumId = move?.row.changeReasonEnumId || "";
       const key = `${from.nodeId}>${to.nodeId}>${kind}>${reasonEnumId}`;
       const line: FlowEdge = lines.get(key) || {

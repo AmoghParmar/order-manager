@@ -56,9 +56,11 @@ export function toSearchOrderRowViewModel(order: Order): OrderRowViewModel {
   });
 }
 
+/** `shipmentMethodDesc` is the caller's label for the order's shipment method type. */
 export function toWorkflowOrderRowViewModel(
   order: WorkflowOrder,
-  enrichment?: OrderRowEnrichment
+  enrichment?: OrderRowEnrichment,
+  shipmentMethodDesc?: string
 ): OrderRowViewModel {
   return createOrderRowViewModel({
     orderId: order.orderId,
@@ -66,7 +68,7 @@ export function toWorkflowOrderRowViewModel(
     customerName: enrichment?.customerPartyName || order.customerName?.trim() || order.customerPartyId || translate('Unknown customer'),
     allocationSummary: workflowAllocationSummary(order, enrichment),
     carrier: usableCarrier(order.carrierPartyId) || usableCarrier(enrichment?.carrierPartyId),
-    shippingMethod: order.shipmentMethodDesc || order.shippingMethodTypeId || enrichment?.shipmentMethodTypeId,
+    shippingMethod: shipmentMethodDesc || order.shippingMethodTypeId || enrichment?.shipmentMethodTypeId,
     channel: enrichment?.salesChannelDesc || formatIdentifier(order.salesChannelEnumId),
     orderDate: order.orderDate,
     estimatedDelivery: order.estimatedDeliveryDate || enrichment?.estimatedDeliveryDate || enrichment?.promisedDatetime

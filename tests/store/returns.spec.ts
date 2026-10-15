@@ -1,23 +1,25 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getPartyNames } from "@/services/customer";
-import { fetchOrderRowEnrichment } from "@/services/order";
-import { getReturn, listReturns } from "@/services/returns";
 import { useReturnsStore } from "@/store/returns";
 
-vi.mock("@/services/customer", () => ({ getPartyNames: vi.fn() }));
-vi.mock("@/services/order", () => ({ fetchOrderRowEnrichment: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getPartyNames: vi.fn(),
+  fetchOrderRowEnrichment: vi.fn()
+}));
 
-vi.mock("@/services/returns", () => ({
-  getReturn: vi.fn(),
-  listReturns: vi.fn(),
+vi.mock("@/store/customer", () => ({ useCustomerStore: () => ({ getPartyNames: mocks.getPartyNames }) }));
+vi.mock("@/store/order", () => ({ useOrderStore: () => ({ fetchOrderRowEnrichment: mocks.fetchOrderRowEnrichment }) }));
+
+vi.mock("@/utils/returns", async (importOriginal) => ({
+  ...(await importOriginal<any>()),
   toReturnSummary: vi.fn((value) => value)
 }));
 
-const getReturnMock = vi.mocked(getReturn);
-const listReturnsMock = vi.mocked(listReturns);
-const getPartyNamesMock = vi.mocked(getPartyNames);
-const fetchOrderRowEnrichmentMock = vi.mocked(fetchOrderRowEnrichment);
+// The store's own fetch actions, replaced on the store instance so search and loadReturn call these.
+const getReturnMock = vi.fn();
+const listReturnsMock = vi.fn();
+const getPartyNamesMock = mocks.getPartyNames;
+const fetchOrderRowEnrichmentMock = mocks.fetchOrderRowEnrichment;
 
 const detail = {
   returnId: "R200",
@@ -41,6 +43,7 @@ describe("returns store", () => {
     getPartyNamesMock.mockResolvedValue([]);
     fetchOrderRowEnrichmentMock.mockReset();
     fetchOrderRowEnrichmentMock.mockResolvedValue({});
+    Object.assign(useReturnsStore(), { getReturn: getReturnMock, listReturns: listReturnsMock });
   });
 
   it("loads the first page with server paging", async () => {
@@ -67,7 +70,7 @@ describe("returns store", () => {
 
     await store.search();
 
-    expect(fetchOrderRowEnrichmentMock).toHaveBeenCalledWith(["M1"]);
+    expect(fetchOrderRowEnrichmentMock).toHaveBeenCalledWith(["M1"], []);
     expect(getPartyNamesMock).toHaveBeenCalledWith(["P1"]);
     expect(store.returns[0]).toMatchObject({ orderName: "#1001", customerName: "Alex Morgan" });
   });
@@ -118,7 +121,7 @@ describe("returns store", () => {
 
     await store.loadReturn("R200");
 
-    expect(fetchOrderRowEnrichmentMock).toHaveBeenCalledWith(["M200", "M201"]);
+    expect(fetchOrderRowEnrichmentMock).toHaveBeenCalledWith(["M200", "M201"], []);
     expect(store.current?.customerName).toBe("Alex Morgan");
     expect(store.current?.items.map((item) => item.orderName)).toEqual(["#200", "#201"]);
   });

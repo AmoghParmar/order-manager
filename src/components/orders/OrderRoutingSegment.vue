@@ -261,7 +261,7 @@ function itemImage(item: EnrichedOrderItem) {
 
 /** The location whose stock explains the item: where it is, or the last real location it was at when it now sits in a queue or parking. */
 function inventoryFacilityId(entry: Entry): string | undefined {
-  return isStockLocation(entry.item.facilityId)
+  return isStockLocation(entry.item.facilityId, seed.facilities(), seed.facilityTypes())
     ? entry.item.facilityId
     : [...entry.history.events].reverse().find((event) => event.stock)?.stock?.facilityId;
 }

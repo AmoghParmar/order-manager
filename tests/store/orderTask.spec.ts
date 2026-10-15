@@ -15,9 +15,8 @@ vi.mock('@/store/productStore', () => ({
   })),
 }));
 
-vi.mock('@/composables/useProductMaster', () => ({
-  useProductMaster: vi.fn(() => ({
-    init: vi.fn(),
+vi.mock('@/store/productCache', () => ({
+  useProductCacheStore: vi.fn(() => ({
     prefetch: vi.fn(),
   })),
 }));

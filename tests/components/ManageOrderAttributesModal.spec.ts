@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import ManageOrderAttributesModal from '@/components/orders/ManageOrderAttributesModal.vue';
 
 const mocks = vi.hoisted(() => ({
@@ -72,6 +73,8 @@ const unsaved = (wrapper: Modal) => wrapper.findAll('.attribute-kv')
 
 describe('manage order attributes modal', () => {
   beforeEach(() => {
+    // The order detail store sends the writes, through the faked api.
+    setActivePinia(createPinia());
     mocks.api.mockReset().mockResolvedValue({ data: {} });
     mocks.dismiss.mockReset();
     mocks.showToast.mockReset();

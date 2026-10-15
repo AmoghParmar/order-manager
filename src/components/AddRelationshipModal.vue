@@ -161,8 +161,10 @@ import { arrowBackOutline, arrowForwardOutline, closeOutline, saveOutline } from
 import { computed, ref } from 'vue';
 import { translate } from '@common';
 import { useSeedData } from '@common/db';
-import { searchCustomers } from '@/services/customer';
+import { useCustomerStore } from '@/store/customer';
 
+
+const customerStore = useCustomerStore();
 const seed = useSeedData();
 
 interface RelatableParty {
@@ -218,7 +220,7 @@ async function runSearch() {
   const searchId = ++latestSearchId;
   searching.value = true;
   try {
-    const { customers } = await searchCustomers({
+    const { customers } = await customerStore.searchCustomers({
       queryString: queryString.value.trim(),
       partyTypeId: 'All',
       pageSize: 20,

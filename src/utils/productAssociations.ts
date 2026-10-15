@@ -1,5 +1,3 @@
-import { api } from '@common';
-
 export interface SubstituteAssociation {
   productId: string;
   productIdTo: string;
@@ -18,13 +16,9 @@ const activeAt = (association: any, now = Date.now()) => {
   return fromDate <= now && thruDate > now;
 };
 
-export async function fetchActiveSubstitutes(productId: string): Promise<SubstituteAssociation[]> {
-  const response = await api({
-    url: `oms/products/${productId}/associations`,
-    method: 'GET',
-    params: { pageSize: 500 }
-  });
-  return rows(response.data)
+/** The product's active outgoing substitutes, from an associations response. */
+export function activeSubstitutes(data: any, productId: string): SubstituteAssociation[] {
+  return rows(data)
     .filter((association: any) =>
       association.productAssocTypeId === 'PRODUCT_SUBSTITUTE'
       && (association.productId === productId || association.direction === 'outgoing')
@@ -37,26 +31,4 @@ export async function fetchActiveSubstitutes(productId: string): Promise<Substit
       thruDate: association.thruDate
     }))
     .filter((association: SubstituteAssociation) => association.productIdTo);
-}
-
-export async function createSubstituteAssociation(productId: string, productIdTo: string) {
-  return api({
-    url: `oms/products/${productId}/assocs`,
-    method: 'POST',
-    data: { productId, productIdTo, productAssocTypeId: 'PRODUCT_SUBSTITUTE' }
-  });
-}
-
-export async function expireSubstituteAssociation(productId: string, association: SubstituteAssociation) {
-  return api({
-    url: `oms/products/${productId}/assocs`,
-    method: 'POST',
-    data: {
-      productId,
-      productIdTo: association.productIdTo,
-      productAssocTypeId: 'PRODUCT_SUBSTITUTE',
-      fromDate: association.fromDate,
-      thruDate: Date.now()
-    }
-  });
 }

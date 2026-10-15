@@ -36,10 +36,10 @@ describe('OrderQueueList', () => {
     expect(source).toContain("{{ translate('Broker selected') }}");
     expect(source).toContain('component: RoutingGroupModal');
     expect(source).toContain('brokerableShipGroupsForOrders(orderIds)');
-    expect(source).toContain('fetchOrderShipGroups(orderId)');
+    expect(source).toContain('orderDetailStore.fetchOrderShipGroups(orderId)');
     expect(source).toContain('isVirtualShipGroup(shipGroup, facilityById, parentTypeByFacilityType)');
     expect(source).toContain('orderTaskStore.brokerShipGroup({');
-    expect(source).toContain("url: `oms/orders/${orderId}/shipGroups`");
+    expect(readFileSync(resolve(process.cwd(), 'src/store/orderDetail.ts'), 'utf8')).toContain("url: `oms/orders/${orderId}/shipGroups`");
   });
 
   it('uses sales channel, shipping method, and shared date filters for queue search', () => {

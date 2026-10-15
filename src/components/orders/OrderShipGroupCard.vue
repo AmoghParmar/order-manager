@@ -146,7 +146,7 @@
             <ion-label>
               <div>
                 {{ primaryIdentifier(item.productId) || item.productId }}
-                <ion-badge class="kit-badge" color="dark" v-if="isKit(item)">{{ translate("Kit") }}</ion-badge>
+                <ion-badge class="kit-badge" color="dark" v-if="isKit(getProduct(item.productId))">{{ translate("Kit") }}</ion-badge>
               </div>
               <p>{{ secondaryIdentifier(item.productId) }}</p>
               <p v-if="featureLabel(item.productId)" class="ship-group-item-features" :title="featureLabel(item.productId)">{{ featureLabel(item.productId) }}</p>
@@ -202,7 +202,7 @@
               <ion-label>
                 <div>
                   {{ primaryIdentifier(item.productId) || item.productId }}
-                  <ion-badge class="kit-badge" color="dark" v-if="isKit(item)">{{ translate("Kit") }}</ion-badge>
+                  <ion-badge class="kit-badge" color="dark" v-if="isKit(getProduct(item.productId))">{{ translate("Kit") }}</ion-badge>
                 </div>
                 <p>{{ secondaryIdentifier(item.productId) }}</p>
                 <!-- The collapsed summary above carries the same line, but a counter sale
@@ -496,8 +496,8 @@ import {
 } from 'ionicons/icons';
 import { DxpShopifyImg, translate } from '@common';
 import { useSeedData } from '@common/db';
+import { useOrder } from '@/composables/useOrder';
 import { useProductIdentity } from '@/composables/useProductIdentity';
-import { useOrderDetailStore } from '@/store/orderDetail';
 import { confirmAction, isKit } from '@/utils';
 import type { ShipGroupMilestones } from '@/utils/orderEvents';
 import { formatDateTime, formatElapsed, formatNumber, formatRelative, formatTime, toDateInputValue } from '@/utils/format';
@@ -545,8 +545,8 @@ const emit = defineEmits<{
   'save-address': [address: ShipGroupAddressEdit];
 }>();
 
-const orderDetailStore = useOrderDetailStore();
 const seed = useSeedData();
+const { shippingMethodsByCarrier } = useOrder();
 const { getProduct, imagePreview, primaryIdentifier, secondaryIdentifier, featureLabel } = useProductIdentity();
 
 const ISSUANCE_LABELS: Record<ItemIssuance['kind'], string> = {
@@ -635,7 +635,7 @@ const carrierName = computed(() => {
   return carrier ? partyName(carrier) : '';
 });
 const methodLabel = computed(() => methodId.value ? seed.shipmentMethodDescription(methodId.value) : '');
-const carrierMethods = computed(() => [...orderDetailStore.shippingMethodsByCarrier(carrierId.value)]
+const carrierMethods = computed(() => [...shippingMethodsByCarrier(carrierId.value)]
   .sort((a, b) => Number(a.sequenceNumber ?? Infinity) - Number(b.sequenceNumber ?? Infinity)));
 
 function onCarrierChange(carrierPartyId: string) {

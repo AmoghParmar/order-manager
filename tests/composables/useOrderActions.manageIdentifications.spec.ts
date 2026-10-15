@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, ref } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { modalController } from '@ionic/vue';
 import { useOrderActions } from '@/composables/useOrderActions';
@@ -18,13 +18,13 @@ function dismissModalWith(role: string | undefined) {
 function setup() {
   const order = { id: 'O1', statusId: 'ORDER_APPROVED', shipGroups: [], groupedItems: [], identifications: [] } as unknown as EnrichedOrder;
   const loadOrder = vi.fn();
-  const actions = useOrderActions({
+  const actions = effectScope().run(() => useOrderActions({
     order: ref(order),
     loadOrder,
     selectedItemIds: ref(new Set<string>()),
     selectedShipGroupItems: ref({}),
     selectedSegment: ref('items'),
-  });
+  }))!;
   return { actions, loadOrder };
 }
 

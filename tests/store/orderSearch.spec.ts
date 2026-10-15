@@ -1,27 +1,35 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import { api, commonUtil, useSolrSearch } from '@common';
+import { useOrderStore } from '@/store/order';
 import {
   buildActivePhysicalFacilityOrderVolumePayload,
   buildOrderLookupPayload,
   buildOrderRowEnrichmentPayload,
   buildUnfillableProductCandidatesPayload,
   buildUnfillableShipGroupsForProductPayload,
-  getActivePhysicalFacilityOrderVolume,
   buildVirtualLocationCountsPayload,
   buildUnfillableTrendSpanPayload,
-  fetchUnfillableTrend,
-  fetchUnfillableProductCandidates,
-  fetchUnfillableShipGroupsForProduct,
-  fetchVirtualLocationOrderCounts,
-  fetchWorkflowOrderTotals,
-  searchOrders
-} from '@/services/order';
+  type OrderSearchParams
+} from '@/utils/orderSearch';
 
-vi.mock('@common', () => ({
+vi.mock('@common', async (importOriginal) => ({
+  ...await importOriginal<any>(),
   api: vi.fn(),
   commonUtil: { hasError: vi.fn() },
   useSolrSearch: vi.fn()
 }));
+
+beforeEach(() => setActivePinia(createPinia()));
+
+const store = () => useOrderStore();
+const searchOrders = (params: OrderSearchParams = {}, facilityTypes: any[] = []) => store().queryOrders(params, facilityTypes);
+const getActivePhysicalFacilityOrderVolume = (params?: { productStoreId?: string }) => store().fetchActivePhysicalFacilityOrderVolume(params);
+const fetchUnfillableTrend = (productStoreId?: string, timeZone?: string, maxBuckets?: number) => store().fetchUnfillableTrend(productStoreId, timeZone, maxBuckets);
+const fetchUnfillableProductCandidates = (productStoreId?: string, limit?: number) => store().fetchUnfillableProductCandidates(productStoreId, limit);
+const fetchUnfillableShipGroupsForProduct = (productStoreId: string, productId: string) => store().fetchUnfillableShipGroupsForProduct(productStoreId, productId);
+const fetchVirtualLocationOrderCounts = (params: Parameters<ReturnType<typeof useOrderStore>['fetchVirtualLocationOrderCounts']>[0]) => store().fetchVirtualLocationOrderCounts(params);
+const fetchWorkflowOrderTotals = (productStoreId?: string) => store().fetchWorkflowOrderTotals(productStoreId);
 
 function filtersOf(params: Parameters<typeof buildOrderLookupPayload>[0]) {
   return buildOrderLookupPayload(params).json.filter as string[];

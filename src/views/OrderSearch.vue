@@ -117,7 +117,7 @@
         :title="translate('Could not load orders')"
         :message="error"
         retryable
-        @retry="orderStore.runSearch()"
+        @retry="runSearch()"
       />
 
       <ion-list v-else>
@@ -218,6 +218,11 @@ import ErrorState from '@/components/common/ErrorState.vue';
 import SearchFilterCard from '@/components/common/SearchFilterCard.vue';
 
 const seed = useSeedData();
+
+/** The order search with the facility type rows its rows' virtual-location checks need. */
+async function runSearch() {
+  return orderStore.runSearch(await seed.getFacilityTypes().catch(() => []));
+}
 import UniformFilterLayout from '@/components/common/UniformFilterLayout.vue';
 import OrderSortPopover from '@/components/orders/OrderSortPopover.vue';
 import OrderRow from '@/components/orders/OrderRow.vue';
@@ -274,7 +279,7 @@ const canUseBulkActions = computed(() => (!HIDE_SHOPIFY_UNSYNCED_ACTIONS && canC
 
 onMounted(async () => {
   orderStore.searchFilters.productStoreId = selectedProductStoreId.value;
-  await orderStore.runSearch();
+  await runSearch();
 });
 
 watch(selectedProductStoreId, () => {
@@ -286,11 +291,11 @@ watch(searchQuery, () => {
 });
 
 watch(searchFilters, () => {
-  orderStore.runSearch();
+  runSearch();
 }, { deep: true });
 
 watch(searchSort, () => {
-  orderStore.runSearch();
+  runSearch();
 });
 
 watch(searchResults, () => {
@@ -300,7 +305,7 @@ watch(searchResults, () => {
 
 function scheduleSearch() {
   if (debounceTimer.value) clearTimeout(debounceTimer.value);
-  debounceTimer.value = setTimeout(() => orderStore.runSearch(), 300);
+  debounceTimer.value = setTimeout(() => runSearch(), 300);
 }
 
 async function confirmCancelOrders() {
@@ -318,7 +323,7 @@ async function confirmCancelOrders() {
             await orderDetailStore.bulkCancelOrders(orderIds);
             await showToast(translate('Orders cancelled successfully.'));
             exitSelectMode();
-            await orderStore.runSearch();
+            await runSearch();
           } catch {
             await showToast(translate('Failed to cancel orders. Please try again.'));
           }
@@ -354,7 +359,7 @@ async function openEditShippingMethodModal() {
     await orderDetailStore.bulkUpdateShippingMethods(orderIds, data.carrierPartyId, data.shipmentMethodTypeId);
     await showToast(translate('Shipping method updated successfully.'));
     exitSelectMode();
-    await orderStore.runSearch();
+    await runSearch();
   } catch {
     await showToast(translate('Failed to update shipping method. Please try again.'));
   }
@@ -378,7 +383,7 @@ function clearFilters() {
 }
 
 async function loadMore(event: CustomEvent) {
-  await orderStore.appendNextPage();
+  await orderStore.appendNextPage(await seed.getFacilityTypes().catch(() => []));
   (event.target as HTMLIonInfiniteScrollElement).complete();
 }
 

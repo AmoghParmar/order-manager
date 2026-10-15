@@ -1,7 +1,6 @@
 import { alertController, toastController } from '@ionic/vue';
 import { alertCircleOutline, checkmarkCircleOutline, removeCircleOutline } from 'ionicons/icons';
 import { translate } from '@common';
-import { useProductCacheStore } from '@/store/productCache';
 
 export const showToast = async (message: string) => {
   const toast = await toastController.create({
@@ -49,11 +48,8 @@ export const confirmParkOrder = async (): Promise<boolean> => {
   return confirmed;
 }
 
-export const isKit = (item: any) => {
-  const productCache = useProductCacheStore();
-  const product = productCache.getProduct(item.productId);
-  return product && product.productTypeId === 'MARKETING_PKG_PICK';
-}
+/** Whether a product is a kit (a marketing package picked as one). Pass the item's cached product. */
+export const isKit = (product?: any): boolean => product?.productTypeId === 'MARKETING_PKG_PICK';
 
 /** Maps an ORDER_RISK_LEVEL enum id to an Ionic color. Shared by the fraud order list and order detail. */
 export const riskLevelColor = (riskLevelEnumId: string): string => {

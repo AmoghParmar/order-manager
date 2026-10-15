@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ref } from 'vue';
+import { effectScope, ref } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { modalController } from '@ionic/vue';
 import { api } from '@common';
 import { showToast } from '@/utils';
 import { useOrderActions } from '@/composables/useOrderActions';
+import { useProductStore } from '@/store/productStore';
 import type { EnrichedOrder, EnrichedOrderItem, EnrichedShipGroup } from '@/types/orderDetail';
 
 vi.mock('@common', async (importOriginal) => ({ ...(await importOriginal<any>()), api: vi.fn() }));
@@ -32,13 +33,13 @@ function setup(isVirtual: boolean, items: EnrichedOrderItem[], checked: string[]
   } as unknown as EnrichedOrder;
   const loadOrder = vi.fn();
   const selectedShipGroupItems = ref<Record<string, string[]>>({ '00001': checked });
-  const actions = useOrderActions({
+  const actions = effectScope().run(() => useOrderActions({
     order: ref(order),
     loadOrder,
     selectedItemIds: ref(new Set<string>()),
     selectedShipGroupItems,
     selectedSegment: ref('ship-groups'),
-  });
+  }))!;
   return { actions, shipGroup, loadOrder, selectedShipGroupItems };
 }
 
@@ -77,11 +78,23 @@ describe('ship group selection actions', () => {
       data: {
         orderId: 'O1',
         items: [
-          { orderItemSeqId: '01', quantity: '1', rejectionReasonId: 'REJ_RSN_DAMAGED', maySplit: 'Y' },
-          { orderItemSeqId: '03', quantity: '1', rejectionReasonId: 'REJ_RSN_DAMAGED', maySplit: 'Y' },
+          { orderItemSeqId: '01', quantity: '1', rejectionReasonId: 'REJ_RSN_DAMAGED', maySplit: 'Y', updateQOH: false },
+          { orderItemSeqId: '03', quantity: '1', rejectionReasonId: 'REJ_RSN_DAMAGED', maySplit: 'Y', updateQOH: false },
         ],
       },
     }]);
+  });
+
+  it('asks the server to update QOH on pull back when the store affects QOH on rejection', async () => {
+    useProductStore().settings.affectQOHOnRej = 'Y';
+    const { actions, shipGroup } = setup(false, [item('01', 'ITEM_APPROVED')]);
+    dismissModalWith({ role: 'confirm', data: { rejectionReasonId: 'REJ_RSN_DAMAGED' } });
+
+    await actions.rejectSelectedItems(shipGroup);
+
+    expect(calls()[0].data.items).toEqual([
+      { orderItemSeqId: '01', quantity: '1', rejectionReasonId: 'REJ_RSN_DAMAGED', maySplit: 'Y', updateQOH: true },
+    ]);
   });
 
   it('releases only items still before fulfillment, one allocation each', async () => {

@@ -35,18 +35,24 @@ vi.mock('@ionic/vue', () => {
 
 vi.mock('@/store/orderDetail', () => ({
   useOrderDetailStore: () => ({
-    enrichedOrderByOrderId: () => ({ shipGroups: [{ items: [{ orderItemSeqId: '02', productId: 'P1', name: 'Blouse', quantity: 1, transfers: mocks.transfers }] }] }),
     fetchInventoryTransfers: mocks.fetchInventoryTransfers,
+  }),
+}));
+vi.mock('@/composables/useOrder', () => ({
+  useOrder: () => ({
+    enrichedOrder: () => ({ shipGroups: [{ items: [{ orderItemSeqId: '02', productId: 'P1', name: 'Blouse', quantity: 1, transfers: mocks.transfers }] }] }),
   }),
 }));
 vi.mock('@/store/user', () => ({ useUserStore: () => ({ hasPermission: () => mocks.canManage }) }));
 vi.mock('@/composables/useProductIdentity', () => ({
   useProductIdentity: () => ({ getProduct: () => null, primaryIdentifier: () => '649A-678:S', secondaryIdentifier: () => '141914', featureLabel: () => 'S' }),
 }));
-vi.mock('@/services/inventoryTransfers', () => ({
-  fetchFacilityStock: mocks.fetchFacilityStock,
-  executeInventoryTransfer: mocks.executeInventoryTransfer,
-  cancelInventoryTransfer: mocks.cancelInventoryTransfer,
+vi.mock('@/store/stock', () => ({
+  useStockStore: () => ({
+    fetchFacilityStock: mocks.fetchFacilityStock,
+    executeInventoryTransfer: mocks.executeInventoryTransfer,
+    cancelInventoryTransfer: mocks.cancelInventoryTransfer,
+  }),
 }));
 vi.mock('@/utils', () => ({ showToast: mocks.showToast }));
 

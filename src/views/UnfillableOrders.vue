@@ -19,7 +19,7 @@ import router from '@/router';
 import OrderQueueList from '@/components/OrderQueueList.vue';
 // The same statuses the Funnel counts with, so this page and the card that links here
 // can never describe different populations — the drift they had was issue #336.
-import { UNFILLABLE_QUEUE_ORDER_STATUSES } from '@/services/order';
+import { UNFILLABLE_QUEUE_ORDER_STATUSES } from '@/utils/orderSearch';
 
 // The funnel's Unfillable card deep-links into a single order date, so both
 // bounds come from the route and seed the queue's own date filters.

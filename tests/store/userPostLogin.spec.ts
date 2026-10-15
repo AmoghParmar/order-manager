@@ -20,7 +20,7 @@ vi.mock('@/store/productStore', () => ({
     fetchProductStorePreference: async () => { calls.push('storePreference'); },
   }),
 }));
-vi.mock('@/services/appDbSync', () => ({
+vi.mock('@/db/appDbSync', () => ({
   stopAppDbSync: vi.fn(async () => { calls.push('wipe'); }),
   startAppDbSync: vi.fn(async () => { calls.push('start'); }),
 }));

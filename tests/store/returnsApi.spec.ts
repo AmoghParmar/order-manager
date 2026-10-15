@@ -1,13 +1,18 @@
 import { api } from "@common";
+import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { RETURN_DETAIL_UNAVAILABLE, getReturn, listReturns, mapReturnDetail } from "@/services/returns";
+import { useReturnsStore } from "@/store/returns";
+import { RETURN_DETAIL_UNAVAILABLE, mapReturnDetail } from "@/utils/returns";
 
-vi.mock("@common", () => ({ api: vi.fn() }));
+vi.mock("@common", async (importOriginal) => ({ ...await importOriginal<any>(), api: vi.fn() }));
 
 const apiMock = vi.mocked(api);
+const listReturns = (...args: Parameters<ReturnType<typeof useReturnsStore>["listReturns"]>) => useReturnsStore().listReturns(...args);
+const getReturn = (returnId: string) => useReturnsStore().getReturn(returnId);
 
-describe("returns service", () => {
+describe("returns api", () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     apiMock.mockReset();
   });
 

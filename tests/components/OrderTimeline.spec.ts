@@ -28,7 +28,7 @@ vi.mock('@ionic/vue', () => {
   };
 });
 
-vi.mock('@/composables/useOrderDetail', () => ({ FACILITY_CHANGE_PAGE_SIZE: 200 }));
+vi.mock('@/utils/orderDetailQueries', async (importOriginal) => ({ ...(await importOriginal<any>()), FACILITY_CHANGE_PAGE_SIZE: 200 }));
 vi.mock('@/composables/useProductIdentity', () => ({ useProductIdentity: () => ({ primaryIdentifier: () => 'TEE-M' }) }));
 vi.mock('@common/db', () => {
   // A list getter's `withSync` reads `sync.synced`; `serviceState.running` reads `sync.running`.

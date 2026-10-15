@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { api } from '@common';
 import { useOrderStore } from '@/store/order';
-import { fetchOrderRowEnrichment } from '@/services/order';
 
 vi.mock('@common', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -17,18 +16,10 @@ vi.mock('@common', async (importOriginal) => {
   };
 });
 
-vi.mock('@/db/orderManagerDb', async (importOriginal) => {
-  const actual = await importOriginal<any>();
-  return {
-    ...actual,
-    omDb: () => ({ all: async () => [], get: async () => undefined }),
-  };
-});
-
-vi.mock('@/services/order', () => ({
-  searchOrders: vi.fn(),
-  fetchOrderRowEnrichment: vi.fn(),
-}));
+// The caller's facility type rows, handed through to the row enrichment.
+const FACILITY_TYPES = [{ facilityTypeId: 'PARKING_LOT', parentTypeId: 'VIRTUAL_FACILITY' }];
+// The store's own enrichment action, replaced on the store instance so the queue loaders call it.
+const fetchOrderRowEnrichment = vi.fn();
 
 describe('order workflow store', () => {
   beforeEach(() => {
@@ -37,6 +28,7 @@ describe('order workflow store', () => {
     vi.mocked(api).mockResolvedValue({ data: {} });
     vi.mocked(fetchOrderRowEnrichment).mockReset();
     vi.mocked(fetchOrderRowEnrichment).mockResolvedValue({});
+    Object.assign(useOrderStore(), { fetchOrderRowEnrichment });
   });
 
   it('ships selected packed workflow shipments through Poorti bulk ship', async () => {
@@ -116,11 +108,11 @@ describe('order workflow store', () => {
       .mockResolvedValueOnce({ M100001: { orderId: 'M100001', itemDocuments: [] } })
       .mockResolvedValueOnce({ M100003: { orderId: 'M100003', itemDocuments: [] } });
 
-    await store.fetchWorkflowOrders('open', filters as any);
-    await store.loadMoreWorkflowOrders('open', filters as any);
+    await store.fetchWorkflowOrders('open', filters as any, FACILITY_TYPES);
+    await store.loadMoreWorkflowOrders('open', filters as any, FACILITY_TYPES);
 
-    expect(fetchOrderRowEnrichment).toHaveBeenNthCalledWith(1, ['M100001', 'M100002']);
-    expect(fetchOrderRowEnrichment).toHaveBeenNthCalledWith(2, ['M100003']);
+    expect(fetchOrderRowEnrichment).toHaveBeenNthCalledWith(1, ['M100001', 'M100002'], FACILITY_TYPES);
+    expect(fetchOrderRowEnrichment).toHaveBeenNthCalledWith(2, ['M100003'], FACILITY_TYPES);
     expect(store.workflowOrderEnrichment.open).toEqual({
       M100001: { orderId: 'M100001', itemDocuments: [] },
       M100003: { orderId: 'M100003', itemDocuments: [] }
@@ -136,7 +128,7 @@ describe('order workflow store', () => {
     };
     vi.mocked(api).mockResolvedValue({ data: { ordersCount: 0, orders: [] } });
 
-    await store.fetchWorkflowOrders('packed', filters as any);
+    await store.fetchWorkflowOrders('packed', filters as any, FACILITY_TYPES);
 
     expect(api).toHaveBeenCalledWith(expect.objectContaining({
       url: 'oms/orders/salesOrders/packed',
@@ -153,7 +145,7 @@ describe('order workflow store', () => {
     await store.fetchWorkflowOrders('open', {
       query: '', customerName: '', productStoreId: 'All', salesChannelEnumId: 'All',
       facilityId: 'All', shipmentMethodTypeId: 'All', priority: null, dateFrom: '', dateThru: ''
-    } as any);
+    } as any, FACILITY_TYPES);
 
     expect(api).toHaveBeenCalledWith(expect.objectContaining({
       params: expect.objectContaining({ orderByField: 'orderDate,orderId' })
@@ -170,7 +162,7 @@ describe('order workflow store', () => {
     await store.fetchWorkflowOrders('open', {
       query: 'new', customerName: '', productStoreId: 'All', salesChannelEnumId: 'All',
       facilityId: 'All', shipmentMethodTypeId: 'All', priority: null, dateFrom: '', dateThru: ''
-    });
+    }, FACILITY_TYPES);
 
     expect(store.workflowOrderEnrichment.open).toEqual({});
     expect(fetchOrderRowEnrichment).not.toHaveBeenCalled();
@@ -185,11 +177,11 @@ describe('order workflow store', () => {
     } as any;
     vi.mocked(api).mockRejectedValueOnce(new Error('Network Error'));
 
-    await store.fetchWorkflowOrders('open', filters);
+    await store.fetchWorkflowOrders('open', filters, FACILITY_TYPES);
     expect(store.workflowOrdersError.open).toBe('Network Error');
 
     vi.mocked(api).mockResolvedValueOnce({ data: { ordersCount: 0, orders: [] } });
-    await store.fetchWorkflowOrders('open', filters);
+    await store.fetchWorkflowOrders('open', filters, FACILITY_TYPES);
     expect(store.workflowOrdersError.open).toBe('');
   });
 });

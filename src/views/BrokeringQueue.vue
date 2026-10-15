@@ -39,9 +39,9 @@ import {
   ALL_FACILITY_OPTION_ID,
   FALLBACK_BROKERING_FACILITY_IDS,
   buildBrokeringFacilityOptions,
-  fetchBrokeringFacilities,
   isUnfillableFacilityId,
 } from '@/utils/brokeringFacilities';
+import { useOrderStore } from '@/store/order';
 
 type FacilityOption = { id: string; name: string };
 
@@ -106,7 +106,7 @@ function normalizeFacilitySelection(event?: any) {
 }
 
 async function loadVirtualFacilities() {
-  const options = buildBrokeringFacilityOptions(await fetchBrokeringFacilities());
+  const options = buildBrokeringFacilityOptions(await useOrderStore().fetchBrokeringFacilities());
   virtualFacilities.value = [{ id: ALL_FACILITY_OPTION_ID, name: translate('All') }, ...options];
 }
 

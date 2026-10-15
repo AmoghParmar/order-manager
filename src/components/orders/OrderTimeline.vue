@@ -72,7 +72,7 @@ import { timeOutline, warningOutline } from 'ionicons/icons';
 import { translate } from '@common';
 import { serviceState, useSeedData } from '@common/db';
 import OrderTimelineEntry from '@/components/orders/OrderTimelineEntry.vue';
-import { FACILITY_CHANGE_PAGE_SIZE } from '@/composables/useOrderDetail';
+import { FACILITY_CHANGE_PAGE_SIZE } from '@/utils/orderDetailQueries';
 import { useProductIdentity } from '@/composables/useProductIdentity';
 import { isVirtualFacilityId, useOrderDetailStore, type OrderHistoryStatus } from '@/store/orderDetail';
 import type { EnrichedOrder } from '@/types/orderDetail';
@@ -107,7 +107,7 @@ const context = computed<TimelineContext>(() => {
     statusDescription: (statusId: string) => seed.statusDescription(statusId),
     describe: (value: string) => seed.enumDescription(value),
     enumDescription: (enumId: string) => seed.enumDescription(enumId),
-    isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId),
+    isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId, seed.facilities(), seed.facilityTypes()),
     itemTotal: Object.keys(shipGroupOfItem).length,
     shipGroupOfItem,
     posShipGroupIds: new Set(props.order.shipGroups.filter((shipGroup) => shipGroup.isPosCompleted).map((shipGroup) => shipGroup.id)),

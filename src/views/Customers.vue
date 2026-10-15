@@ -81,11 +81,13 @@
 <script setup lang="ts">
 import { IonButtons, IonContent, IonHeader, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList, IonListHeader, IonMenuButton, IonPage, IonProgressBar, IonSearchbar, IonTitle, IonToolbar, useIonRouter } from '@ionic/vue';
 import { computed, onMounted, ref, watch } from 'vue';
-import { searchCustomers } from '@/services/customer';
+import { useCustomerStore } from '@/store/customer';
 import type { Customer } from '@/types/order';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
 import OrderSortPopover, { type OrderSortOption } from '@/components/orders/OrderSortPopover.vue';
+
+const customerStore = useCustomerStore();
 import { translate } from '@common'
 
 const ionRouter = useIonRouter();
@@ -126,7 +128,7 @@ async function runSearch() {
   loading.value = true;
   error.value = '';
   try {
-    const result = await searchCustomers({
+    const result = await customerStore.searchCustomers({
       queryString: searchQuery.value,
       partyTypeId: 'All',
       pageSize: 50,
@@ -147,7 +149,7 @@ async function runSearch() {
 async function loadMore(event: CustomEvent) {
   pageIndex.value++;
   try {
-    const result = await searchCustomers({
+    const result = await customerStore.searchCustomers({
       queryString: searchQuery.value,
       partyTypeId: 'All',
       pageSize: 50,

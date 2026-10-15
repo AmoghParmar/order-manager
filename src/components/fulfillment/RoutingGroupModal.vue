@@ -47,11 +47,14 @@
 import { IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonRadio, IonRadioGroup, IonSpinner, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline } from 'ionicons/icons';
 import { onMounted, ref } from 'vue';
-import { api, logger, translate } from '@common';
+import { logger, translate } from '@common';
+import { useRoutingGroups } from '@/composables/useRoutingGroups';
 
 const props = defineProps<{
   productStoreId: string;
 }>();
+
+const { fetchRoutingGroups: readRoutingGroups } = useRoutingGroups();
 
 type RoutingGroup = {
   routingGroupId: string;
@@ -75,12 +78,7 @@ function save() {
 async function fetchRoutingGroups() {
   isLoading.value = true;
   try {
-    const resp = await api({
-      url: 'order-routing/groups',
-      method: 'GET',
-      params: { productStoreId: props.productStoreId },
-    });
-    routingGroups.value = resp.data || [];
+    routingGroups.value = await readRoutingGroups(props.productStoreId);
   } catch (error) {
     logger.error('Failed to fetch routing groups', error);
   } finally {

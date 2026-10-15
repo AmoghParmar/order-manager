@@ -15,7 +15,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Settings } from 'luxon';
 import { emitter, FastTravel, translate } from '@common';
 import { useAuth } from '@common/composables/useAuth';
-import { startAppDbSync } from '@/services/appDbSync';
+import { startAppDbSync } from '@/db/appDbSync';
 import Menu from '@/components/layout/Menu.vue';
 import router from './router';
 import { useUserStore } from '@/store/user';

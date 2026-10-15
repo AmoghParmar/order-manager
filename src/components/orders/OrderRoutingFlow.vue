@@ -52,7 +52,7 @@
             :ref="observeNode"
             type="button"
             class="routing-flow-node"
-            :class="{ virtual: !isStockLocation(node.facilityId), short: isNodeShort(node), selected: isSelected('node', node.id) }"
+            :class="{ virtual: !isStockLocation(node.facilityId, seed.facilities(), seed.facilityTypes()), short: isNodeShort(node), selected: isSelected('node', node.id) }"
             :style="nodeStyle(node)"
             :data-node-id="node.id"
             @click="select('node', node.id)"

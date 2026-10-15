@@ -49,9 +49,11 @@ const facilities: Record<string, Record<string, string>> = {
 
 vi.mock('@/store/orderDetail', () => ({
   useOrderDetailStore: () => ({
-    enrichedOrderByOrderId: () => ({ shipGroups: [{ items: [mocks.item] }] }),
     fetchInventoryTransfers: mocks.fetchInventoryTransfers,
   }),
+}));
+vi.mock('@/composables/useOrder', () => ({
+  useOrder: () => ({ enrichedOrder: () => ({ shipGroups: [{ items: [mocks.item] }] }) }),
 }));
 vi.mock('@common/db', () => ({
   useSeedData: () => ({
@@ -63,11 +65,12 @@ vi.mock('@/composables/useProductIdentity', () => ({
   useProductIdentity: () => ({ getProduct: () => null, primaryIdentifier: () => '649A-678:S', secondaryIdentifier: () => '141914', featureLabel: () => 'S' }),
 }));
 vi.mock('@/composables/useOrderDistances', () => ({ fetchDistancesFromFacility: mocks.fetchDistancesFromFacility }));
-vi.mock('@/services/inventoryTransfers', async (importOriginal) => ({
-  ...(await importOriginal<any>()),
-  fetchFacilityStock: mocks.fetchFacilityStock,
-  fetchFacilitySalesVelocity: mocks.fetchFacilitySalesVelocity,
-  requestInventoryTransfers: mocks.requestInventoryTransfers,
+vi.mock('@/store/stock', () => ({
+  useStockStore: () => ({
+    fetchFacilityStock: mocks.fetchFacilityStock,
+    fetchFacilitySalesVelocity: mocks.fetchFacilitySalesVelocity,
+    requestInventoryTransfers: mocks.requestInventoryTransfers,
+  }),
 }));
 vi.mock('@/utils', () => ({ showToast: mocks.showToast }));
 

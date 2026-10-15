@@ -138,8 +138,8 @@ import { useUserStore } from '@/store/user';
 import { HIDE_SHOPIFY_UNSYNCED_ACTIONS } from '@/config/featureFlags';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useSeedData } from '@common/db';
-import { fetchUnfillableProductCandidates, fetchUnfillableShipGroupsForProduct } from '@/services/order';
-import { fetchActiveSubstitutes } from '@/services/productAssociations';
+import { useOrderStore } from '@/store/order';
+import { useProductSubstitutes } from '@/composables/useProductSubstitutes';
 import { showToast } from '@/utils';
 import { countTaskTargets, runGroupedTaskMutation, shipGroupTaskTarget } from '@/utils/orderTaskBulk';
 import Actions from "@/authorization/actions";
@@ -147,10 +147,12 @@ import Actions from "@/authorization/actions";
 const seed = useSeedData();
 
 const orderTaskStore = useOrderTaskStore();
+const orderStore = useOrderStore();
 const productStore = useProductStore();
 const userStore = useUserStore();
 const productCache = useProductCacheStore();
 const productMaster = useProductMaster();
+const { fetchActiveSubstitutes } = useProductSubstitutes();
 
 const filters = ref(defaultOrderTaskFilters());
 useOrderTaskRouteState(filters, 'swap');
@@ -309,7 +311,7 @@ async function loadSetupCandidates() {
   setupLoading.value = true;
   setupError.value = '';
   try {
-    const candidates = await fetchUnfillableProductCandidates(productStoreId);
+    const candidates = await orderStore.fetchUnfillableProductCandidates(productStoreId);
     productMaster.init();
     await productMaster.prefetch(candidates.map((candidate) => candidate.productId));
     setupCandidates.value = candidates.map((candidate) => ({
@@ -363,7 +365,7 @@ async function rebrokerProductOrders(candidate: SwapSetupCandidate) {
   setupLoading.value = true;
   setupError.value = '';
   try {
-    const shipGroups = await fetchUnfillableShipGroupsForProduct(productStoreId, candidate.productId);
+    const shipGroups = await orderStore.fetchUnfillableShipGroupsForProduct(productStoreId, candidate.productId);
     if (!shipGroups.length) {
       await showToast(translate('No approved unfillable orders remain for this product.'));
       await loadSetupCandidates();

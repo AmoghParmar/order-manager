@@ -1,21 +1,17 @@
 import { defineStore } from "pinia";
 import { api, commonUtil, logger, translate, useSolrSearch } from "@common";
-import { seedData } from "@common/db";
-import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_SAMPLE_SIZE, useOrderDetail, type IssuanceLine } from "@/composables/useOrderDetail";
+import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_REASON_ID, UNFILLABLE_SAMPLE_SIZE, responseRows, type IssuanceLine } from "@/utils/orderDetailQueries";
 import { useProductCacheStore } from "./productCache";
-import { useCustomerStore } from "./customer";
 import { useUserStore } from "./user";
 import Actions from "@/authorization/actions";
-import { escapeSolrValue } from "@/services/order";
-import { getReturn } from "@/services/returns";
-import { fetchOrderInventoryTransfers } from "@/services/inventoryTransfers";
-import { enrichOrder, isPosCompletedShipGroup } from "@/utils/orderDetailEnrichment";
+import { escapeSolrValue } from "@/utils/orderSearch";
+import { useReturnsStore } from "@/store/returns";
+import { useStockStore } from "@/store/stock";
+import { isPosCompletedShipGroup } from "@/utils/orderDetailEnrichment";
 import { toMillis } from "@/utils/format";
 import { type ItemIssuanceSummary, summariseIssuance } from "@/utils/inventoryIssuance";
 import { OrderActionValidator } from "@/utils/OrderActionValidator";
-import { buildOrderEvents, clusterEvents, type ExchangeChild, type OrderEvent, type UnfillableSummary } from "@/utils/orderEvents";
-import { adjustmentAmount, adjustmentKey, adjustmentLabel } from "@/utils/orderAdjustments";
-import type { EnrichedOrder } from "@/types/orderDetail";
+import { clusterEvents, type ExchangeChild, type UnfillableSummary } from "@/utils/orderEvents";
 
 type LoadStatus = "idle" | "loading" | "loaded" | "error" | "notfound";
 
@@ -25,8 +21,6 @@ interface OrderEntry {
   loadedAt: string;
   error: string;
 }
-
-const HEADER_SEQ_ID = "_NA_";
 
 /** Whether the sources behind an order's history are still loading, and whether one failed. */
 export interface OrderHistoryStatus {
@@ -57,78 +51,17 @@ async function singleFlight(key: string, force: boolean, run: () => Promise<void
 const QUEUE_FACILITY_ID = "_NA_";
 
 /** Parking and queue facilities, where an item waits rather than being fulfilled. */
-export function isVirtualFacilityId(facilityId: string): boolean {
+export function isVirtualFacilityId(facilityId: string, facilities: any[], facilityTypes: any[]): boolean {
   if (!facilityId || facilityId === QUEUE_FACILITY_ID) return true;
-  const facilityTypeId = seedData.facility(facilityId)?.facilityTypeId;
+  const facilityTypeId = facilities.find((row) => row.facilityId === facilityId)?.facilityTypeId;
   return OrderActionValidator.isVirtualFacility({
     facilityId,
     facilityTypeId,
-    facilityParentTypeId: seedData.facilityType(facilityTypeId)?.parentTypeId,
+    facilityParentTypeId: facilityTypes.find((row) => row.facilityTypeId === facilityTypeId)?.parentTypeId,
   });
 }
 
 const newEntry = (): OrderEntry => ({ payload: null, status: "idle", loadedAt: "", error: "" });
-
-const adjustmentDisplayLabel = (adj: any) =>
-  adjustmentLabel(adj, seedData.orderAdjustmentTypeDescription, "OTHER_ADJUSTMENT");
-
-const adjustmentUniqueKey = (adj: any, fallbackSeqId = "") =>
-  adjustmentKey(adj, adjustmentDisplayLabel(adj), fallbackSeqId);
-
-/**
- * Subtotal, adjustments grouped by label, and grand total. Sums the rows actually displayed
- * (subtotal + every adjustment, including tax) rather than trusting the backend's grandTotal,
- * which has been observed to exclude tax. Rounded to avoid floating-point drift
- * (e.g. 59 + 1.53 + 0.59 + 2.86 = 63.980000000000004).
- */
-function orderTotals(order: any) {
-  if (!order) return { subtotal: 0, adjustments: {}, total: 0, includedAdjustments: {} };
-
-  let subtotal = 0;
-  (order.shipGroups || []).forEach((sg: any) => {
-    (sg.items || []).forEach((item: any) => {
-      subtotal += Number(item.unitPrice || 0) * Number(item.quantity || 0);
-    });
-  });
-
-  const adjustments: Record<string, number> = {};
-  const includedAdjustments: Record<string, number> = {};
-  let adjustmentsTotal = 0;
-  const seenAdjustments = new Set<string>();
-
-  const recordAdjustment = (adj: any, fallbackSeqId = "") => {
-    const uniqueKey = adjustmentUniqueKey(adj, fallbackSeqId);
-    if (seenAdjustments.has(uniqueKey)) return;
-    seenAdjustments.add(uniqueKey);
-
-    adjustmentsTotal += Number(adj.amount || 0);
-    const { amount, isIncluded } = adjustmentAmount(adj);
-    const label = adjustmentDisplayLabel(adj);
-
-    // Included and excluded amounts stay in separate buckets: a label can carry both
-    // (an included tax on one item, an ordinary one on another), and merging them would
-    // label the ordinary amount "included" while it still adds to the grand total.
-    const bucket = isIncluded ? includedAdjustments : adjustments;
-    bucket[label] = (bucket[label] || 0) + amount;
-  };
-
-  (order.adjustments || []).forEach((adj: any) => recordAdjustment(adj));
-  (order.shipGroups || []).forEach((sg: any) => {
-    (sg.items || []).forEach((item: any) => {
-      (item.adjustments || []).forEach((adj: any) => recordAdjustment(adj, item.orderItemSeqId));
-    });
-  });
-
-  // Filter out zero-sum adjustments
-  [adjustments, includedAdjustments].forEach((bucket) => {
-    Object.keys(bucket).forEach((key) => {
-      if (bucket[key] === 0) delete bucket[key];
-    });
-  });
-
-  const computedTotal = Math.round((subtotal + adjustmentsTotal) * 100) / 100;
-  return { subtotal, adjustments, total: computedTotal || order.grandTotal || 0, includedAdjustments };
-}
 
 const NON_CANCELLABLE_ITEM_STATUSES = new Set(["ITEM_CANCELLED", "ITEM_COMPLETED"]);
 
@@ -209,31 +142,6 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     inventoryTransfersByOrderId: {} as Record<string, any[]>,
   }),
   getters: {
-    /**
-     * The order page's view model: the raw order document joined with the loaded auxiliary
-     * sources (order events, issuance, risk, returns, transfers) and the seed,
-     * product and customer caches. See utils/orderDetailEnrichment.
-     */
-    enrichedOrderByOrderId(): (orderId: string) => EnrichedOrder | null {
-      return (orderId: string) => {
-        const raw = this.orderById(orderId);
-        if (!raw) return null;
-        const customerPartyId = this.customerPartyIdByOrderId(orderId);
-        return enrichOrder(raw, {
-          totals: this.orderTotalsByOrderId(orderId),
-          groupAdjustments: this.adjustmentsByExternalIdByOrderId(orderId),
-          customerPartyId,
-          customerName: this.customerNameByOrderId(orderId),
-          customerProfile: customerPartyId ? useCustomerStore().getCustomer(customerPartyId) : null,
-          events: this.orderEventsByOrderId(orderId),
-          issuanceByItem: this.issuanceByItemSeqIdByOrderId(orderId),
-          riskAssessments: this.riskAssessmentsForOrder(orderId),
-          returnedQtyBySeqId: this.returnedQtyByItemSeqIdByOrderId(orderId),
-          inventoryTransfers: this.inventoryTransfersByOrderId[orderId] || [],
-        }, { seed: seedData, productCache: useProductCacheStore() });
-      };
-    },
-
     orderById: (state) => (orderId: string) => state.byOrderId[orderId]?.payload || null,
     /**
      * Whether an order's transfers have loaded. Until they have, every item looks like it has none,
@@ -279,25 +187,6 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       };
     },
 
-    /**
-     * The order's history as typed events, oldest first: the OrderStatus rows on the order
-     * document plus the facility changes, unfillable attempts, fulfillment dates, returns and
-     * exchanges loaded beside it. See utils/orderEvents.
-     */
-    orderEventsByOrderId(): (orderId: string) => OrderEvent[] {
-      return (orderId: string): OrderEvent[] => buildOrderEvents({
-        order: this.byOrderId[orderId]?.payload || null,
-        facilityChanges: this.facilityChangesByOrderId[orderId] || [],
-        facilityChangesLoaded: Array.isArray(this.facilityChangesByOrderId[orderId]),
-        facilityChangesTruncated: !!this.facilityChangesTruncatedByOrderId[orderId],
-        unfillable: this.unfillableByOrderId[orderId] || null,
-        fulfillment: this.fulfillmentTimelineByOrderId[orderId] || [],
-        returnHeadersById: this.returnHeadersById,
-        exchangeChildren: this.exchangeChildrenByOrderId[orderId] || [],
-        isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId),
-      });
-    },
-
     orderHistoryStatus: (state) => (orderId: string): OrderHistoryStatus => ({
       loading: (state.historyStatusByOrderId[orderId]?.loading || 0) > 0,
       failed: !!state.historyStatusByOrderId[orderId]?.failed,
@@ -324,10 +213,6 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         if (seqId) totals[seqId] = (totals[seqId] || 0) + Number(item.returnQuantity || 0);
       });
       return totals;
-    },
-
-    orderTotalsByOrderId(): (orderId: string) => ReturnType<typeof orderTotals> {
-      return (orderId: string) => orderTotals(this.byOrderId[orderId]?.payload);
     },
 
     allItemsByOrderId: (state) => (orderId: string) => {
@@ -357,63 +242,114 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         return map;
       };
     },
-
-    /**
-     * Adjustments grouped by orderItemExternalId, summing their amounts. Inclusion is carried
-     * as metadata rather than baked into the label so the view can translate it at render time,
-     * and so an included and an ordinary adjustment sharing a label stay separate rows.
-     */
-    adjustmentsByExternalIdByOrderId(): (orderId: string) => Record<string, Array<{ label: string; amount: number; isIncluded: boolean }>> {
-      return (orderId: string) => {
-        const current = this.orderById(orderId);
-        const index: Record<string, Record<string, { label: string; amount: number; isIncluded: boolean }>> = {};
-        const seqIdToExtId = this.itemExternalIdBySeqIdByOrderId(orderId);
-        const seenAdjustments = new Set<string>();
-
-        const recordAdj = (seqId: string, adj: any) => {
-          const extId = seqIdToExtId[seqId] || seqId;
-          if (!extId) return;
-          const uniqueKey = `${extId}:${adjustmentUniqueKey(adj, seqId)}`;
-          if (seenAdjustments.has(uniqueKey)) return;
-          seenAdjustments.add(uniqueKey);
-
-          const { amount, isIncluded } = adjustmentAmount(adj);
-          const label = adjustmentDisplayLabel(adj);
-          const bucketKey = isIncluded ? `${label}\u0000included` : label;
-          const buckets = index[extId] ||= {};
-          const bucket = buckets[bucketKey] ||= { label, amount: 0, isIncluded };
-          bucket.amount += amount;
-        };
-
-        // 1. Top-level adjustments carry their orderItemSeqId
-        (current?.adjustments || []).forEach((adj: any) => {
-          const seqId = adj.orderItemSeqId;
-          if (seqId && seqId !== HEADER_SEQ_ID) recordAdj(seqId, adj);
-        });
-
-        // 2. Adjustments nested under each ship group item
-        (current?.shipGroups || []).forEach((sg: any) => {
-          (sg.items || []).forEach((item: any) => {
-            const seqId = item.orderItemSeqId;
-            if (seqId) (item.adjustments || []).forEach((adj: any) => recordAdj(seqId, adj));
-          });
-        });
-
-        return Object.fromEntries(
-          Object.entries(index).map(([extId, buckets]) => [extId, Object.values(buckets)])
-        );
-      };
-    },
-
-    /** Shipping methods for a given carrier partyId, derived from the fetched carrierShipmentMethods list or the local database. */
-    shippingMethodsByCarrier(): (carrierPartyId: string) => any[] {
-      return (carrierPartyId: string) => {
-        const fromDetail = this.shippingMethods.filter((m: any) => m.partyId === carrierPartyId || m.carrierPartyId === carrierPartyId);
-        return fromDetail.length ? fromDetail : seedData.shipmentMethodsByCarrier(carrierPartyId);
-      };
-    },
   },
   actions: {
+    /**
+     * Fetch the full order master-detail document.
+     *
+     * `GET oms/orders?orderId={orderId}&dependentLevels=1` returns the OrderHeader
+     * `default` entity master as an array of one. Returns the raw axios response;
+     * the store unwraps `data[0]` and owns error handling.
+     */
+    async getOrder(orderId: string): Promise<any> {
+      return api({
+        url: "oms/orders",
+        method: "GET",
+        params: { orderId, dependentLevels: 1 }
+      });
+    },
+
+    async getCommunicationEvents(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/communicationEvents`,
+        method: "GET"
+      });
+    },
+
+    async getRiskAssessments(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/risks`,
+        method: "GET"
+      });
+    },
+
+
+    /**
+     * OrderFacilityChange rows (brokered, released, parked, rejected) for the order,
+     * excluding UNFILLABLE. `_op=in` plus `_not=Y` builds `NOT IN ('UNFILLABLE') OR
+     * changeReasonEnumId IS NULL`, so the reason-less rows are still returned. Newest first,
+     * so an order with more moves than one page loses its oldest rows, not its latest.
+     */
+    async getFacilityChanges(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/facilityChange`,
+        method: "GET",
+        params: {
+          changeReasonEnumId: UNFILLABLE_REASON_ID,
+          changeReasonEnumId_op: "in",
+          changeReasonEnumId_not: "Y",
+          orderByField: "-changeDatetime",
+          pageSize: FACILITY_CHANGE_PAGE_SIZE
+        }
+      });
+    },
+
+    /**
+     * The most recent UNFILLABLE rows, newest first. The first row dates the last
+     * failed attempt and the row count sizes the entry — see UNFILLABLE_SAMPLE_SIZE
+     * for why the rows are counted rather than read off the count header.
+     */
+    async getUnfillableAttempts(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/facilityChange`,
+        method: "GET",
+        params: {
+          changeReasonEnumId: UNFILLABLE_REASON_ID,
+          orderByField: "-changeDatetime",
+          pageSize: UNFILLABLE_SAMPLE_SIZE
+        }
+      });
+    },
+
+    /**
+     * InventoryItemDetail rows that record an inventory issuance against the order.
+     *
+     * Issuing inventory writes a detail row carrying `itemIssuanceId` and a negative
+     * `quantityOnHandDiff`; the reservation that precedes it writes a separate row with
+     * `reasonEnumId` and no issuance id. `itemIssuanceId_op=empty` + `_not=Y` keeps only
+     * the issuance rows, so the response is one row per issued line rather than two.
+     *
+     * There is no REST resource for ItemIssuance, and the order-wide `oms/inventoryItem/detail`
+     * list is not mounted (405), so the rows are read per inventory item: ProductFacility names
+     * the inventory item of each product at each facility, and `inventoryItem/{id}/detail`
+     * filters by order. A component issued for a marketing package is not an order line, so it
+     * is not found this way.
+     */
+    async getInventoryIssuance(orderId: string, lines: IssuanceLine[]): Promise<any[]> {
+      const lineKeys = new Set(lines.map((line) => `${line.productId}|${line.facilityId}`));
+      if (!lineKeys.size) return [];
+      const productFacilities = responseRows(await api({
+        url: "oms/productFacilities",
+        method: "GET",
+        params: {
+          productId: [...new Set(lines.map((line) => line.productId))].join(","),
+          productId_op: "in",
+          facilityId: [...new Set(lines.map((line) => line.facilityId))].join(","),
+          facilityId_op: "in",
+          pageSize: 100
+        }
+      }));
+      // The two `in` filters cross every product with every facility; keep only the real pairs.
+      const inventoryItemIds = [...new Set(productFacilities
+        .filter((row) => row.inventoryItemId && lineKeys.has(`${row.productId}|${row.facilityId}`))
+        .map((row) => row.inventoryItemId))];
+      const details = await Promise.all(inventoryItemIds.map(async (inventoryItemId) => responseRows(await api({
+        url: `oms/inventoryItem/${inventoryItemId}/detail`,
+        method: "GET",
+        params: { orderId, itemIssuanceId_op: "empty", itemIssuanceId_not: "Y", pageSize: 100 }
+      }))));
+      return details.flat();
+    },
     async fetchOrder(orderId: string, force = false) {
       if (!orderId) return;
 
@@ -428,7 +364,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       entry.error = "";
 
       try {
-        const resp = await useOrderDetail().getOrder(orderId);
+        const resp = await this.getOrder(orderId);
         if (commonUtil.hasError(resp)) throw resp.data;
 
         const payload = Array.isArray(resp.data) ? resp.data[0] : resp.data;
@@ -493,10 +429,9 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       if (!force && Array.isArray(this.facilityChangesByOrderId[orderId])) return;
 
       return singleFlight(`events:${orderId}`, force, () => this.trackHistory(orderId, async () => {
-        const orderDetail = useOrderDetail();
         const [facilityChanges, unfillable] = await Promise.allSettled([
-          orderDetail.getFacilityChanges(orderId),
-          orderDetail.getUnfillableAttempts(orderId)
+          this.getFacilityChanges(orderId),
+          this.getUnfillableAttempts(orderId)
         ]);
 
         const changesLoaded = facilityChanges.status === "fulfilled" && !commonUtil.hasError(facilityChanges.value);
@@ -558,7 +493,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
           .filter(isPosCompletedShipGroup)
           .flatMap((shipGroup: any) => (shipGroup.items || []).map((item: any) => ({ productId: item.productId, facilityId: shipGroup.facilityId })))
           .filter((line: IssuanceLine) => line.productId && line.facilityId);
-        this.issuanceByOrderId[orderId] = summariseIssuance(await useOrderDetail().getInventoryIssuance(orderId, lines));
+        this.issuanceByOrderId[orderId] = summariseIssuance(await this.getInventoryIssuance(orderId, lines));
         this.issuanceStatusByOrderId[orderId] = "loaded";
       } catch (error: any) {
         logger.error(`Failed to load inventory issuance for [${orderId}]`, error);
@@ -569,7 +504,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     async fetchCommEvents(orderId: string) {
       if (!orderId) return;
       try {
-        const resp = await useOrderDetail().getCommunicationEvents(orderId);
+        const resp = await this.getCommunicationEvents(orderId);
         if (commonUtil.hasError(resp)) throw resp.data;
         const docs = Array.isArray(resp.data) ? resp.data : (resp.data?.docs || []);
         this.commEventsByOrderId[orderId] = docs;
@@ -586,7 +521,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       this.riskAssessmentsStatusByOrderId[orderId] = "loading";
 
       try {
-        const resp = await useOrderDetail().getRiskAssessments(orderId);
+        const resp = await this.getRiskAssessments(orderId);
         if (commonUtil.hasError(resp)) throw resp.data;
         this.riskAssessmentsByOrderId[orderId] = Array.isArray(resp.data) ? resp.data : (resp.data?.docs || []);
         this.riskAssessmentsStatusByOrderId[orderId] = "loaded";
@@ -599,7 +534,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     async fetchInventoryTransfers(orderId: string) {
       if (!orderId) return;
       try {
-        this.inventoryTransfersByOrderId[orderId] = await fetchOrderInventoryTransfers(orderId);
+        this.inventoryTransfersByOrderId[orderId] = await useStockStore().fetchOrderInventoryTransfers(orderId);
       } catch (error: any) {
         logger.error(`Failed to load inventory transfers for [${orderId}]`, error);
       }
@@ -620,6 +555,57 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       } catch (error: any) {
         logger.error('Failed to load carrier parties', error);
       }
+    },
+    async fetchOrderShipGroups(orderId: string): Promise<any[]> {
+      const response = await api({ url: `oms/orders/${orderId}/shipGroups`, method: 'GET' });
+      return Array.isArray(response.data) ? response.data : (response.data?.docs || response.data?.shipGroups || []);
+    },
+    addOrderIdentification(orderId: string, orderIdentificationTypeId: string, idValue: string, fromDate: number) {
+      return api({
+        url: `oms/orders/${orderId}/identifications`,
+        method: 'POST',
+        data: { orderIdentificationTypeId, idValue, fromDate }
+      });
+    },
+    /** Ends an identification: there is no in-place value update, so an edit expires the row and adds a new one. */
+    expireOrderIdentification(orderId: string, identification: { orderIdentificationTypeId: string; fromDate?: string | number }, thruDate: number) {
+      return api({
+        url: `oms/orders/${orderId}/identifications`,
+        method: 'PUT',
+        data: {
+          orderIdentificationTypeId: identification.orderIdentificationTypeId,
+          orderId,
+          fromDate: identification.fromDate,
+          thruDate
+        }
+      });
+    },
+    addOrderItemAttribute(orderId: string, orderItemSeqId: string, attribute: { attrName: string; attrValue?: string; attrDescription?: string }) {
+      return api({
+        url: `oms/orders/${orderId}/items/${orderItemSeqId}/attributes`,
+        method: 'POST',
+        data: attribute
+      });
+    },
+    deleteOrderItemAttribute(orderId: string, orderItemSeqId: string, attrName: string) {
+      return api({
+        url: `oms/orders/${orderId}/items/${orderItemSeqId}/attributes/${encodeURIComponent(attrName)}`,
+        method: 'DELETE'
+      });
+    },
+    /** Stores an order attribute: creates a new name or overwrites an existing one. */
+    storeOrderAttribute(orderId: string, attribute: { attrName: string; attrValue?: string; attrDescription?: string }) {
+      return api({ url: `oms/orders/${orderId}/attributes`, method: 'POST', data: { ...attribute } });
+    },
+    deleteOrderAttribute(orderId: string, attrName: string) {
+      return api({ url: `oms/orders/${orderId}/attributes/${encodeURIComponent(attrName)}`, method: 'DELETE' });
+    },
+    addItemToOrder(orderId: string, shipGroupSeqId: string, productId: string, quantity: number) {
+      return api({
+        url: `oms/orders/${orderId}/addItem`,
+        method: 'POST',
+        data: { orderId, shipGroupSeqId, productId, quantity }
+      });
     },
     async updateShipGroup(orderId: string, shipGroupSeqId: string, data: Record<string, any>) {
       return api({ url: `oms/orders/${orderId}/shipGroups/${shipGroupSeqId}`, method: 'PUT', data });
@@ -654,7 +640,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     },
     async bulkCancelOrders(orderIds: string[]) {
       const results = await Promise.all(orderIds.map(async (orderId) => {
-        const orderResponse = await useOrderDetail().getOrder(orderId);
+        const orderResponse = await this.getOrder(orderId);
         if (commonUtil.hasError(orderResponse)) throw orderResponse.data;
 
         const order = orderPayload(orderResponse.data);
@@ -748,7 +734,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         await Promise.all(pending.map(async (returnId) => {
           this.returnHeadersById[returnId] = null;
           try {
-            const header = await getReturn(returnId);
+            const header = await useReturnsStore().getReturn(returnId);
             if (header) this.returnHeadersById[returnId] = header;
           } catch (error) {
             failed = true;

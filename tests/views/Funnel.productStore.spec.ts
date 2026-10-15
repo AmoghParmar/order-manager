@@ -37,7 +37,7 @@ describe('Funnel product store scope', () => {
 
   it('keeps the facility metrics actionable when daily metric rows are empty', () => {
     expect(customerServiceSource).toContain('hasUsableFacilityFulfillmentVelocity');
-    expect(customerServiceSource).toContain('activeFacilityVelocityFallbackRows(await getActivePhysicalFacilityOrderVolume({ productStoreId }))');
+    expect(customerServiceSource).toContain('activeFacilityVelocityFallbackRows(await useOrderStore().fetchActivePhysicalFacilityOrderVolume({ productStoreId }))');
     expect(funnelSource).toContain('<ion-segment-button value="rejections">');
     expect(funnelSource).toContain('store.fetchFacilityRejections(productStoreId)');
     expect(funnelSource).toContain('facilityRejections.value.map');

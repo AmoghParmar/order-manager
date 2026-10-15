@@ -206,13 +206,15 @@
 import { IonAccordion, IonAccordionGroup, IonAvatar, IonButton, IonButtons, IonChip, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonListHeader, IonNote, IonRadio, IonRadioGroup, IonSearchbar, IonSpinner, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline, warningOutline } from 'ionicons/icons';
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { api, DxpShopifyImg, logger, translate } from '@common';
+import { DxpShopifyImg, logger, translate } from '@common';
 import { useSeedData } from '@common/db';
+import { useStockStore } from '@/store/stock';
 import { formatNumber } from '@/utils/format';
 import type { FacilityCoverageRow, FacilityItemAvailability } from '@/utils/facilityInventory';
 import { buildFacilityCoverageRows, filterFacilityCoverageRows, isPhysicalFacility, noFacilityCovers, pinCurrentFacility, sortFacilityCoverageRows } from '@/utils/facilityInventory';
 
 const seed = useSeedData();
+const stockStore = useStockStore();
 
 export type FacilityInventoryModalItem = {
   orderItemSeqId: string;
@@ -336,10 +338,6 @@ async function selectSearchBarText(event: any) {
   element.select();
 }
 
-function responseList(data: any) {
-  return Array.isArray(data) ? data : data?.entityValueList ?? data?.docs ?? data?.list ?? data?.items ?? [];
-}
-
 function todayIsoDate() {
   const now = new Date();
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
@@ -373,31 +371,6 @@ function teardownMobileViewport() {
   }
 }
 
-/**
- * Entity list responses cap at the page size, so one page can silently hide facilities that stock
- * an item, and understated coverage is worse than a second request.
- *
- * The real total comes back in X-Total-Count, but the OMS does not list that header in
- * Access-Control-Expose-Headers, so the browser cannot read it on these cross-origin calls. A full
- * page is therefore the only "there may be more" signal available: keep going until one comes back
- * short.
- */
-async function fetchAllPages(url: string, params: Record<string, any>, pageSize = 500) {
-  const rows: any[] = [];
-  let pageIndex = 0;
-
-  while (pageIndex < 20) {
-    const resp: any = await api({ url, method: 'GET', params: { ...params, pageIndex, pageSize } });
-    const page = responseList(resp.data);
-    rows.push(...page);
-
-    if (page.length < pageSize) break;
-    pageIndex += 1;
-  }
-
-  return rows;
-}
-
 async function fetchFacilityInventory() {
   isLoading.value = true;
   hasFailed.value = false;
@@ -420,22 +393,14 @@ async function fetchFacilityInventory() {
     // Inventory is the reason this modal exists, so a failure there is fatal. Quantity on hand and
     // today's consumption only decorate the row, so they degrade to a dash instead.
     const [productFacilities, inventoryResp, orderCountResp] = await Promise.all([
-      fetchAllPages('oms/productFacilities', { productId: joinedProductIds, productId_op: 'in' }),
-      fetchAllPages('oms/inventoryLogs', { productId: joinedProductIds, productId_op: 'in' }).catch((error) => {
+      // Every page: one can silently hide facilities that stock an item.
+      stockStore.fetchAllRows('oms/productFacilities', { productId: joinedProductIds, productId_op: 'in' }, 500),
+      stockStore.fetchAllRows('oms/inventoryLogs', { productId: joinedProductIds, productId_op: 'in' }, 500).catch((error) => {
         logger.error('Failed to fetch inventory logs', error);
         return [];
       }),
       // Volatile: consumption changes through the day, so it is fetched live and never cached.
-      api({
-        url: 'admin/facilities/orderCount',
-        method: 'GET',
-        params: {
-          facilityId: facilityIds.join(','),
-          facilityId_op: 'in',
-          entryDate: todayIsoDate(),
-          pageSize: Math.max(facilityIds.length, 1)
-        }
-      }).then((resp: any) => responseList(resp.data)).catch((error) => {
+      stockStore.fetchFacilityOrderCounts(facilityIds, todayIsoDate()).catch((error) => {
         logger.error('Failed to fetch facility order counts', error);
         return [];
       })

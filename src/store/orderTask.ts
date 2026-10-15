@@ -2,11 +2,11 @@ import { defineStore } from 'pinia';
 import { api } from '@common';
 import { useOrderStore } from '@/store/order';
 import { useProductStore } from '@/store/productStore';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductCacheStore } from '@/store/productCache';
 import { useStockStore } from '@/store/stock';
 import type { TaskQueueRequestParams } from '@/types/orderTaskFilters';
 // Queue-defining task query constants live in a dependency-free module so the
-// nav-count priming (services/navCounts) can count the exact same populations
+// nav-count priming (primeNavCounts in the order store) can count the exact same populations
 // these queue-list fetches list, without importing the store.
 import {
   ADDRESS_VALIDATION_PURPOSE_TYPE_ID,
@@ -111,8 +111,7 @@ async function prefetchSwapTaskAssets(tasks: any[]) {
     .filter(Boolean);
 
   if (productIds.length) {
-    useProductMaster().init();
-    await useProductMaster().prefetch(productIds);
+    await useProductCacheStore().prefetch(productIds);
   }
 
   const stockRequests = new Map();
@@ -140,8 +139,7 @@ async function prefetchFraudTaskAssets(tasks: any[]) {
     .filter(Boolean);
 
   if (productIds.length) {
-    useProductMaster().init();
-    await useProductMaster().prefetch(productIds);
+    await useProductCacheStore().prefetch(productIds);
   }
 }
 
