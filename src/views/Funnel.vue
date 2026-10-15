@@ -395,7 +395,7 @@
               <ion-list lines="full" class="ion-no-padding">
                 <ion-reorder-group :disabled="false" @ionItemReorder="handleReorder">
                   <ion-item v-for="rule in sortRules" :key="rule.id">
-                    <ion-label>{{ rule.name }}</ion-label>
+                    <ion-label>{{ sortRuleName(rule.id) }}</ion-label>
                     <ion-button slot="end" fill="clear" color="danger" @click="removeSortRule(rule.id)" :aria-label="translate('Remove sort rule')" :title="translate('Remove sort rule')">
                       <ion-icon slot="icon-only" :icon="closeOutline" />
                     </ion-button>
@@ -620,6 +620,7 @@ import { UNFILLABLE_FACILITY_ID, useCustomerServiceStore, type DashboardStatusKe
 import { useOrderStore } from '@/store/order';
 import { useProductStore } from '@/store/productStore';
 import { useSeedData } from '@common/db';
+import { useOrder } from '@/composables/useOrder';
 import { useUserStore } from '@/store/user';
 import { useElapsedHoursSinceDayStart } from '@/utils/funnelClock';
 import { createLatestRequestScope } from '@/utils/latestRequestScope';
@@ -1245,11 +1246,8 @@ const handleReorder = (event: any) => {
 
 
 
-const availableSortOptions = computed(() => {
-  const currentIds = sortRules.value.map(r => r.id);
-
-  return seed.enumsByType('PP_SORT_PARAM_TYPE').filter((e: any) => !currentIds.includes(e.enumCode));
-});
+const { sortRuleName, availableSortOptions: sortOptionsExcept } = useOrder();
+const availableSortOptions = computed(() => sortOptionsExcept(sortRules.value));
 
 function addSortRule(enumCode: string) {
   store.addSortRule(selectedFacilityId.value, enumCode);

@@ -1,7 +1,5 @@
 import { logger } from "@common";
-import { loadSeedData, type SeedData } from "@common/db";
 import { defineStore } from "pinia";
-import { markRaw } from "vue";
 import {
   type LocationStock, fetchInventoryCutoff, fetchLocationStock, fetchRoutingChanges, fetchStockMovements,
   pairKey
@@ -22,11 +20,6 @@ interface RoutingHistoryState {
   stockByPair: Record<string, LocationStock>;
   /** When each product store went live on HotWax inventory (see fetchInventoryCutoff); null when unknown. */
   cutoffByProductStore: Record<string, number | null>;
-  /**
-   * The facility seed tables, read once per load (`loadSeedData`), which tell a stock location from
-   * a virtual one. Null until the first load; until then the facility id convention decides.
-   */
-  facilitySeed: SeedData | null;
 }
 
 export interface LoadRoutingOptions {
@@ -36,6 +29,12 @@ export interface LoadRoutingOptions {
   importedAt?: number;
   /** The order's product store, whose go-live explains items with no inventory impact. */
   productStoreId?: string;
+  /**
+   * The caller's facility and facility type rows, which tell a stock location from a virtual one.
+   * Without them the facility id convention decides.
+   */
+  facilities?: any[];
+  facilityTypes?: any[];
 }
 
 const inFlight = new Map<string, Promise<void>>();
@@ -49,35 +48,29 @@ export const useRoutingHistoryStore = defineStore("routingHistory", {
     movementsByPair: {},
     stockByPair: {},
     cutoffByProductStore: {},
-    facilitySeed: null,
   }),
   getters: {
-    historyFor: (state) => (orderId: string, items: RoutingItem[]): ItemRoutingHistory[] => buildRoutingHistory({
+    /** `facilities` and `facilityTypes` are the caller's rows, which tell stock locations from virtual ones. */
+    historyFor: (state) => (orderId: string, items: RoutingItem[], facilities: any[], facilityTypes: any[]): ItemRoutingHistory[] => buildRoutingHistory({
       orderId,
       items,
       changes: state.changesByOrderId[orderId] || [],
       movements: state.movementsByPair,
       stock: state.stockByPair,
-      facilities: state.facilitySeed?.facilities() ?? [],
-      facilityTypes: state.facilitySeed?.facilityTypes() ?? [],
+      facilities,
+      facilityTypes,
     }),
     statusFor: (state) => (orderId: string): LoadStatus | undefined => state.statusByOrderId[orderId],
     cutoffFor: (state) => (productStoreId?: string): number | null => (productStoreId && state.cutoffByProductStore[productStoreId]) || null,
   },
   actions: {
-    /** Read the facility seed tables again, so locations are told apart by their current types. */
-    async loadFacilitySeed(): Promise<SeedData> {
-      // markRaw: a snapshot of getters, not state to track field by field.
-      this.facilitySeed = markRaw(await loadSeedData(["facilities", "facilityTypes"]));
-
-      return this.facilitySeed;
-    },
-
-    /** Current stock at each item's location, for the warnings on the item and ship group views. */
-    async fetchItemLocationStock(items: RoutingItem[]) {
-      const seed = await this.loadFacilitySeed();
+    /**
+     * Current stock at each item's location, for the warnings on the item and ship group views.
+     * `facilities` and `facilityTypes` are the caller's rows, which tell stock locations from virtual ones.
+     */
+    async fetchItemLocationStock(items: RoutingItem[], facilities: any[], facilityTypes: any[]) {
       const pairs = items
-        .filter((item) => item.productId && isStockLocation(item.facilityId, seed.facilities(), seed.facilityTypes()))
+        .filter((item) => item.productId && isStockLocation(item.facilityId, facilities, facilityTypes))
         .map((item) => ({ productId: item.productId, facilityId: item.facilityId }));
       if(!pairs.length) {return;}
       try {
@@ -95,7 +88,7 @@ export const useRoutingHistoryStore = defineStore("routingHistory", {
 
     /** Routing changes, the stock movements behind them, and current stock, for the Routing segment. */
     loadRoutingHistory(orderId: string, items: RoutingItem[], options: LoadRoutingOptions = {}): Promise<void> {
-      const { force = false, importedAt, productStoreId } = options;
+      const { force = false, importedAt, productStoreId, facilities = [], facilityTypes = [] } = options;
       if(!force && !stale.has(orderId) && this.statusByOrderId[orderId] === "loaded") {return Promise.resolve();}
       const running = inFlight.get(orderId);
       // A forced load wants changes newer than the running load has read, so it runs again after it.
@@ -107,9 +100,9 @@ export const useRoutingHistoryStore = defineStore("routingHistory", {
       const load = (async () => {
         if(!reloading) {this.statusByOrderId[orderId] = "loading";}
         try {
-          const [changes, seed] = await Promise.all([fetchRoutingChanges(orderId), this.loadFacilitySeed()]);
+          const changes = await fetchRoutingChanges(orderId);
           this.changesByOrderId[orderId] = changes;
-          const requests = movementRequests(items, changes, seed.facilities(), seed.facilityTypes(), importedAt);
+          const requests = movementRequests(items, changes, facilities, facilityTypes, importedAt);
           if(productStoreId && !(productStoreId in this.cutoffByProductStore)) {
             // Only explains empty timelines, so a failure leaves them unexplained rather than failing the load.
             this.cutoffByProductStore[productStoreId] = await fetchInventoryCutoff(productStoreId).catch((err) => {

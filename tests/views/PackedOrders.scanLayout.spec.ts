@@ -11,7 +11,7 @@ describe('Packed orders scan layout', () => {
 
   it('uses the standardized enriched order row instead of packed-only duplicate fields', () => {
     expect(packedOrdersSource).toContain(':model="orderRow(order)"');
-    expect(packedOrdersSource).toContain('toWorkflowOrderRowViewModel(order, orderStore.workflowEnrichment(bucket, order.orderId))');
+    expect(packedOrdersSource).toContain('const orderRow = (order: WorkflowOrder) => workflowOrderRow(bucket, order);');
     expect(packedOrdersSource).not.toContain('shipmentContextLabel(order)');
   });
 

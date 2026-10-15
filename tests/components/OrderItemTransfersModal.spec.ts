@@ -35,8 +35,12 @@ vi.mock('@ionic/vue', () => {
 
 vi.mock('@/store/orderDetail', () => ({
   useOrderDetailStore: () => ({
-    enrichedOrderByOrderId: () => ({ shipGroups: [{ items: [{ orderItemSeqId: '02', productId: 'P1', name: 'Blouse', quantity: 1, transfers: mocks.transfers }] }] }),
     fetchInventoryTransfers: mocks.fetchInventoryTransfers,
+  }),
+}));
+vi.mock('@/composables/useOrder', () => ({
+  useOrder: () => ({
+    enrichedOrder: () => ({ shipGroups: [{ items: [{ orderItemSeqId: '02', productId: 'P1', name: 'Blouse', quantity: 1, transfers: mocks.transfers }] }] }),
   }),
 }));
 vi.mock('@/store/user', () => ({ useUserStore: () => ({ hasPermission: () => mocks.canManage }) }));

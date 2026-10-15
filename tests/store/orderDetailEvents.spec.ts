@@ -1,8 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useOrderDetailStore } from '@/store/orderDetail';
+import { useOrder } from '@/composables/useOrder';
 import { api } from '@common';
 import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_SAMPLE_SIZE, useOrderDetail } from '@/composables/useOrderDetail';
+
+// useOrder joins over the seed tables; these specs read them empty, so labels answer raw ids.
+vi.mock('@common/db', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return { ...actual, useSeedData: () => actual.emptySeedData };
+});
+vi.mock('@/store/order', () => ({ useOrderStore: () => ({}) }));
 
 vi.mock('@common', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -69,7 +77,7 @@ describe('order detail event sources', () => {
       { orderItemSeqId: '03', changeReasonEnumId: 'RELEASED', fromFacilityId: '_NA_', facilityId: 'BROADWAY', changeDatetime: '2026-06-26 14:17:51.901' },
     ];
 
-    const events = store.orderEventsByOrderId(ORDER_ID);
+    const events = useOrder().orderEvents(ORDER_ID);
 
     expect(events.map((event) => event.kind)).toEqual(['orderStatus', 'move']);
     expect(events[1]).toMatchObject({ move: 'released', orderItemSeqIds: ['01', '02', '03'], isFirst: true });
@@ -78,7 +86,7 @@ describe('order detail event sources', () => {
   it('has no events when the order document has not loaded', () => {
     const store = useOrderDetailStore();
 
-    expect(store.orderEventsByOrderId(ORDER_ID)).toEqual([]);
+    expect(useOrder().orderEvents(ORDER_ID)).toEqual([]);
   });
 
   it('counts one failed brokering run as one attempt however many items it touched', async () => {
@@ -271,7 +279,7 @@ describe('order detail event sources', () => {
     await store.fetchOrderEvents(ORDER_ID);
 
     // Statuses come off the document, so a failed sibling call cannot take them out.
-    const events = store.orderEventsByOrderId(ORDER_ID);
+    const events = useOrder().orderEvents(ORDER_ID);
     expect(events.filter((event) => event.kind === 'orderStatus')).toHaveLength(1);
     expect(events.filter((event) => event.kind === 'move')).toEqual([]);
     expect(store.unfillableAttemptsByOrderId(ORDER_ID)).toMatchObject({ count: 1 });

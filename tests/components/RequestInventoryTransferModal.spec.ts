@@ -49,9 +49,11 @@ const facilities: Record<string, Record<string, string>> = {
 
 vi.mock('@/store/orderDetail', () => ({
   useOrderDetailStore: () => ({
-    enrichedOrderByOrderId: () => ({ shipGroups: [{ items: [mocks.item] }] }),
     fetchInventoryTransfers: mocks.fetchInventoryTransfers,
   }),
+}));
+vi.mock('@/composables/useOrder', () => ({
+  useOrder: () => ({ enrichedOrder: () => ({ shipGroups: [{ items: [mocks.item] }] }) }),
 }));
 vi.mock('@common/db', () => ({
   useSeedData: () => ({

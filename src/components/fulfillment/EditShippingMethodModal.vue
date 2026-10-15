@@ -73,12 +73,14 @@ import {
 import { closeOutline, saveOutline } from 'ionicons/icons';
 import { computed, onMounted, ref } from 'vue';
 import { translate } from '@common';
+import { useOrder } from '@/composables/useOrder';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useSeedData } from '@common/db';
 
 const seed = useSeedData();
 
 const orderDetailStore = useOrderDetailStore();
+const { shippingMethodsByCarrier } = useOrder();
 
 const selectedCarrierId = ref('');
 const selectedMethodId = ref('');
@@ -95,7 +97,7 @@ const availableCarriers = computed(() => {
 });
 
 const methodsForCarrier = computed(() =>
-  [...orderDetailStore.shippingMethodsByCarrier(selectedCarrierId.value)].sort(
+  [...shippingMethodsByCarrier(selectedCarrierId.value)].sort(
     (a, b) => Number(a.sequenceNumber ?? Infinity) - Number(b.sequenceNumber ?? Infinity)
   )
 );

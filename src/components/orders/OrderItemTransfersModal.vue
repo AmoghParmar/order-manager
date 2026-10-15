@@ -114,6 +114,7 @@ import { closeOutline } from 'ionicons/icons';
 import { computed, ref, watch } from 'vue';
 import { DxpShopifyImg, logger, translate } from '@common';
 import Actions from '@/authorization/actions';
+import { useOrder } from '@/composables/useOrder';
 import { useProductIdentity } from '@/composables/useProductIdentity';
 import { cancelInventoryTransfer, executeInventoryTransfer, fetchFacilityStock } from '@/services/inventoryTransfers';
 import { useOrderDetailStore } from '@/store/orderDetail';
@@ -128,11 +129,12 @@ const props = defineProps<{
 }>();
 
 const orderDetailStore = useOrderDetailStore();
+const { enrichedOrder } = useOrder();
 const { getProduct, primaryIdentifier, secondaryIdentifier, featureLabel } = useProductIdentity();
 const canManage = computed(() => useUserStore().hasPermission(Actions.APP_INVENTORY_TRANSFER_MANAGE));
 
 // Read from the store, so completing or cancelling shows here once the transfers reload.
-const item = computed(() => orderDetailStore.enrichedOrderByOrderId(props.orderId)?.shipGroups
+const item = computed(() => enrichedOrder(props.orderId)?.shipGroups
   .flatMap((shipGroup) => shipGroup.items)
   .find((entry) => entry.orderItemSeqId === props.orderItemSeqId));
 const product = computed(() => item.value && getProduct(item.value.productId));

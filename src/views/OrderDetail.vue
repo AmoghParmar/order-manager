@@ -191,6 +191,7 @@ import OrderItemsSegment from '@/components/orders/OrderItemsSegment.vue';
 import OrderRoutingSegment from '@/components/orders/OrderRoutingSegment.vue';
 import OrderShipGroupCard from '@/components/orders/OrderShipGroupCard.vue';
 import OrderSummaryHeader from '@/components/orders/OrderSummaryHeader.vue';
+import { useOrder } from '@/composables/useOrder';
 import { useOrderActions } from '@/composables/useOrderActions';
 import { useOrderDistances } from '@/composables/useOrderDistances';
 import { useProductMaster } from '@/composables/useProductMaster';
@@ -222,7 +223,8 @@ const userStore = useUserStore();
 const canViewReturns = computed(() => userStore.hasPermission(Actions.APP_ORDER_RETURN_VIEW));
 const canRequestInventoryTransfer = computed(() => userStore.hasPermission(Actions.APP_INVENTORY_TRANSFER_CREATE));
 
-const order = computed(() => orderDetailStore.enrichedOrderByOrderId(props.orderId));
+const { enrichedOrder, orderEvents: orderEventsFor } = useOrder();
+const order = computed(() => enrichedOrder(props.orderId));
 const loading = computed(() => orderDetailStore.loadingById(props.orderId));
 const error = computed(() => orderDetailStore.errorById(props.orderId));
 
@@ -316,12 +318,25 @@ const routingItems = computed<RoutingItem[]>(() => (order.value?.shipGroups || [
 /** When the order came in: the routing graph's first column, and where items that were never routed are read from. */
 const orderImportedAt = computed(() => toMillis(orderDetailStore.orderById(props.orderId)?.entryDate || orderDetailStore.orderById(props.orderId)?.orderDate) || 0);
 
-function loadRoutingHistory(force = false) {
-  if (!routingItems.value.length) return;
-  routingHistoryStore.loadRoutingHistory(props.orderId, routingItems.value, {
+/**
+ * The facility and facility type rows, read now: routing tells stock locations from virtual ones by
+ * them. A failed read leaves the facility id convention to decide.
+ */
+async function readFacilityRows() {
+  const [facilities, facilityTypes] = await Promise.all([seed.getFacilities(), seed.getFacilityTypes()]).catch(() => [[], []]);
+  return { facilities, facilityTypes };
+}
+
+async function loadRoutingHistory(force = false) {
+  const items = routingItems.value;
+  if (!items.length) return;
+  const { facilities, facilityTypes } = await readFacilityRows();
+  routingHistoryStore.loadRoutingHistory(props.orderId, items, {
     force,
     importedAt: orderImportedAt.value || undefined,
     productStoreId: orderDetailStore.orderById(props.orderId)?.productStoreId,
+    facilities,
+    facilityTypes,
   });
 }
 
@@ -329,7 +344,8 @@ function loadRoutingHistory(force = false) {
 // When items move (an action on this page, or routing on the server), the routing read before is out of date.
 watch(() => routingItems.value.map((item) => `${item.orderItemSeqId}:${pairKey(item.productId, item.facilityId)}:${item.statusId}`).join(','),
   (_items, previousItems) => {
-    routingHistoryStore.fetchItemLocationStock(routingItems.value);
+    const items = routingItems.value;
+    readFacilityRows().then(({ facilities, facilityTypes }) => routingHistoryStore.fetchItemLocationStock(items, facilities, facilityTypes));
     const moved = previousItems !== undefined;
     if (selectedSegment.value === 'routing') loadRoutingHistory(moved);
     else if (moved) routingHistoryStore.markStale(props.orderId);
@@ -340,7 +356,7 @@ const shortStock = computed(() => Object.fromEntries(routingItems.value
   .filter((item) => isShortAtLocation(item, routingHistoryStore.stockByPair, seed.facilities(), seed.facilityTypes()))
   .map((item) => [item.orderItemSeqId, routingHistoryStore.stockByPair[pairKey(item.productId, item.facilityId)].atp])));
 
-const routingHistory = computed(() => routingHistoryStore.historyFor(props.orderId, routingItems.value));
+const routingHistory = computed(() => routingHistoryStore.historyFor(props.orderId, routingItems.value, seed.facilities(), seed.facilityTypes()));
 
 /** Why an item's inventory timeline is empty: completed before the store went live, or nothing moved yet. */
 const routingNoImpact = computed(() => {
@@ -398,7 +414,7 @@ function timelineRoute(link: OrderEventLink): string | undefined {
   return `/orders/${link.id}`;
 }
 
-const orderEvents = computed(() => orderDetailStore.orderEventsByOrderId(props.orderId));
+const orderEvents = computed(() => orderEventsFor(props.orderId));
 const historyStatus = computed(() => orderDetailStore.orderHistoryStatus(props.orderId));
 
 // Orders this one was exchanged from (OrderItemAssoc rows of type EXCHANGE, pointing at the

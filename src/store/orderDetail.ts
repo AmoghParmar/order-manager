@@ -1,22 +1,17 @@
 import { defineStore } from "pinia";
 import { api, commonUtil, logger, translate, useSolrSearch } from "@common";
-import { emptySeedData, loadSeedData, type SeedData } from "@common/db";
-import { markRaw } from "vue";
 import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_SAMPLE_SIZE, useOrderDetail, type IssuanceLine } from "@/composables/useOrderDetail";
 import { useProductCacheStore } from "./productCache";
-import { useCustomerStore } from "./customer";
 import { useUserStore } from "./user";
 import Actions from "@/authorization/actions";
 import { escapeSolrValue } from "@/services/order";
 import { getReturn } from "@/services/returns";
 import { fetchOrderInventoryTransfers } from "@/services/inventoryTransfers";
-import { enrichOrder, isPosCompletedShipGroup } from "@/utils/orderDetailEnrichment";
+import { isPosCompletedShipGroup } from "@/utils/orderDetailEnrichment";
 import { toMillis } from "@/utils/format";
 import { type ItemIssuanceSummary, summariseIssuance } from "@/utils/inventoryIssuance";
 import { OrderActionValidator } from "@/utils/OrderActionValidator";
-import { buildOrderEvents, clusterEvents, type ExchangeChild, type OrderEvent, type UnfillableSummary } from "@/utils/orderEvents";
-import { adjustmentAmount, adjustmentKey, adjustmentLabel } from "@/utils/orderAdjustments";
-import type { EnrichedOrder } from "@/types/orderDetail";
+import { clusterEvents, type ExchangeChild, type UnfillableSummary } from "@/utils/orderEvents";
 
 type LoadStatus = "idle" | "loading" | "loaded" | "error" | "notfound";
 
@@ -26,8 +21,6 @@ interface OrderEntry {
   loadedAt: string;
   error: string;
 }
-
-const HEADER_SEQ_ID = "_NA_";
 
 /** Whether the sources behind an order's history are still loading, and whether one failed. */
 export interface OrderHistoryStatus {
@@ -69,67 +62,6 @@ export function isVirtualFacilityId(facilityId: string, facilities: any[], facil
 }
 
 const newEntry = (): OrderEntry => ({ payload: null, status: "idle", loadedAt: "", error: "" });
-
-const adjustmentDisplayLabel = (adj: any, seed: SeedData) =>
-  adjustmentLabel(adj, seed.orderAdjustmentTypeDescription, "OTHER_ADJUSTMENT");
-
-const adjustmentUniqueKey = (adj: any, seed: SeedData, fallbackSeqId = "") =>
-  adjustmentKey(adj, adjustmentDisplayLabel(adj, seed), fallbackSeqId);
-
-/**
- * Subtotal, adjustments grouped by label, and grand total. Sums the rows actually displayed
- * (subtotal + every adjustment, including tax) rather than trusting the backend's grandTotal,
- * which has been observed to exclude tax. Rounded to avoid floating-point drift
- * (e.g. 59 + 1.53 + 0.59 + 2.86 = 63.980000000000004).
- */
-function orderTotals(order: any, seed: SeedData) {
-  if (!order) return { subtotal: 0, adjustments: {}, total: 0, includedAdjustments: {} };
-
-  let subtotal = 0;
-  (order.shipGroups || []).forEach((sg: any) => {
-    (sg.items || []).forEach((item: any) => {
-      subtotal += Number(item.unitPrice || 0) * Number(item.quantity || 0);
-    });
-  });
-
-  const adjustments: Record<string, number> = {};
-  const includedAdjustments: Record<string, number> = {};
-  let adjustmentsTotal = 0;
-  const seenAdjustments = new Set<string>();
-
-  const recordAdjustment = (adj: any, fallbackSeqId = "") => {
-    const uniqueKey = adjustmentUniqueKey(adj, seed, fallbackSeqId);
-    if (seenAdjustments.has(uniqueKey)) return;
-    seenAdjustments.add(uniqueKey);
-
-    adjustmentsTotal += Number(adj.amount || 0);
-    const { amount, isIncluded } = adjustmentAmount(adj);
-    const label = adjustmentDisplayLabel(adj, seed);
-
-    // Included and excluded amounts stay in separate buckets: a label can carry both
-    // (an included tax on one item, an ordinary one on another), and merging them would
-    // label the ordinary amount "included" while it still adds to the grand total.
-    const bucket = isIncluded ? includedAdjustments : adjustments;
-    bucket[label] = (bucket[label] || 0) + amount;
-  };
-
-  (order.adjustments || []).forEach((adj: any) => recordAdjustment(adj));
-  (order.shipGroups || []).forEach((sg: any) => {
-    (sg.items || []).forEach((item: any) => {
-      (item.adjustments || []).forEach((adj: any) => recordAdjustment(adj, item.orderItemSeqId));
-    });
-  });
-
-  // Filter out zero-sum adjustments
-  [adjustments, includedAdjustments].forEach((bucket) => {
-    Object.keys(bucket).forEach((key) => {
-      if (bucket[key] === 0) delete bucket[key];
-    });
-  });
-
-  const computedTotal = Math.round((subtotal + adjustmentsTotal) * 100) / 100;
-  return { subtotal, adjustments, total: computedTotal || order.grandTotal || 0, includedAdjustments };
-}
 
 const NON_CANCELLABLE_ITEM_STATUSES = new Set(["ITEM_CANCELLED", "ITEM_COMPLETED"]);
 
@@ -208,39 +140,8 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     // Inventory transfers requested for the order's items, by Order Manager, the Transfers app
     // or the regional broker.
     inventoryTransfersByOrderId: {} as Record<string, any[]>,
-    // The seed tables the order page's labels and joins read, as one snapshot read with each order
-    // load (loadSeedData). It does not follow later changes; the next load reads it again.
-    seedSnapshot: null as SeedData | null,
   }),
   getters: {
-    /** The seed snapshot, or one that answers raw ids until the first order load has read it. */
-    seed: (state): SeedData => state.seedSnapshot ?? emptySeedData,
-
-    /**
-     * The order page's view model: the raw order document joined with the loaded auxiliary
-     * sources (order events, issuance, risk, returns, transfers) and the seed,
-     * product and customer caches. See utils/orderDetailEnrichment.
-     */
-    enrichedOrderByOrderId(): (orderId: string) => EnrichedOrder | null {
-      return (orderId: string) => {
-        const raw = this.orderById(orderId);
-        if (!raw) return null;
-        const customerPartyId = this.customerPartyIdByOrderId(orderId);
-        return enrichOrder(raw, {
-          totals: this.orderTotalsByOrderId(orderId),
-          groupAdjustments: this.adjustmentsByExternalIdByOrderId(orderId),
-          customerPartyId,
-          customerName: this.customerNameByOrderId(orderId),
-          customerProfile: customerPartyId ? useCustomerStore().getCustomer(customerPartyId) : null,
-          events: this.orderEventsByOrderId(orderId),
-          issuanceByItem: this.issuanceByItemSeqIdByOrderId(orderId),
-          riskAssessments: this.riskAssessmentsForOrder(orderId),
-          returnedQtyBySeqId: this.returnedQtyByItemSeqIdByOrderId(orderId),
-          inventoryTransfers: this.inventoryTransfersByOrderId[orderId] || [],
-        }, { seed: this.seed, productCache: useProductCacheStore() });
-      };
-    },
-
     orderById: (state) => (orderId: string) => state.byOrderId[orderId]?.payload || null,
     /**
      * Whether an order's transfers have loaded. Until they have, every item looks like it has none,
@@ -286,25 +187,6 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       };
     },
 
-    /**
-     * The order's history as typed events, oldest first: the OrderStatus rows on the order
-     * document plus the facility changes, unfillable attempts, fulfillment dates, returns and
-     * exchanges loaded beside it. See utils/orderEvents.
-     */
-    orderEventsByOrderId(): (orderId: string) => OrderEvent[] {
-      return (orderId: string): OrderEvent[] => buildOrderEvents({
-        order: this.byOrderId[orderId]?.payload || null,
-        facilityChanges: this.facilityChangesByOrderId[orderId] || [],
-        facilityChangesLoaded: Array.isArray(this.facilityChangesByOrderId[orderId]),
-        facilityChangesTruncated: !!this.facilityChangesTruncatedByOrderId[orderId],
-        unfillable: this.unfillableByOrderId[orderId] || null,
-        fulfillment: this.fulfillmentTimelineByOrderId[orderId] || [],
-        returnHeadersById: this.returnHeadersById,
-        exchangeChildren: this.exchangeChildrenByOrderId[orderId] || [],
-        isVirtualFacility: (facilityId: string) => isVirtualFacilityId(facilityId, this.seed.facilities(), this.seed.facilityTypes()),
-      });
-    },
-
     orderHistoryStatus: (state) => (orderId: string): OrderHistoryStatus => ({
       loading: (state.historyStatusByOrderId[orderId]?.loading || 0) > 0,
       failed: !!state.historyStatusByOrderId[orderId]?.failed,
@@ -331,10 +213,6 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         if (seqId) totals[seqId] = (totals[seqId] || 0) + Number(item.returnQuantity || 0);
       });
       return totals;
-    },
-
-    orderTotalsByOrderId(): (orderId: string) => ReturnType<typeof orderTotals> {
-      return (orderId: string) => orderTotals(this.byOrderId[orderId]?.payload, this.seed);
     },
 
     allItemsByOrderId: (state) => (orderId: string) => {
@@ -364,73 +242,8 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         return map;
       };
     },
-
-    /**
-     * Adjustments grouped by orderItemExternalId, summing their amounts. Inclusion is carried
-     * as metadata rather than baked into the label so the view can translate it at render time,
-     * and so an included and an ordinary adjustment sharing a label stay separate rows.
-     */
-    adjustmentsByExternalIdByOrderId(): (orderId: string) => Record<string, Array<{ label: string; amount: number; isIncluded: boolean }>> {
-      return (orderId: string) => {
-        const current = this.orderById(orderId);
-        const index: Record<string, Record<string, { label: string; amount: number; isIncluded: boolean }>> = {};
-        const seqIdToExtId = this.itemExternalIdBySeqIdByOrderId(orderId);
-        const seenAdjustments = new Set<string>();
-
-        const recordAdj = (seqId: string, adj: any) => {
-          const extId = seqIdToExtId[seqId] || seqId;
-          if (!extId) return;
-          const uniqueKey = `${extId}:${adjustmentUniqueKey(adj, this.seed, seqId)}`;
-          if (seenAdjustments.has(uniqueKey)) return;
-          seenAdjustments.add(uniqueKey);
-
-          const { amount, isIncluded } = adjustmentAmount(adj);
-          const label = adjustmentDisplayLabel(adj, this.seed);
-          const bucketKey = isIncluded ? `${label}\u0000included` : label;
-          const buckets = index[extId] ||= {};
-          const bucket = buckets[bucketKey] ||= { label, amount: 0, isIncluded };
-          bucket.amount += amount;
-        };
-
-        // 1. Top-level adjustments carry their orderItemSeqId
-        (current?.adjustments || []).forEach((adj: any) => {
-          const seqId = adj.orderItemSeqId;
-          if (seqId && seqId !== HEADER_SEQ_ID) recordAdj(seqId, adj);
-        });
-
-        // 2. Adjustments nested under each ship group item
-        (current?.shipGroups || []).forEach((sg: any) => {
-          (sg.items || []).forEach((item: any) => {
-            const seqId = item.orderItemSeqId;
-            if (seqId) (item.adjustments || []).forEach((adj: any) => recordAdj(seqId, adj));
-          });
-        });
-
-        return Object.fromEntries(
-          Object.entries(index).map(([extId, buckets]) => [extId, Object.values(buckets)])
-        );
-      };
-    },
-
-    /** Shipping methods for a given carrier partyId, derived from the fetched carrierShipmentMethods list or the local database. */
-    shippingMethodsByCarrier(): (carrierPartyId: string) => any[] {
-      return (carrierPartyId: string) => {
-        const fromDetail = this.shippingMethods.filter((m: any) => m.partyId === carrierPartyId || m.carrierPartyId === carrierPartyId);
-        return fromDetail.length ? fromDetail : this.seed.shipmentMethodsByCarrier(carrierPartyId);
-      };
-    },
   },
   actions: {
-    /** Read the seed snapshot again. A failed read keeps the last one: labels fall back, the order still loads. */
-    async loadSeed() {
-      try {
-        // markRaw: a snapshot of getters, not state to track field by field.
-        this.seedSnapshot = markRaw(await loadSeedData());
-      } catch (error) {
-        logger.error("Failed to read the seed tables for the order page", error);
-      }
-    },
-
     async fetchOrder(orderId: string, force = false) {
       if (!orderId) return;
 
@@ -445,7 +258,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       entry.error = "";
 
       try {
-        const [resp] = await Promise.all([useOrderDetail().getOrder(orderId), this.loadSeed()]);
+        const resp = await useOrderDetail().getOrder(orderId);
         if (commonUtil.hasError(resp)) throw resp.data;
 
         const payload = Array.isArray(resp.data) ? resp.data[0] : resp.data;

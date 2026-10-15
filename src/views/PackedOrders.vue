@@ -131,7 +131,7 @@ import OrderRow from '@/components/orders/OrderRow.vue';
 import OrderSortPopover from '@/components/orders/OrderSortPopover.vue';
 
 const seed = useSeedData();
-import { toWorkflowOrderRowViewModel } from '@/utils/orderRows';
+import { useOrder } from '@/composables/useOrder';
 import { api, translate } from '@common';
 import router from '@/router';
 import { showToast } from '@/utils';
@@ -177,9 +177,8 @@ const resultsSummary = computed(() =>
 const selectedProductStoreId = computed(() => productStore.getCurrentProductStore?.productStoreId || 'All');
 const sortOptions = WORKFLOW_ORDER_SORT_OPTIONS;
 
-function orderRow(order: WorkflowOrder) {
-  return toWorkflowOrderRowViewModel(order, orderStore.workflowEnrichment(bucket, order.orderId));
-}
+const { workflowOrderRow } = useOrder();
+const orderRow = (order: WorkflowOrder) => workflowOrderRow(bucket, order);
 
 type FacilityOption = {
   id: string;

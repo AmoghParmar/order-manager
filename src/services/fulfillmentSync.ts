@@ -1,8 +1,8 @@
 import { api } from '@common';
 
 export interface SortRule {
+  /** The sort field: a PP_SORT_PARAM_TYPE enum's enumCode. */
   id: string;
-  name: string;
   sequenceNum: number;
   conditionSeqId: string;
 }

@@ -1,6 +1,5 @@
 import { DateTime } from 'luxon';
 import { defineStore } from 'pinia';
-import { orderManagerDb } from '@/db/orderManagerDb';
 import {
   createPartyEmail,
   createPartyPostalAddress,
@@ -24,7 +23,7 @@ import {
 } from '@/services/customer';
 import { listReturns } from '@/services/returns';
 import { useProductMaster } from '@/composables/useProductMaster';
-import { commonUtil, translate } from '@common';
+import { translate } from '@common';
 import type {
   ContactSection,
   CustomerCommunicationSummary,
@@ -101,24 +100,6 @@ function isContactActive(fromDate?: string, thruDate?: string): boolean {
   return isActiveThru(thruDate);
 }
 
-// Order/ship-group progress: target = (#statuses x 100); current = sum of each status's
-// StatusItem.statusAge. Robust to whatever statuses exist (order items now, shipment items
-// when the order payload includes them). Capped at 1.
-function computeProgress(statusIds: string[], statusAge: (statusId: string) => number): number {
-  if (!statusIds.length) return 0;
-  const target = statusIds.length * 100;
-  const current = statusIds.reduce((sum, statusId) => sum + statusAge(statusId), 0);
-  return target ? Math.min(current / target, 1) : 0;
-}
-
-// Color the progress bar by the least-progressed (min statusAge) status via the shared
-// status-color map: all complete -> success, in progress -> primary/medium, cancelled -> danger.
-function progressStatusColor(statusIds: string[], statusAge: (statusId: string) => number): string {
-  if (!statusIds.length) return 'medium';
-  const rep = statusIds.reduce((min, statusId) => (statusAge(statusId) < statusAge(min) ? statusId : min), statusIds[0]);
-  return commonUtil.getStatusColor(rep);
-}
-
 function relationshipKey(relationship: CustomerRelationship): string {
   return [
     relationship.partyIdFrom,
@@ -147,17 +128,6 @@ function allRelationships(profile: CustomerProfile | null, loadedRelationships: 
 
 function triggerCustomerIndex(partyId: string): void {
   indexCustomer(partyId).catch((e) => console.error(`[customer index] failed for ${partyId}:`, e));
-}
-
-/** statusId -> statusAge, read straight from IndexedDB. */
-async function readStatusAges(): Promise<Map<string, number>> {
-  try {
-    const statuses = await orderManagerDb.entity(orderManagerDb.tables.statuses).all();
-
-    return new Map(statuses.map((row: any) => [row.statusId, Number(row.statusAge ?? 0)]));
-  } catch {
-    return new Map();
-  }
 }
 
 export const useCustomerStore = defineStore('customerDetail', {
@@ -379,18 +349,12 @@ export const useCustomerStore = defineStore('customerDetail', {
         const result = await getCustomerOrdersFromSolr(partyId, { pageSize: 100 });
 
         // Real progress for the rendered cards: hydrate each via the official get-order API
-        // (not Solr) and compute from order-item (+ shipment-item) status ages.
-        // statusAge is stamped into each card's progress value, so read the rows up front.
-        const ageByStatusId = await readStatusAges();
+        // (not Solr). The page words progress from these statuses' ages (useCustomerDetail).
         const displayCount = 12;
         await Promise.all(result.orders.slice(0, displayCount).map(async (order) => {
           try {
             const statusIds = await getOrderProgressStatuses(order.orderId);
-            if (statusIds.length) {
-              order.progressValue = computeProgress(statusIds, (statusId) => ageByStatusId.get(statusId) ?? 0);
-              order.progressPercent = Math.round(order.progressValue * 100);
-              order.progressColor = progressStatusColor(statusIds, (statusId) => ageByStatusId.get(statusId) ?? 0);
-            }
+            if (statusIds.length) order.progressStatusIds = statusIds;
           } catch {
             // keep the Solr status fallback on a per-order failure
           }

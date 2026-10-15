@@ -2,10 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { api } from '@common';
 import { useOrderDetailStore } from '@/store/orderDetail';
+import { useOrder } from '@/composables/useOrder';
 
 const orderDetailApi = vi.hoisted(() => ({
   getOrder: vi.fn()
 }));
+
+// useOrder joins over the seed tables; these specs read them empty, so labels answer raw ids.
+vi.mock('@common/db', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  return { ...actual, useSeedData: () => actual.emptySeedData };
+});
+vi.mock('@/store/order', () => ({ useOrderStore: () => ({}) }));
 
 vi.mock('@common', () => ({
   api: vi.fn(),
@@ -77,7 +85,7 @@ describe('order detail store', () => {
       error: ''
     };
 
-    expect(store.orderTotalsByOrderId('M100821')).toEqual({
+    expect(useOrder().orderTotals('M100821')).toEqual({
       subtotal: 59,
       adjustments: {
         'Salt Lake County Tax': 1.53,
@@ -87,7 +95,7 @@ describe('order detail store', () => {
       total: 63.98,
       includedAdjustments: {}
     });
-    expect(store.adjustmentsByExternalIdByOrderId('M100821')['15617773142165']).toEqual([
+    expect(useOrder().adjustmentsByExternalId('M100821')['15617773142165']).toEqual([
       { label: 'Salt Lake County Tax', amount: 1.53, isIncluded: false },
       { label: 'Salt Lake City City Tax', amount: 0.59, isIncluded: false },
       { label: 'Utah State Tax', amount: 2.86, isIncluded: false }
@@ -116,7 +124,7 @@ describe('order detail store', () => {
       error: ''
     };
 
-    expect(store.orderTotalsByOrderId('M100822')).toEqual({
+    expect(useOrder().orderTotals('M100822')).toEqual({
       subtotal: 69,
       adjustments: {
         'Utah State Tax': 3,
@@ -166,7 +174,7 @@ describe('order detail store', () => {
       error: ''
     };
 
-    expect(store.orderTotalsByOrderId('M100823')).toEqual({
+    expect(useOrder().orderTotals('M100823')).toEqual({
       subtotal: 59,
       adjustments: {},
       total: 59,
@@ -174,7 +182,7 @@ describe('order detail store', () => {
         'State Tax': 4.5
       }
     });
-    expect(store.adjustmentsByExternalIdByOrderId('M100823')['15617773142165']).toEqual([
+    expect(useOrder().adjustmentsByExternalId('M100823')['15617773142165']).toEqual([
       { label: 'State Tax', amount: 4.5, isIncluded: true }
     ]);
   });
@@ -224,17 +232,17 @@ describe('order detail store', () => {
 
     // The ordinary $3 must stay out of the included bucket: it genuinely adds to the
     // grand total, so labelling it "included" would misstate what the customer paid.
-    expect(store.orderTotalsByOrderId('M100824')).toEqual({
+    expect(useOrder().orderTotals('M100824')).toEqual({
       subtotal: 118,
       adjustments: { 'State Tax': 3 },
       total: 121,
       includedAdjustments: { 'State Tax': 4.5 }
     });
 
-    expect(store.adjustmentsByExternalIdByOrderId('M100824').EXT_INCLUDED).toEqual([
+    expect(useOrder().adjustmentsByExternalId('M100824').EXT_INCLUDED).toEqual([
       { label: 'State Tax', amount: 4.5, isIncluded: true }
     ]);
-    expect(store.adjustmentsByExternalIdByOrderId('M100824').EXT_ORDINARY).toEqual([
+    expect(useOrder().adjustmentsByExternalId('M100824').EXT_ORDINARY).toEqual([
       { label: 'State Tax', amount: 3, isIncluded: false }
     ]);
   });
@@ -353,15 +361,15 @@ describe('order detail store', () => {
     };
     store.fulfillmentTimelineByOrderId.M100821 = [{ shipGroupSeqId: '00001', picklistDate: 1_700_000_100_000 }];
 
-    const enriched = store.enrichedOrderByOrderId('M100821')!;
+    const enriched = useOrder().enrichedOrder('M100821')!;
     // Totals come from orderTotalsByOrderId, so the page and the store agree on the numbers.
     expect(enriched.totals).toEqual(expect.objectContaining({ subtotal: 59, total: 61.86 }));
     expect(enriched.totals.adjustmentRows).toEqual([{ label: 'Utah State Tax', detail: '', amount: 2.86, isIncluded: false }]);
     // Item status rows on the order document reach the timeline as order events.
-    expect(store.orderEventsByOrderId('M100821').filter((event) => event.kind === 'itemStatus').map((event: any) => event.statusId)).toEqual(['ITEM_CANCELLED']);
+    expect(useOrder().orderEvents('M100821').filter((event) => event.kind === 'itemStatus').map((event: any) => event.statusId)).toEqual(['ITEM_CANCELLED']);
     // The ship group reads its lifecycle from the same events.
     expect(enriched.shipGroups[0].lifecycle.picklistDate).toBe(1_700_000_100_000);
-    expect(store.enrichedOrderByOrderId('unknown')).toBeNull();
+    expect(useOrder().enrichedOrder('unknown')).toBeNull();
   });
 });
 

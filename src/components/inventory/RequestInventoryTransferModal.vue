@@ -164,6 +164,7 @@ import {
 } from "@ionic/vue";
 import { arrowBackOutline, closeOutline, saveOutline } from "ionicons/icons";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { useOrder } from "@/composables/useOrder";
 import { fetchDistancesFromFacility } from "@/composables/useOrderDistances";
 import { useProductIdentity } from "@/composables/useProductIdentity";
 import {
@@ -193,9 +194,10 @@ const groupOf = (facility: any) => FACILITY_GROUPS.find((group) => group.include
 
 const orderDetailStore = useOrderDetailStore();
 const seed = useSeedData();
+const { enrichedOrder } = useOrder();
 const { getProduct, primaryIdentifier, secondaryIdentifier, featureLabel } = useProductIdentity();
 
-const item = computed(() => orderDetailStore.enrichedOrderByOrderId(props.orderId)?.shipGroups
+const item = computed(() => enrichedOrder(props.orderId)?.shipGroups
   .flatMap((shipGroup) => shipGroup.items)
   .find((entry) => entry.orderItemSeqId === props.orderItemSeqId));
 const product = computed(() => item.value && getProduct(item.value.productId));
