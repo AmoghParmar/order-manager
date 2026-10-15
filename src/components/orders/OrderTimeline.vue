@@ -72,7 +72,7 @@ import { timeOutline, warningOutline } from 'ionicons/icons';
 import { translate } from '@common';
 import { serviceState, useSeedData } from '@common/db';
 import OrderTimelineEntry from '@/components/orders/OrderTimelineEntry.vue';
-import { FACILITY_CHANGE_PAGE_SIZE } from '@/composables/useOrderDetail';
+import { FACILITY_CHANGE_PAGE_SIZE } from '@/utils/orderDetailQueries';
 import { useProductIdentity } from '@/composables/useProductIdentity';
 import { isVirtualFacilityId, useOrderDetailStore, type OrderHistoryStatus } from '@/store/orderDetail';
 import type { EnrichedOrder } from '@/types/orderDetail';

@@ -1,22 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import {
-  getCustomerOrdersFromSolr,
-  getCustomerProfile,
-  getCustomerRelationships,
-  getCustomerTasks
-} from '@/services/customer';
 import { useCustomerStore } from '@/store/customer';
 import type { CustomerProfile } from '@/types/customer';
 
-vi.mock('@/services/customer', () => ({
-  getCustomerProfile: vi.fn(),
-  getCustomerOrdersFromSolr: vi.fn(),
-  getCustomerTasks: vi.fn(),
-  getCustomerRelationships: vi.fn(),
-  createPartyRelationship: vi.fn(),
-  expirePartyRelationship: vi.fn()
-}));
+// The store's own fetch actions, replaced on the store instance so the loaders call these.
+const getCustomerProfile = vi.fn();
+const getCustomerOrdersFromSolr = vi.fn();
+const getCustomerTasks = vi.fn();
+const getCustomerRelationships = vi.fn();
+const createPartyRelationship = vi.fn();
+const expirePartyRelationship = vi.fn();
 
 vi.mock('@/db/orderManagerDb', async (importOriginal) => ({
   ...(await importOriginal<any>()),
@@ -29,6 +22,13 @@ vi.mock('@/db/orderManagerDb', async (importOriginal) => ({
 describe('customer detail store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    Object.assign(useCustomerStore(), {
+      getCustomerProfile, getCustomerOrdersFromSolr, getCustomerTasks, getCustomerRelationships,
+      createPartyRelationship, expirePartyRelationship,
+      // Not under test: duplicate lookup and the background index stay off the network.
+      findShopifyDuplicateParties: vi.fn(async () => []),
+      indexCustomer: vi.fn(async () => undefined)
+    });
     vi.mocked(getCustomerProfile).mockReset();
     vi.mocked(getCustomerOrdersFromSolr).mockReset();
     vi.mocked(getCustomerTasks).mockReset();

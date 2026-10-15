@@ -6,7 +6,7 @@ import { showToast } from "@/utils";
 import { useOrderDetailStore } from "./orderDetail";
 import { useProductCacheStore } from "./productCache";
 import { useProductStore } from "@/store/productStore";
-import { startAppDbSync, stopAppDbSync } from "@/services/appDbSync";
+import { startAppDbSync, stopAppDbSync } from "@/db/appDbSync";
 
 export const useUserStore = defineStore("user", {
   state: () => ({
@@ -183,6 +183,22 @@ export const useUserStore = defineStore("user", {
         return Promise.reject(error);
       }
     },
+    /** Whether the OMS answers at all: any HTTP response counts, only a network failure does not. */
+    async isOmsReachable(): Promise<boolean> {
+      try {
+        await api({
+          url: commonUtil.isMoqui() ? "admin/user/permissions" : "getPermissions",
+          method: "GET",
+          baseURL: commonUtil.getOmsURL(),
+          params: { viewIndex: 0, viewSize: 1 },
+          timeout: 3000,
+        });
+        return true;
+      } catch (error: any) {
+        return Boolean(error?.response);
+      }
+    },
+
     async postLogout() {
       await stopAppDbSync();
       useOrderDetailStore().reset();

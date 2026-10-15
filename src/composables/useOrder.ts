@@ -1,7 +1,7 @@
 import { commonUtil, translate } from '@common';
 import { useSeedData } from '@common/db';
-import type { SortRule } from '@/services/fulfillmentSync';
-import { summarizeBrokeredFacilities } from '@/services/order';
+import type { SortRule } from '@/types/customerService';
+import { summarizeBrokeredFacilities } from '@/utils/orderSearch';
 import { useCustomerStore } from '@/store/customer';
 import { useOrderStore } from '@/store/order';
 import { isVirtualFacilityId, useOrderDetailStore } from '@/store/orderDetail';

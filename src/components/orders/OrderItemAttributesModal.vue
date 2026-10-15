@@ -90,9 +90,10 @@
 import { IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonListHeader, IonSpinner, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { addOutline, closeOutline, trashOutline } from 'ionicons/icons';
 import { reactive, ref } from 'vue';
-import { api, translate } from '@common';
+import { translate } from '@common';
 import EmptyState from '@/components/common/EmptyState.vue';
 import AttributeListItem from '@/components/orders/AttributeListItem.vue';
+import { useOrderDetailStore } from '@/store/orderDetail';
 import { confirmAction, showToast } from '@/utils';
 
 type Attribute = { attrName: string; attrValue?: string; attrDescription?: string };
@@ -103,6 +104,7 @@ const props = defineProps<{
   attributes: Attribute[];
 }>();
 
+const orderDetailStore = useOrderDetailStore();
 const localAttributes = ref<Attribute[]>([...props.attributes]);
 const saving = ref(false);
 const deletingAttr = ref('');
@@ -113,14 +115,10 @@ async function addAttribute() {
   if (!form.attrName.trim()) return;
   saving.value = true;
   try {
-    await api({
-      url: `oms/orders/${props.orderId}/items/${props.orderItemSeqId}/attributes`,
-      method: 'POST',
-      data: {
-        attrName: form.attrName.trim(),
-        attrValue: form.attrValue.trim() || undefined,
-        attrDescription: form.attrDescription.trim() || undefined
-      }
+    await orderDetailStore.addOrderItemAttribute(props.orderId, props.orderItemSeqId, {
+      attrName: form.attrName.trim(),
+      attrValue: form.attrValue.trim() || undefined,
+      attrDescription: form.attrDescription.trim() || undefined
     });
     localAttributes.value.push({
       attrName: form.attrName.trim(),
@@ -142,10 +140,7 @@ async function deleteAttribute(attr: Attribute) {
   if (!await confirmAction(translate('Delete attribute'), translate('{name} will be deleted from this item.', { name: attr.attrName }), translate('Delete'))) return;
   deletingAttr.value = attr.attrName;
   try {
-    await api({
-      url: `oms/orders/${props.orderId}/items/${props.orderItemSeqId}/attributes/${encodeURIComponent(attr.attrName)}`,
-      method: 'DELETE'
-    });
+    await orderDetailStore.deleteOrderItemAttribute(props.orderId, props.orderItemSeqId, attr.attrName);
     localAttributes.value = localAttributes.value.filter(a => a.attrName !== attr.attrName);
     await showToast(translate('Attribute deleted.'));
   } catch {

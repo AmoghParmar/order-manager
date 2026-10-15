@@ -1,4 +1,3 @@
-import { api } from "@common";
 import type {
   ReturnDetail,
   ReturnIdentification,
@@ -25,7 +24,7 @@ function optionalNumber(value: unknown): number | undefined {
   return Number.isFinite(numericValue) ? numericValue : undefined;
 }
 
-function assertSuccessfulPayload(data: any): void {
+export function assertSuccessfulPayload(data: any): void {
   const messages = data?._ERROR_MESSAGE_LIST_ || data?.errorMessages;
   const message = data?._ERROR_MESSAGE_ || data?.errorMessage || (Array.isArray(messages) ? messages.join("; ") : "");
   if(message) {throw new Error(message);}
@@ -144,8 +143,12 @@ export function toReturnSummary(detail: ReturnDetail): ReturnSummary {
   return mapReturnSummary(detail);
 }
 
-export async function listReturns(query: ReturnListQuery = {}): Promise<ReturnListResult> {
-  const params = Object.fromEntries(Object.entries({
+export const RETURN_DETAIL_UNAVAILABLE =
+  "This OMS does not serve return detail. Returns can be browsed and filtered, but an individual return cannot be opened unless the Shopify connector serving GET sob/returns/{returnId} is deployed.";
+
+/** The `oms/returns` query params, without the empty filters. */
+export function returnListParams(query: ReturnListQuery = {}): Record<string, unknown> {
+  return Object.fromEntries(Object.entries({
     pageIndex: query.pageIndex ?? 0,
     pageSize: query.pageSize ?? 25,
     orderId: query.orderId,
@@ -154,35 +157,14 @@ export async function listReturns(query: ReturnListQuery = {}): Promise<ReturnLi
     fromPartyId: query.fromPartyId,
     returnChannelEnumId: query.returnChannelEnumId
   }).filter(([, value]) => value !== undefined && value !== ""));
-  const response = await api({ url: "oms/returns", method: "get", params });
-  assertSuccessfulPayload(response.data);
-  const rows = Array.isArray(response.data)
-    ? response.data
-    : response.data?.returns ?? response.data?.returnList ?? response.data?.docs ?? [];
-  const items = rows.map(mapReturnSummary).filter((item: ReturnSummary) => item.returnId);
-  const total = Number(response.data?.returnsCount ?? response.data?.totalCount ?? items.length);
-
-  return { items, total: Number.isFinite(total) ? total : items.length };
 }
 
-export const RETURN_DETAIL_UNAVAILABLE =
-  "This OMS does not serve return detail. Returns can be browsed and filtered, but an individual return cannot be opened unless the Shopify connector serving GET sob/returns/{returnId} is deployed.";
+export function normalizeReturnList(data: any): ReturnListResult {
+  const rows = Array.isArray(data)
+    ? data
+    : data?.returns ?? data?.returnList ?? data?.docs ?? [];
+  const items = rows.map(mapReturnSummary).filter((item: ReturnSummary) => item.returnId);
+  const total = Number(data?.returnsCount ?? data?.totalCount ?? items.length);
 
-export async function getReturn(returnId: string): Promise<ReturnDetail> {
-  const normalizedReturnId = returnId.trim();
-  if(!normalizedReturnId) {throw new Error("Return ID is required");}
-  let response;
-  try {
-    response = await api({ url: `sob/returns/${encodeURIComponent(normalizedReturnId)}`, method: "get" });
-  } catch (error: any) {
-    const status = error?.response?.status;
-    if(status === 404 || status === 405) {throw new Error(RETURN_DETAIL_UNAVAILABLE, { cause: error });}
-
-    throw error;
-  }
-  assertSuccessfulPayload(response.data);
-  const detail = mapReturnDetail(response.data);
-  if(!detail.returnId) {throw new Error(`Return ${normalizedReturnId} was not found`);}
-
-  return detail;
+  return { items, total: Number.isFinite(total) ? total : items.length };
 }

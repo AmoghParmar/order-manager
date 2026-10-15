@@ -1,20 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import { api } from '@common';
-import {
-  fetchFacilitySalesVelocity,
-  fetchFacilityStock,
-  fetchOrderInventoryTransfers,
-  inventoryTransferOpenQuantity,
-  isInventoryTransferEligibleItem,
-  requestInventoryTransfers,
-} from '@/services/inventoryTransfers';
+import { useStockStore } from '@/store/stock';
+import { inventoryTransferOpenQuantity, isInventoryTransferEligibleItem } from '@/utils/inventoryTransfers';
 
 const mocks = vi.hoisted(() => ({ runSolrQuery: vi.fn() }));
 
-vi.mock('@common', () => ({ api: vi.fn(), useSolrSearch: () => ({ runSolrQuery: mocks.runSolrQuery }) }));
+vi.mock('@common', () => ({
+  api: vi.fn(),
+  commonUtil: {},
+  logger: { error: vi.fn() },
+  translate: (text: string) => text,
+  useSolrSearch: () => ({ runSolrQuery: mocks.runSolrQuery })
+}));
 
-describe('inventory transfers service', () => {
+const fetchFacilitySalesVelocity = (productId: string, days?: number) => useStockStore().fetchFacilitySalesVelocity(productId, days);
+const fetchFacilityStock = (productId: string, facilityIds: string[]) => useStockStore().fetchFacilityStock(productId, facilityIds);
+const fetchOrderInventoryTransfers = (orderId: string) => useStockStore().fetchOrderInventoryTransfers(orderId);
+const requestInventoryTransfers = (payload: any) => useStockStore().requestInventoryTransfers(payload);
+
+describe('inventory transfers', () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     vi.mocked(api).mockReset();
     mocks.runSolrQuery.mockReset();
   });

@@ -1,5 +1,3 @@
-import { api, commonUtil, useSolrSearch } from '@common';
-import { orderManagerDb } from '@/db/orderManagerDb';
 import type { Order } from '@/types/order';
 import type {
   AllocationItemDocument,
@@ -13,7 +11,7 @@ import {
   toStringValue,
   toNumberValue,
   type OrderSearchResult
-} from './OrderService';
+} from '@/utils/orderDocs';
 import { DateTime } from 'luxon';
 
 // Facility id used by OMS to hold archived order items (General Operations Parking).
@@ -82,24 +80,6 @@ export interface WorkflowOrderTotals {
   packed: number;
 }
 
-export async function fetchWorkflowOrderTotals(productStoreId?: string): Promise<WorkflowOrderTotals> {
-  const buckets: WorkflowOrderBucket[] = ['open', 'inflight', 'packed'];
-  const totals = await Promise.all(buckets.map(async (bucket) => {
-    const resp = await api({
-      url: `oms/orders/salesOrders/${bucket}`,
-      method: 'get',
-      params: {
-        pageSize: 1,
-        pageIndex: 0,
-        ...(productStoreId ? { productStoreId } : {})
-      }
-    });
-
-    return [bucket, Number(resp.data?.ordersCount ?? 0)] as const;
-  }));
-
-  return Object.fromEntries(totals) as unknown as WorkflowOrderTotals;
-}
 export interface UnfillableProductCandidate {
   productId: string;
   itemCount: number;
@@ -266,23 +246,6 @@ export function buildOrderLookupPayload(params: OrderSearchParams = {}) {
   return payload;
 }
 
-export async function searchOrders(params: OrderSearchParams = {}): Promise<OrderSearchResult> {
-  const response = await useSolrSearch().runSolrQuery(buildOrderLookupPayload(params));
-
-  if (commonUtil.hasError(response)) return Promise.reject(response.data);
-
-  // facilityParentTypeId is stamped onto the normalized rows, so it cannot self-correct.
-  const facilityTypeRows = await readFacilityTypes();
-  const result = normalizeOrderSolrResponse(response.data, params.allocationSummary, facilityTypeRows);
-  if (params.allocationSummary?.mode !== 'queue-first' || !result.orders.length) return result;
-
-  const enrichment = await fetchOrderRowEnrichment(result.orders.map((order) => order.id));
-  return {
-    ...result,
-    orders: result.orders.map((order) => mergeSearchOrderEnrichment(order, enrichment[order.id], params.allocationSummary!))
-  };
-}
-
 const orderRowEnrichmentFields = [
   'orderId',
   'externalOrderId',
@@ -326,14 +289,6 @@ export function buildOrderRowEnrichmentPayload(orderIds: readonly string[]) {
       ]
     }
   };
-}
-
-export async function fetchOrderRowEnrichment(orderIds: readonly string[]): Promise<Record<string, OrderRowEnrichment>> {
-  const uniqueOrderIds = [...new Set(orderIds.filter(Boolean))];
-  if (!uniqueOrderIds.length) return {};
-  const response = await useSolrSearch().runSolrQuery(buildOrderRowEnrichmentPayload(uniqueOrderIds));
-  if (commonUtil.hasError(response)) return Promise.reject(response.data);
-  return normalizeOrderRowEnrichment(response.data, await readFacilityTypes());
 }
 
 export function buildActivePhysicalFacilityOrderVolumePayload(params: { productStoreId?: string } = {}) {
@@ -423,24 +378,6 @@ export function buildVirtualLocationCountsPayload(params: VirtualLocationCountPa
   };
 }
 
-export async function getActivePhysicalFacilityOrderVolume(params: { productStoreId?: string } = {}): Promise<ActiveFacilityOrderVolume[]> {
-  const response = await useSolrSearch().runSolrQuery(buildActivePhysicalFacilityOrderVolumePayload(params));
-
-  if (commonUtil.hasError(response)) return Promise.reject(response.data);
-
-  return normalizeActivePhysicalFacilityOrderVolume(response.data);
-}
-
-export async function fetchVirtualLocationOrderCounts(params: VirtualLocationCountParams): Promise<VirtualLocationOrderCount[]> {
-  if (!params.facilityIds.length) return [];
-
-  const response = await useSolrSearch().runSolrQuery(buildVirtualLocationCountsPayload(params));
-
-  if (commonUtil.hasError(response)) return Promise.reject(response.data);
-
-  return normalizeVirtualLocationCountResponse(response.data);
-}
-
 function unfillableItemFilters(productStoreId?: string, productId?: string) {
   const filters = [
     'docType:ORDER',
@@ -470,19 +407,6 @@ export function buildUnfillableProductCandidatesPayload(productStoreId?: string,
       }
     }
   };
-}
-
-export async function fetchUnfillableProductCandidates(productStoreId?: string, limit = 50): Promise<UnfillableProductCandidate[]> {
-  const response = await useSolrSearch().runSolrQuery(buildUnfillableProductCandidatesPayload(productStoreId, limit));
-  if (commonUtil.hasError(response)) return Promise.reject(response.data);
-  const buckets = response.data?.facets?.products?.buckets
-    || response.data?.response?.facets?.products?.buckets
-    || [];
-  return buckets
-    .map((bucket: any) => ({
-      productId: toStringValue(bucket.val),
-      itemCount: toNumberValue(bucket.count)
-    }))
 }
 
 // Order statuses that make up the live unfillable queue. Kept identical to the
@@ -601,45 +525,43 @@ export function buildUnfillableOrderDateTrendPayload(
   };
 }
 
-function solrFacets(data: any) {
+export function solrFacets(data: any) {
   return data?.facets || data?.response?.facets || {};
 }
 
 export const EMPTY_UNFILLABLE_TREND: UnfillableTrend = { points: [], days: [], totalOrders: 0 };
 
-export async function fetchUnfillableTrend(
-  productStoreId?: string,
-  timeZone?: string,
-  maxBuckets = UNFILLABLE_TREND_MAX_BUCKETS
-): Promise<UnfillableTrend> {
-  const solr = useSolrSearch();
-  const zone = timeZone || undefined;
-  const inZone = (iso: string) => (zone ? DateTime.fromISO(iso, { zone }) : DateTime.fromISO(iso));
-  const dayOf = (value: any) => {
-    const parsed = inZone(toStringValue(value));
-    return parsed.isValid ? parsed.toFormat('yyyy-MM-dd') : toStringValue(value);
-  };
+export interface UnfillableTrendWindow {
+  start: DateTime;
+  end: DateTime;
+  gapDays: number;
+}
 
-  const spanResponse = await solr.runSolrQuery(buildUnfillableTrendSpanPayload(productStoreId));
-  if (commonUtil.hasError(spanResponse)) return Promise.reject(spanResponse.data);
+function inZone(iso: string, timeZone?: string) {
+  return timeZone ? DateTime.fromISO(iso, { zone: timeZone }) : DateTime.fromISO(iso);
+}
 
-  const span = solrFacets(spanResponse.data);
-  const oldest = inZone(toStringValue(span.oldestOrderDate));
-  const newest = inZone(toStringValue(span.newestOrderDate));
+/** The bucketed window from the span query's facets, or null when the queue is empty. */
+export function unfillableTrendWindow(spanData: any, timeZone?: string, maxBuckets = UNFILLABLE_TREND_MAX_BUCKETS): UnfillableTrendWindow | null {
+  const span = solrFacets(spanData);
+  const oldest = inZone(toStringValue(span.oldestOrderDate), timeZone);
+  const newest = inZone(toStringValue(span.newestOrderDate), timeZone);
   // An empty queue has no min/max at all — nothing to plot.
-  if (!oldest.isValid || !newest.isValid) return EMPTY_UNFILLABLE_TREND;
+  if (!oldest.isValid || !newest.isValid) return null;
 
   const start = oldest.startOf('day');
   const totalDays = Math.max(1, Math.floor(newest.startOf('day').diff(start, 'days').days) + 1);
   const gapDays = Math.max(1, Math.ceil(totalDays / maxBuckets));
   const end = start.plus({ days: Math.ceil(totalDays / gapDays) * gapDays });
+  return { start, end, gapDays };
+}
 
-  const response = await solr.runSolrQuery(
-    buildUnfillableOrderDateTrendPayload(productStoreId, start, end, gapDays)
-  );
-  if (commonUtil.hasError(response)) return Promise.reject(response.data);
-
-  const facets = solrFacets(response.data);
+export function normalizeUnfillableTrend(data: any, gapDays: number, timeZone?: string): UnfillableTrend {
+  const dayOf = (value: any) => {
+    const parsed = inZone(toStringValue(value), timeZone);
+    return parsed.isValid ? parsed.toFormat('yyyy-MM-dd') : toStringValue(value);
+  };
+  const facets = solrFacets(data);
 
   return {
     points: (facets.byOrderDate?.buckets || []).map((bucket: any) => ({
@@ -654,6 +576,27 @@ export async function fetchUnfillableTrend(
     })),
     totalOrders: toNumberValue(facets.totalOrders)
   };
+}
+
+export function normalizeUnfillableProductCandidates(data: any): UnfillableProductCandidate[] {
+  const buckets = data?.facets?.products?.buckets
+    || data?.response?.facets?.products?.buckets
+    || [];
+  return buckets.map((bucket: any) => ({
+    productId: toStringValue(bucket.val),
+    itemCount: toNumberValue(bucket.count)
+  }));
+}
+
+export function normalizeUnfillableShipGroups(data: any): UnfillableShipGroup[] {
+  const docs = data?.response?.docs || [];
+  const unique = new Map<string, UnfillableShipGroup>();
+  docs.forEach((doc: any) => {
+    const orderId = toStringValue(doc.orderId);
+    const shipGroupSeqId = toStringValue(doc.shipGroupSeqId);
+    if (orderId && shipGroupSeqId) unique.set(`${orderId}|${shipGroupSeqId}`, { orderId, shipGroupSeqId });
+  });
+  return [...unique.values()];
 }
 
 export function buildUnfillableShipGroupsForProductPayload(productStoreId: string, productId: string) {
@@ -671,20 +614,7 @@ export function buildUnfillableShipGroupsForProductPayload(productStoreId: strin
   };
 }
 
-export async function fetchUnfillableShipGroupsForProduct(productStoreId: string, productId: string): Promise<UnfillableShipGroup[]> {
-  const response = await useSolrSearch().runSolrQuery(buildUnfillableShipGroupsForProductPayload(productStoreId, productId));
-  if (commonUtil.hasError(response)) return Promise.reject(response.data);
-  const docs = response.data?.response?.docs || [];
-  const unique = new Map<string, UnfillableShipGroup>();
-  docs.forEach((doc: any) => {
-    const orderId = toStringValue(doc.orderId);
-    const shipGroupSeqId = toStringValue(doc.shipGroupSeqId);
-    if (orderId && shipGroupSeqId) unique.set(`${orderId}|${shipGroupSeqId}`, { orderId, shipGroupSeqId });
-  });
-  return [...unique.values()];
-}
-
-function normalizeVirtualLocationCountResponse(data: any): VirtualLocationOrderCount[] {
+export function normalizeVirtualLocationCountResponse(data: any): VirtualLocationOrderCount[] {
   const buckets = data?.facets?.facilityCounts?.buckets
     || data?.response?.facets?.facilityCounts?.buckets
     || [];
@@ -697,7 +627,7 @@ function normalizeVirtualLocationCountResponse(data: any): VirtualLocationOrderC
     .filter((row: VirtualLocationOrderCount) => row.facilityId);
 }
 
-function normalizeOrderSolrResponse(data: any, allocationSummary: AllocationSummaryOptions | undefined, facilityTypeRows: any[]): OrderSearchResult {
+export function normalizeOrderSolrResponse(data: any, allocationSummary: AllocationSummaryOptions | undefined, facilityTypeRows: any[]): OrderSearchResult {
   const groupedOrders = data?.grouped?.orderId;
 
   if (groupedOrders) {
@@ -740,7 +670,7 @@ function sumParkingUnits(docs: any[]) {
   return docs.reduce((total, doc) => total + toNumberValue(doc.quantity), 0);
 }
 
-function normalizeActivePhysicalFacilityOrderVolume(data: any): ActiveFacilityOrderVolume[] {
+export function normalizeActivePhysicalFacilityOrderVolume(data: any): ActiveFacilityOrderVolume[] {
   const buckets = data?.facets?.physicalFacilities?.buckets
     || data?.response?.facets?.physicalFacilities?.buckets
     || [];
@@ -784,15 +714,6 @@ export function summarizeBrokeredFacilities(docs: any[], facilityTypeRows: any[]
   };
 }
 
-/** Facility type rows, read straight from IndexedDB; unavailable means no parent types. */
-async function readFacilityTypes(): Promise<any[]> {
-  try {
-    return await orderManagerDb.entity(orderManagerDb.tables.facilityTypes).all();
-  } catch {
-    return [];
-  }
-}
-
 /** Parent type of a facility TYPE, from rows the caller already read. */
 function parentTypeOf(facilityTypeRows: any[], facilityTypeId: string): string {
   return facilityTypeRows.find((row: any) => row.facilityTypeId === facilityTypeId)?.parentTypeId ?? '';
@@ -825,7 +746,7 @@ function allocationDocuments(docs: readonly any[], facilityTypeRows: any[]): All
   });
 }
 
-function normalizeOrderRowEnrichment(data: any, facilityTypeRows: any[]): Record<string, OrderRowEnrichment> {
+export function normalizeOrderRowEnrichment(data: any, facilityTypeRows: any[]): Record<string, OrderRowEnrichment> {
   const groups = data?.grouped?.orderId?.groups || [];
   return groups.reduce((byOrderId: Record<string, OrderRowEnrichment>, group: any) => {
     const docs = allDocs(group?.doclist);
@@ -854,7 +775,7 @@ function normalizeOrderRowEnrichment(data: any, facilityTypeRows: any[]): Record
   }, {});
 }
 
-function mergeSearchOrderEnrichment(
+export function mergeSearchOrderEnrichment(
   order: Order,
   enrichment: OrderRowEnrichment | undefined,
   allocationSummary: AllocationSummaryOptions

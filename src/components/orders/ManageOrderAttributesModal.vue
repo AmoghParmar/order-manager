@@ -112,9 +112,10 @@ import {
 } from '@ionic/vue';
 import { checkmarkDoneOutline, closeOutline, createOutline, saveOutline, trashOutline } from 'ionicons/icons';
 import { computed, onMounted, reactive, ref } from 'vue';
-import { api, commonUtil, translate } from '@common';
+import { commonUtil, translate } from '@common';
 import EmptyState from '@/components/common/EmptyState.vue';
 import AttributeListItem from '@/components/orders/AttributeListItem.vue';
+import { useOrderDetailStore } from '@/store/orderDetail';
 import { showToast } from '@/utils';
 
 type Attribute = { attrName: string; attrValue?: string; attrDescription?: string };
@@ -123,6 +124,8 @@ const props = defineProps<{
   orderId: string;
   attributes: Attribute[];
 }>();
+
+const orderDetailStore = useOrderDetailStore();
 
 // What the order holds on the server, and the list as the operator has changed it. Adding,
 // editing and deleting only change the draft; Save writes the difference.
@@ -223,7 +226,7 @@ async function save() {
   try {
     // Deletes go first, so a name removed and added back in another case isn't taken for the old one.
     for (const attr of removed) {
-      const resp = await api({ url: `oms/orders/${props.orderId}/attributes/${encodeURIComponent(attr.attrName)}`, method: 'DELETE' });
+      const resp = await orderDetailStore.deleteOrderAttribute(props.orderId, attr.attrName);
       if (commonUtil.hasError(resp)) throw resp.data;
       saved.value = saved.value.filter((entry) => entry.attrName !== attr.attrName);
       savedSome.value = true;
@@ -231,7 +234,7 @@ async function save() {
     // POST stores the attribute, creating a new name or overwriting an existing one, so each write
     // carries the description along with the value.
     for (const attr of stored) {
-      const resp = await api({ url: `oms/orders/${props.orderId}/attributes`, method: 'POST', data: { ...attr } });
+      const resp = await orderDetailStore.storeOrderAttribute(props.orderId, attr);
       if (commonUtil.hasError(resp)) throw resp.data;
       saved.value = [...saved.value.filter((entry) => entry.attrName !== attr.attrName), { ...attr }];
       savedSome.value = true;

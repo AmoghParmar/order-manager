@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 import { api } from '@common';
-import {
-  getCustomer,
-  getCustomerOrders,
-  getCustomerTasks,
-  searchCustomers
-} from '@/services/customer';
+import { useCustomerStore } from '@/store/customer';
 
 const { runSolrQuery } = vi.hoisted(() => ({
   runSolrQuery: vi.fn(),
@@ -35,154 +31,15 @@ vi.mock('@common', async (importOriginal) => {
 
 import { useAuth } from '@common/composables/useAuth';
 
-describe('customer service', () => {
+const getCustomerTasks = (...args: Parameters<ReturnType<typeof useCustomerStore>['getCustomerTasks']>) => useCustomerStore().getCustomerTasks(...args);
+const searchCustomers = (...args: Parameters<ReturnType<typeof useCustomerStore>['searchCustomers']>) => useCustomerStore().searchCustomers(...args);
+
+describe('customer api', () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     vi.mocked(api).mockReset();
     runSolrQuery.mockReset();
     useAuth().updateToken("test-token");
-  });
-
-  it('fetches a customer profile from the party endpoint', async () => {
-    vi.mocked(api).mockResolvedValue({
-      data: {
-        partyId: 'CUST_1',
-        partyTypeId: 'PERSON',
-        statusId: 'PARTY_ENABLED',
-        personalTitle: 'Ms.',
-        firstName: 'Swati',
-        lastName: 'Pandey',
-        createdStamp: '2026-05-20T10:00:00',
-        lastUpdatedStamp: '2026-05-22T10:00:00',
-      },
-    });
-
-    const customer = await getCustomer('CUST_1');
-
-    expect(api).toHaveBeenCalledWith({
-      url: 'oms/parties/CUST_1',
-      method: 'get',
-    });
-    expect(customer).toMatchObject({
-      id: 'CUST_1',
-      name: 'Swati Pandey',
-      personalTitle: 'Ms.',
-      partyTypeId: 'PERSON',
-      statusId: 'PARTY_ENABLED',
-      createdStamp: '2026-05-20T10:00:00',
-      lastUpdatedStamp: '2026-05-22T10:00:00',
-    });
-  });
-
-  it('fetches a customer profile and merges createdStamp from the lookup DataDocument', async () => {
-    vi.mocked(api).mockImplementation(async (config: any) => {
-      if (config.url === 'oms/parties/CUST_1') {
-        return {
-          data: {
-            partyId: 'CUST_1',
-            partyTypeId: 'PERSON',
-            statusId: 'PARTY_ENABLED',
-            firstName: 'Swati',
-            lastName: 'Pandey',
-          }
-        };
-      }
-      if (config.url === 'oms/dataDocumentView' && config.data?.dataDocumentId === 'OrderManagerCustomerLookup') {
-        return {
-          data: {
-            entityValueList: [{
-              partyId: 'CUST_1',
-              createdStamp: 1779343184614,
-              lastUpdatedStamp: 1779443184614
-            }]
-          }
-        };
-      }
-      return { data: {} };
-    });
-
-    const customer = await getCustomer('CUST_1');
-
-    expect(api).toHaveBeenCalledWith({
-      url: 'oms/parties/CUST_1',
-      method: 'get',
-    });
-    expect(api).toHaveBeenCalledWith({
-      url: 'oms/dataDocumentView',
-      method: 'post',
-      data: expect.objectContaining({
-        dataDocumentId: 'OrderManagerCustomerLookup',
-        customParametersMap: {
-          partyId: 'CUST_1',
-          partyid: 'CUST_1'
-        }
-      })
-    });
-    expect(customer.createdStamp).toBe('1779343184614');
-    expect(customer.lastUpdatedStamp).toBe('1779443184614');
-  });
-
-
-  it('fetches recent customer orders using OrderManagerOrderRoleLookup and OrderManagerOrderLookup', async () => {
-    vi.mocked(api)
-      .mockResolvedValueOnce({
-        data: {
-          count: 1,
-          entityValueList: [{
-            orderId: 'M100051',
-            partyId: 'CUST_1',
-            roleTypeId: 'PLACING_CUSTOMER',
-          }],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: {
-          entityValueList: [{
-            hcOrderId: 'M100051',
-            orderName: '#1004',
-            statusId: 'ORDER_APPROVED',
-            orderDate: '2026-05-22T10:00:00',
-          }],
-        },
-      });
-
-    const result = await getCustomerOrders('CUST_1', { pageSize: 10, pageIndex: 0 });
-
-    expect(api).toHaveBeenNthCalledWith(1, {
-      url: 'oms/dataDocumentView',
-      method: 'post',
-      data: {
-        dataDocumentId: 'OrderManagerOrderRoleLookup',
-        format: 'json',
-        customParametersMap: {
-          partyId: 'CUST_1',
-          partyid: 'CUST_1',
-          roleTypeId: 'PLACING_CUSTOMER',
-          roletypeid: 'PLACING_CUSTOMER'
-        },
-        pageSize: 10,
-        pageIndex: 0,
-      },
-    });
-
-    expect(api).toHaveBeenNthCalledWith(2, {
-      url: 'oms/dataDocumentView',
-      method: 'post',
-      data: {
-        dataDocumentId: 'OrderManagerOrderLookup',
-        format: 'json',
-        fieldsToSelect: expect.any(Array),
-        customParametersMap: {
-          hcOrderId: 'M100051',
-        },
-        pageSize: 1,
-        pageIndex: 0,
-      },
-    });
-
-    expect(result.orders[0]).toMatchObject({
-      id: 'M100051',
-      externalId: '#1004',
-    });
   });
 
   it('searches customers through Solr and normalizes totals', async () => {

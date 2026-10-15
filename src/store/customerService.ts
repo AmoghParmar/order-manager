@@ -12,18 +12,13 @@ import type {
   VirtualLocationWorkCount,
   HoldTaskCounts
 } from '@/types/customerService';
-import { DEFAULT_WORKFLOW_ORDER_SORT } from '@/types/customerService';
-import { getPickProfileGroups, type SortRule } from '@/services/fulfillmentSync';
+import { DEFAULT_WORKFLOW_ORDER_SORT, type SortRule } from '@/types/customerService';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import {
   EMPTY_UNFILLABLE_TREND,
-  fetchUnfillableTrend,
-  fetchVirtualLocationOrderCounts,
-  getActivePhysicalFacilityOrderVolume,
-  searchOrders,
   UNFILLABLE_QUEUE_ORDER_STATUSES,
   type UnfillableTrend
-} from '@/services/order';
+} from '@/utils/orderSearch';
 import { getDashboardDateFilter } from '@/utils/dashboardDate';
 import { HIDE_SHOPIFY_UNSYNCED_ACTIONS } from '@/config/featureFlags';
 import { useUserStore } from '@/store/user';
@@ -478,8 +473,9 @@ export const useCustomerServiceStore = defineStore('customerService', {
         // today's hourly ship-group counts, which are empty for a backlog
         // queue and rendered the card's sparkline as a flat zero line.
         const [solrResult, trend] = await Promise.all([
-          searchOrders(solrParams),
-          fetchUnfillableTrend(productStoreId, getUserTimeZone())
+          // Only the total is read, so the rows need no facility types.
+          useOrderStore().queryOrders(solrParams, []),
+          useOrderStore().fetchUnfillableTrend(productStoreId, getUserTimeZone())
         ]);
         if (!this.isLatestDashboardRequest('unfillable', requestId)) return;
 
@@ -554,14 +550,14 @@ export const useCustomerServiceStore = defineStore('customerService', {
 
         const [otherCounts, unfillableCounts] = await Promise.all([
           otherFacilityIds.length
-            ? fetchVirtualLocationOrderCounts({
+            ? useOrderStore().fetchVirtualLocationOrderCounts({
                 productStoreId,
                 facilityIds: otherFacilityIds,
                 status: BROKERABLE_ORDER_STATUSES
               })
             : Promise.resolve([]),
           allFacilityIds.includes(UNFILLABLE_FACILITY_ID)
-            ? fetchVirtualLocationOrderCounts({
+            ? useOrderStore().fetchVirtualLocationOrderCounts({
                 productStoreId,
                 facilityIds: [UNFILLABLE_FACILITY_ID],
                 status: UNFILLABLE_QUEUE_ORDER_STATUSES
@@ -593,7 +589,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
           const facilities = Array.isArray(resp.data.facilities) ? resp.data.facilities : [];
           const nextFacilityOrderVolume = hasUsableFacilityOrderVolume(facilities)
             ? facilities
-            : await getActivePhysicalFacilityOrderVolume({ productStoreId });
+            : await useOrderStore().fetchActivePhysicalFacilityOrderVolume({ productStoreId });
           if (!this.isLatestDashboardRequest('facilityOrderVolume', requestId)) return;
           this.facilityOrderVolume = nextFacilityOrderVolume;
         }
@@ -620,7 +616,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
           const facilities = Array.isArray(resp.data.facilities) ? resp.data.facilities : [];
           const nextFacilityFulfillmentVelocity = hasUsableFacilityFulfillmentVelocity(facilities)
             ? facilities
-            : activeFacilityVelocityFallbackRows(await getActivePhysicalFacilityOrderVolume({ productStoreId }));
+            : activeFacilityVelocityFallbackRows(await useOrderStore().fetchActivePhysicalFacilityOrderVolume({ productStoreId }));
           if (!this.isLatestDashboardRequest('facilityFulfillmentVelocity', requestId)) return;
           this.facilityFulfillmentVelocity = nextFacilityFulfillmentVelocity;
         }
@@ -669,7 +665,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
         if (productStoreId) customParametersMap.productStoreId = productStoreId;
 
         const [activeFacilities, resp] = await Promise.all([
-          getActivePhysicalFacilityOrderVolume({ productStoreId }),
+          useOrderStore().fetchActivePhysicalFacilityOrderVolume({ productStoreId }),
           api({
             url: 'oms/dataDocumentView',
             method: 'POST',
@@ -823,11 +819,25 @@ export const useCustomerServiceStore = defineStore('customerService', {
         this.dashboardStatus.facilityFulfillmentProgress = 'error';
       }
     },
+    async getPickProfileGroups(params?: any): Promise<any[]> {
+      try {
+        const response = await api({
+          url: 'poorti/pickProfile/groups',
+          method: 'GET',
+          params
+        });
+        const list = response.data;
+        return Array.isArray(list) ? list : list?.entityValueList || [];
+      } catch (error) {
+        console.error('Failed to get pick profile groups from server', error);
+        return [];
+      }
+    },
     async fetchPickProfileGroups(facilityId?: string) {
       try {
         const params: any = {};
         if (facilityId) params.facilityId = facilityId;
-        this.pickProfileGroups = await getPickProfileGroups(params);
+        this.pickProfileGroups = await this.getPickProfileGroups(params);
       } catch (error) {
         logger.error('Failed to fetch pick profile groups', error);
       }
@@ -981,7 +991,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
       try {
         const params: any = {};
         if (facilityId) params.facilityId = facilityId;
-        const pickProfileGroups = await getPickProfileGroups(params);
+        const pickProfileGroups = await this.getPickProfileGroups(params);
         if (!this.isLatestDashboardRequest('fulfillmentSyncData', requestId)) return;
 
         const group = pickProfileGroups.find((g: any) => g.facilityId === facilityId);
@@ -1156,7 +1166,8 @@ export const useCustomerServiceStore = defineStore('customerService', {
     clearSelection(bucket: WorkflowBucket) {
       this.selection[bucket] = [];
     },
-    async runBulkAction(bucket: WorkflowBucket, actionId: string) {
+    /** `facilityTypes` are the caller's facility type rows, for the refetched queue page. */
+    async runBulkAction(bucket: WorkflowBucket, actionId: string, facilityTypes: any[]) {
       // TODO: API-backed open/inflight buckets need real endpoints to execute bulk actions.
       const selectedIds = new Set(this.selection[bucket]);
       if (selectedIds.size === 0) return;
@@ -1171,7 +1182,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
 
       if (bucket === 'open' && actionId === 'cancel') {
         await useOrderDetailStore().bulkCancelOrders([...selectedIds]);
-        await useOrderStore().fetchWorkflowOrders(bucket, this.filters[bucket]);
+        await useOrderStore().fetchWorkflowOrders(bucket, this.filters[bucket], facilityTypes);
         this.lastAction = `${actionId} · ${selectedIds.size} order${selectedIds.size === 1 ? '' : 's'}`;
         this.clearSelection(bucket);
         return;

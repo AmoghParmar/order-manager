@@ -1,12 +1,12 @@
 import { defineStore } from "pinia";
 import { api, commonUtil, logger, translate, useSolrSearch } from "@common";
-import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_SAMPLE_SIZE, useOrderDetail, type IssuanceLine } from "@/composables/useOrderDetail";
+import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_REASON_ID, UNFILLABLE_SAMPLE_SIZE, responseRows, type IssuanceLine } from "@/utils/orderDetailQueries";
 import { useProductCacheStore } from "./productCache";
 import { useUserStore } from "./user";
 import Actions from "@/authorization/actions";
-import { escapeSolrValue } from "@/services/order";
-import { getReturn } from "@/services/returns";
-import { fetchOrderInventoryTransfers } from "@/services/inventoryTransfers";
+import { escapeSolrValue } from "@/utils/orderSearch";
+import { useReturnsStore } from "@/store/returns";
+import { useStockStore } from "@/store/stock";
 import { isPosCompletedShipGroup } from "@/utils/orderDetailEnrichment";
 import { toMillis } from "@/utils/format";
 import { type ItemIssuanceSummary, summariseIssuance } from "@/utils/inventoryIssuance";
@@ -244,6 +244,112 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     },
   },
   actions: {
+    /**
+     * Fetch the full order master-detail document.
+     *
+     * `GET oms/orders?orderId={orderId}&dependentLevels=1` returns the OrderHeader
+     * `default` entity master as an array of one. Returns the raw axios response;
+     * the store unwraps `data[0]` and owns error handling.
+     */
+    async getOrder(orderId: string): Promise<any> {
+      return api({
+        url: "oms/orders",
+        method: "GET",
+        params: { orderId, dependentLevels: 1 }
+      });
+    },
+
+    async getCommunicationEvents(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/communicationEvents`,
+        method: "GET"
+      });
+    },
+
+    async getRiskAssessments(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/risks`,
+        method: "GET"
+      });
+    },
+
+
+    /**
+     * OrderFacilityChange rows (brokered, released, parked, rejected) for the order,
+     * excluding UNFILLABLE. `_op=in` plus `_not=Y` builds `NOT IN ('UNFILLABLE') OR
+     * changeReasonEnumId IS NULL`, so the reason-less rows are still returned. Newest first,
+     * so an order with more moves than one page loses its oldest rows, not its latest.
+     */
+    async getFacilityChanges(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/facilityChange`,
+        method: "GET",
+        params: {
+          changeReasonEnumId: UNFILLABLE_REASON_ID,
+          changeReasonEnumId_op: "in",
+          changeReasonEnumId_not: "Y",
+          orderByField: "-changeDatetime",
+          pageSize: FACILITY_CHANGE_PAGE_SIZE
+        }
+      });
+    },
+
+    /**
+     * The most recent UNFILLABLE rows, newest first. The first row dates the last
+     * failed attempt and the row count sizes the entry — see UNFILLABLE_SAMPLE_SIZE
+     * for why the rows are counted rather than read off the count header.
+     */
+    async getUnfillableAttempts(orderId: string): Promise<any> {
+      return api({
+        url: `oms/orders/${orderId}/facilityChange`,
+        method: "GET",
+        params: {
+          changeReasonEnumId: UNFILLABLE_REASON_ID,
+          orderByField: "-changeDatetime",
+          pageSize: UNFILLABLE_SAMPLE_SIZE
+        }
+      });
+    },
+
+    /**
+     * InventoryItemDetail rows that record an inventory issuance against the order.
+     *
+     * Issuing inventory writes a detail row carrying `itemIssuanceId` and a negative
+     * `quantityOnHandDiff`; the reservation that precedes it writes a separate row with
+     * `reasonEnumId` and no issuance id. `itemIssuanceId_op=empty` + `_not=Y` keeps only
+     * the issuance rows, so the response is one row per issued line rather than two.
+     *
+     * There is no REST resource for ItemIssuance, and the order-wide `oms/inventoryItem/detail`
+     * list is not mounted (405), so the rows are read per inventory item: ProductFacility names
+     * the inventory item of each product at each facility, and `inventoryItem/{id}/detail`
+     * filters by order. A component issued for a marketing package is not an order line, so it
+     * is not found this way.
+     */
+    async getInventoryIssuance(orderId: string, lines: IssuanceLine[]): Promise<any[]> {
+      const lineKeys = new Set(lines.map((line) => `${line.productId}|${line.facilityId}`));
+      if (!lineKeys.size) return [];
+      const productFacilities = responseRows(await api({
+        url: "oms/productFacilities",
+        method: "GET",
+        params: {
+          productId: [...new Set(lines.map((line) => line.productId))].join(","),
+          productId_op: "in",
+          facilityId: [...new Set(lines.map((line) => line.facilityId))].join(","),
+          facilityId_op: "in",
+          pageSize: 100
+        }
+      }));
+      // The two `in` filters cross every product with every facility; keep only the real pairs.
+      const inventoryItemIds = [...new Set(productFacilities
+        .filter((row) => row.inventoryItemId && lineKeys.has(`${row.productId}|${row.facilityId}`))
+        .map((row) => row.inventoryItemId))];
+      const details = await Promise.all(inventoryItemIds.map(async (inventoryItemId) => responseRows(await api({
+        url: `oms/inventoryItem/${inventoryItemId}/detail`,
+        method: "GET",
+        params: { orderId, itemIssuanceId_op: "empty", itemIssuanceId_not: "Y", pageSize: 100 }
+      }))));
+      return details.flat();
+    },
     async fetchOrder(orderId: string, force = false) {
       if (!orderId) return;
 
@@ -258,7 +364,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       entry.error = "";
 
       try {
-        const resp = await useOrderDetail().getOrder(orderId);
+        const resp = await this.getOrder(orderId);
         if (commonUtil.hasError(resp)) throw resp.data;
 
         const payload = Array.isArray(resp.data) ? resp.data[0] : resp.data;
@@ -323,10 +429,9 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       if (!force && Array.isArray(this.facilityChangesByOrderId[orderId])) return;
 
       return singleFlight(`events:${orderId}`, force, () => this.trackHistory(orderId, async () => {
-        const orderDetail = useOrderDetail();
         const [facilityChanges, unfillable] = await Promise.allSettled([
-          orderDetail.getFacilityChanges(orderId),
-          orderDetail.getUnfillableAttempts(orderId)
+          this.getFacilityChanges(orderId),
+          this.getUnfillableAttempts(orderId)
         ]);
 
         const changesLoaded = facilityChanges.status === "fulfilled" && !commonUtil.hasError(facilityChanges.value);
@@ -388,7 +493,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
           .filter(isPosCompletedShipGroup)
           .flatMap((shipGroup: any) => (shipGroup.items || []).map((item: any) => ({ productId: item.productId, facilityId: shipGroup.facilityId })))
           .filter((line: IssuanceLine) => line.productId && line.facilityId);
-        this.issuanceByOrderId[orderId] = summariseIssuance(await useOrderDetail().getInventoryIssuance(orderId, lines));
+        this.issuanceByOrderId[orderId] = summariseIssuance(await this.getInventoryIssuance(orderId, lines));
         this.issuanceStatusByOrderId[orderId] = "loaded";
       } catch (error: any) {
         logger.error(`Failed to load inventory issuance for [${orderId}]`, error);
@@ -399,7 +504,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     async fetchCommEvents(orderId: string) {
       if (!orderId) return;
       try {
-        const resp = await useOrderDetail().getCommunicationEvents(orderId);
+        const resp = await this.getCommunicationEvents(orderId);
         if (commonUtil.hasError(resp)) throw resp.data;
         const docs = Array.isArray(resp.data) ? resp.data : (resp.data?.docs || []);
         this.commEventsByOrderId[orderId] = docs;
@@ -416,7 +521,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       this.riskAssessmentsStatusByOrderId[orderId] = "loading";
 
       try {
-        const resp = await useOrderDetail().getRiskAssessments(orderId);
+        const resp = await this.getRiskAssessments(orderId);
         if (commonUtil.hasError(resp)) throw resp.data;
         this.riskAssessmentsByOrderId[orderId] = Array.isArray(resp.data) ? resp.data : (resp.data?.docs || []);
         this.riskAssessmentsStatusByOrderId[orderId] = "loaded";
@@ -429,7 +534,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     async fetchInventoryTransfers(orderId: string) {
       if (!orderId) return;
       try {
-        this.inventoryTransfersByOrderId[orderId] = await fetchOrderInventoryTransfers(orderId);
+        this.inventoryTransfersByOrderId[orderId] = await useStockStore().fetchOrderInventoryTransfers(orderId);
       } catch (error: any) {
         logger.error(`Failed to load inventory transfers for [${orderId}]`, error);
       }
@@ -450,6 +555,57 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       } catch (error: any) {
         logger.error('Failed to load carrier parties', error);
       }
+    },
+    async fetchOrderShipGroups(orderId: string): Promise<any[]> {
+      const response = await api({ url: `oms/orders/${orderId}/shipGroups`, method: 'GET' });
+      return Array.isArray(response.data) ? response.data : (response.data?.docs || response.data?.shipGroups || []);
+    },
+    addOrderIdentification(orderId: string, orderIdentificationTypeId: string, idValue: string, fromDate: number) {
+      return api({
+        url: `oms/orders/${orderId}/identifications`,
+        method: 'POST',
+        data: { orderIdentificationTypeId, idValue, fromDate }
+      });
+    },
+    /** Ends an identification: there is no in-place value update, so an edit expires the row and adds a new one. */
+    expireOrderIdentification(orderId: string, identification: { orderIdentificationTypeId: string; fromDate?: string | number }, thruDate: number) {
+      return api({
+        url: `oms/orders/${orderId}/identifications`,
+        method: 'PUT',
+        data: {
+          orderIdentificationTypeId: identification.orderIdentificationTypeId,
+          orderId,
+          fromDate: identification.fromDate,
+          thruDate
+        }
+      });
+    },
+    addOrderItemAttribute(orderId: string, orderItemSeqId: string, attribute: { attrName: string; attrValue?: string; attrDescription?: string }) {
+      return api({
+        url: `oms/orders/${orderId}/items/${orderItemSeqId}/attributes`,
+        method: 'POST',
+        data: attribute
+      });
+    },
+    deleteOrderItemAttribute(orderId: string, orderItemSeqId: string, attrName: string) {
+      return api({
+        url: `oms/orders/${orderId}/items/${orderItemSeqId}/attributes/${encodeURIComponent(attrName)}`,
+        method: 'DELETE'
+      });
+    },
+    /** Stores an order attribute: creates a new name or overwrites an existing one. */
+    storeOrderAttribute(orderId: string, attribute: { attrName: string; attrValue?: string; attrDescription?: string }) {
+      return api({ url: `oms/orders/${orderId}/attributes`, method: 'POST', data: { ...attribute } });
+    },
+    deleteOrderAttribute(orderId: string, attrName: string) {
+      return api({ url: `oms/orders/${orderId}/attributes/${encodeURIComponent(attrName)}`, method: 'DELETE' });
+    },
+    addItemToOrder(orderId: string, shipGroupSeqId: string, productId: string, quantity: number) {
+      return api({
+        url: `oms/orders/${orderId}/addItem`,
+        method: 'POST',
+        data: { orderId, shipGroupSeqId, productId, quantity }
+      });
     },
     async updateShipGroup(orderId: string, shipGroupSeqId: string, data: Record<string, any>) {
       return api({ url: `oms/orders/${orderId}/shipGroups/${shipGroupSeqId}`, method: 'PUT', data });
@@ -484,7 +640,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
     },
     async bulkCancelOrders(orderIds: string[]) {
       const results = await Promise.all(orderIds.map(async (orderId) => {
-        const orderResponse = await useOrderDetail().getOrder(orderId);
+        const orderResponse = await this.getOrder(orderId);
         if (commonUtil.hasError(orderResponse)) throw orderResponse.data;
 
         const order = orderPayload(orderResponse.data);
@@ -578,7 +734,7 @@ export const useOrderDetailStore = defineStore("orderDetail", {
         await Promise.all(pending.map(async (returnId) => {
           this.returnHeadersById[returnId] = null;
           try {
-            const header = await getReturn(returnId);
+            const header = await useReturnsStore().getReturn(returnId);
             if (header) this.returnHeadersById[returnId] = header;
           } catch (error) {
             failed = true;

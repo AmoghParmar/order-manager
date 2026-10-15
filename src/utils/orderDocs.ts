@@ -1,33 +1,9 @@
-import type { Customer, Order } from '@/types/order';
+import type { Order } from '@/types/order';
 
 export interface OrderSearchResult {
   orders: Order[];
   total: number;
 }
-
-export const defaultDataDocuments = {
-  orderLookup: 'OrderManagerOrderLookup',
-  orderRoleLookup: 'OrderManagerOrderRoleLookup'
-};
-
-export const orderLookupFields = [
-  'orderId',
-  'hcOrderId',
-  'orderName',
-  'externalId',
-  'orderDate',
-  'statusId',
-  'customerFirstName',
-  'customerLastName',
-  'customerName',
-  'partyId',
-  'customerPartyId',
-  'salesChannelEnumId',
-  'grandTotal',
-  'currencyUom',
-  'priority',
-  'productStoreId'
-];
 
 export function normalizeOrderDoc(doc: any): Order {
   const orderId = toStringValue(doc.orderId ?? doc.hcOrderId ?? doc.externalId ?? doc.orderName);
@@ -69,31 +45,6 @@ export function normalizeOrderDoc(doc: any): Order {
     returnIds: toStringList(doc.returnId ?? doc.primaryReturnId),
     notes: [],
     history: []
-  };
-}
-
-export function normalizeCustomerDoc(doc: any, fallbackId = ''): Customer {
-  const personalTitle = toStringValue(doc.personalTitle);
-  const firstName = toStringValue(doc.firstName);
-  const middleName = toStringValue(doc.middleName);
-  const lastName = toStringValue(doc.lastName);
-  const displayName = toStringValue(doc.groupName ?? doc.partyName);
-
-  return {
-    id: toStringValue(doc.partyId, fallbackId),
-    name: displayName || [firstName, middleName, lastName].filter(Boolean).join(' '),
-    personalTitle,
-    partyTypeId: toStringValue(doc.partyTypeId),
-    statusId: toStringValue(doc.statusId),
-    externalId: toStringValue(doc.externalId),
-    createdStamp: toStringValue(doc.createdStamp),
-    lastUpdatedStamp: toStringValue(doc.lastUpdatedStamp),
-    email: toStringValue(doc.emailAddress ?? doc.infoString),
-    phone: toStringValue(doc.contactNumber ?? doc.phoneNumber),
-    loyaltyTier: toStringValue(doc.loyaltyTier, 'Unassigned'),
-    lifetimeOrders: toNumberValue(doc.lifetimeOrders),
-    lifetimeValue: toNumberValue(doc.lifetimeValue),
-    addresses: []
   };
 }
 

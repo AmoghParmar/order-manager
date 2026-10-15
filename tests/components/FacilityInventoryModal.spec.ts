@@ -3,6 +3,8 @@ import { resolve } from 'path';
 import { describe, expect, it } from 'vitest';
 
 const source = readFileSync(resolve(process.cwd(), 'src/components/fulfillment/FacilityInventoryModal.vue'), 'utf8');
+// The stock store makes the modal's requests.
+const stock = readFileSync(resolve(process.cwd(), 'src/store/stock.ts'), 'utf8');
 
 describe('facility inventory modal', () => {
   it('uses desktop rows and mobile-only accordions from the same facility data', () => {
@@ -31,20 +33,24 @@ describe('facility inventory modal', () => {
 
   it('reads every product in one request and keeps paging while pages come back full', () => {
     expect(source).toContain("productId_op: 'in'");
-    expect(source).toContain('if (page.length < pageSize) break;');
+    expect(source).toContain("stockStore.fetchAllRows('oms/productFacilities'");
+    expect(stock).toContain('if(page.length < pageSize) {break;}');
     // X-Total-Count is sent but not exposed through CORS, so it cannot be the paging signal.
     expect(source).not.toContain("headers?.['x-total-count']");
+    expect(stock).not.toContain("headers?.['x-total-count']");
   });
 
   it('takes the order limit from the cached facility and the consumption live', () => {
     // facilityIds drive the inventory request, so the rows are read up front, not observed.
     expect(source).toContain('getFacilities()');
     expect(source).toContain('getProductStoreFacilities(props.productStoreId)');
-    expect(source).toContain("url: 'admin/facilities/orderCount'");
-    expect(source).toContain("facilityId_op: 'in'");
+    expect(source).toContain('stockStore.fetchFacilityOrderCounts(facilityIds, todayIsoDate())');
+    expect(stock).toContain('url: "admin/facilities/orderCount"');
+    expect(stock).toContain('facilityId_op: "in"');
     // The unscoped oms mount returned every facility for every date; the admin mount is the one
     // the company app uses and the only one scoped to today and to the facilities on screen.
     expect(source).not.toContain('oms/facilities/facilityOrderCounts');
+    expect(stock).not.toContain('oms/facilities/facilityOrderCounts');
   });
 
   it('keeps the whole row tappable and the save action reachable', () => {

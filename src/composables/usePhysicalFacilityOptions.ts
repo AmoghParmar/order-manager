@@ -7,20 +7,25 @@ const VIRTUAL_FACILITY_TYPE_ID = 'VIRTUAL_FACILITY';
 export function usePhysicalFacilityOptions() {
   const facilityOptions = ref<TaskFilterOption[]>([]);
 
+  /** Every facility that is neither virtual nor under a virtual parent type. */
+  async function fetchPhysicalFacilities(): Promise<any[]> {
+    const response = await api({
+      url: 'oms/facilities',
+      method: 'GET',
+      params: {
+        pageSize: 1000,
+        facilityTypeId: VIRTUAL_FACILITY_TYPE_ID,
+        facilityTypeId_not: 'Y',
+        parentTypeId: VIRTUAL_FACILITY_TYPE_ID,
+        parentTypeId_not: 'Y',
+      },
+    });
+    return responseList(response.data);
+  }
+
   async function loadPhysicalFacilities() {
     try {
-      const response = await api({
-        url: 'oms/facilities',
-        method: 'GET',
-        params: {
-          pageSize: 1000,
-          facilityTypeId: VIRTUAL_FACILITY_TYPE_ID,
-          facilityTypeId_not: 'Y',
-          parentTypeId: VIRTUAL_FACILITY_TYPE_ID,
-          parentTypeId_not: 'Y',
-        },
-      });
-      facilityOptions.value = responseList(response.data)
+      facilityOptions.value = (await fetchPhysicalFacilities())
         .map((facility: any) => ({
           id: facility.facilityId || facility.id,
           label: facility.facilityName || facility.name || facility.facilityId || facility.id,
@@ -31,7 +36,7 @@ export function usePhysicalFacilityOptions() {
     }
   }
 
-  return { facilityOptions, loadPhysicalFacilities };
+  return { facilityOptions, loadPhysicalFacilities, fetchPhysicalFacilities };
 }
 
 function responseList(data: any): any[] {

@@ -146,7 +146,7 @@
             <ion-label>
               <div>
                 {{ primaryIdentifier(item.productId) || item.productId }}
-                <ion-badge class="kit-badge" color="dark" v-if="isKit(item)">{{ translate("Kit") }}</ion-badge>
+                <ion-badge class="kit-badge" color="dark" v-if="isKit(getProduct(item.productId))">{{ translate("Kit") }}</ion-badge>
               </div>
               <p>{{ secondaryIdentifier(item.productId) }}</p>
               <p v-if="featureLabel(item.productId)" class="ship-group-item-features" :title="featureLabel(item.productId)">{{ featureLabel(item.productId) }}</p>
@@ -202,7 +202,7 @@
               <ion-label>
                 <div>
                   {{ primaryIdentifier(item.productId) || item.productId }}
-                  <ion-badge class="kit-badge" color="dark" v-if="isKit(item)">{{ translate("Kit") }}</ion-badge>
+                  <ion-badge class="kit-badge" color="dark" v-if="isKit(getProduct(item.productId))">{{ translate("Kit") }}</ion-badge>
                 </div>
                 <p>{{ secondaryIdentifier(item.productId) }}</p>
                 <!-- The collapsed summary above carries the same line, but a counter sale

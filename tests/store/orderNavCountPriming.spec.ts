@@ -5,7 +5,6 @@ import { describe, expect, it } from 'vitest';
 const read = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8');
 
 describe('nav-count priming', () => {
-  const navCounts = read('src/services/navCounts.ts');
   const orderStore = read('src/store/order.ts');
   const customerService = read('src/store/customerService.ts');
   const funnel = read('src/views/Funnel.vue');
@@ -25,18 +24,18 @@ describe('nav-count priming', () => {
   });
 
   it('keeps only brokering as a dedicated count (page uses distinct-order grouping)', () => {
-    expect(navCounts).toContain('fetchBrokeringCount');
-    expect(navCounts).toContain('brokering: fetchBrokeringCount');
-    // the task-queue and unfillable fetchers were removed from the dedicated service
-    expect(navCounts).not.toContain('oms/orders/tasks');
-    expect(navCounts).not.toContain('fetchUnfillableCount');
-    expect(navCounts).not.toContain('fetchHoldCount');
+    expect(orderStore).toContain('async fetchBrokeringCount(');
+    expect(orderStore).toContain('brokering: () => this.fetchBrokeringCount(storeId)');
+    // the task-queue and unfillable fetchers are not part of the priming
+    expect(orderStore).not.toContain('oms/orders/tasks');
+    expect(orderStore).not.toContain('fetchUnfillableCount');
+    expect(orderStore).not.toContain('fetchHoldCount');
     expect(orderStore).toContain('async primeNavCounts(');
     expect(funnel).toContain('orderStore.primeNavCounts(productStoreId)');
   });
 
   it('shares the brokering facility resolution between the page and the count', () => {
-    expect(navCounts).toContain("import { fetchBrokeringFacilityIds } from '@/utils/brokeringFacilities'");
+    expect(orderStore).toContain('facilityIds: await this.fetchBrokeringFacilityIds(),');
     expect(brokering).toContain("from '@/utils/brokeringFacilities'");
     expect(brokering).toContain('buildBrokeringFacilityOptions');
   });

@@ -105,12 +105,8 @@ import { useSolrSearch } from '@common/composables/useSolrSearch';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
 import { useProductMaster } from '@/composables/useProductMaster';
-import {
-  createSubstituteAssociation,
-  expireSubstituteAssociation,
-  fetchActiveSubstitutes,
-  type SubstituteAssociation,
-} from '@/services/productAssociations';
+import { useProductSubstitutes } from '@/composables/useProductSubstitutes';
+import type { SubstituteAssociation } from '@/utils/productAssociations';
 import { isSameProduct, type ProductIdentity } from '@/utils/productIdentity';
 
 interface SelectableProduct {
@@ -136,6 +132,7 @@ const props = defineProps<{
 }>();
 const { searchProducts } = useSolrSearch();
 const productMaster = useProductMaster();
+const { createSubstituteAssociation, expireSubstituteAssociation, fetchActiveSubstitutes } = useProductSubstitutes();
 
 const queryString = ref('');
 const products = ref<SelectableProduct[]>([]);

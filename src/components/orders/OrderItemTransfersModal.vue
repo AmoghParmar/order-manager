@@ -116,7 +116,7 @@ import { DxpShopifyImg, logger, translate } from '@common';
 import Actions from '@/authorization/actions';
 import { useOrder } from '@/composables/useOrder';
 import { useProductIdentity } from '@/composables/useProductIdentity';
-import { cancelInventoryTransfer, executeInventoryTransfer, fetchFacilityStock } from '@/services/inventoryTransfers';
+import { useStockStore } from '@/store/stock';
 import { useOrderDetailStore } from '@/store/orderDetail';
 import { useUserStore } from '@/store/user';
 import { showToast } from '@/utils';
@@ -129,6 +129,7 @@ const props = defineProps<{
 }>();
 
 const orderDetailStore = useOrderDetailStore();
+const stockStore = useStockStore();
 const { enrichedOrder } = useOrder();
 const { getProduct, primaryIdentifier, secondaryIdentifier, featureLabel } = useProductIdentity();
 const canManage = computed(() => useUserStore().hasPermission(Actions.APP_INVENTORY_TRANSFER_MANAGE));
@@ -156,7 +157,7 @@ const working = ref(false);
 async function loadStock() {
   if (!item.value || !transfer.value) return;
   try {
-    stock.value = await fetchFacilityStock(item.value.productId, [transfer.value.fromFacilityId, transfer.value.toFacilityId]);
+    stock.value = await stockStore.fetchFacilityStock(item.value.productId, [transfer.value.fromFacilityId, transfer.value.toFacilityId]);
   } catch (error) {
     logger.error('Failed to load stock for the transfer', error);
   }
@@ -214,7 +215,7 @@ async function completeTransfer() {
     translate('Complete transfer'),
     translate('Cancel'),
   );
-  if (confirmed) await runAction(() => executeInventoryTransfer(open.id), translate('Transfer completed.'), translate('Failed to complete the transfer. Please try again.'));
+  if (confirmed) await runAction(() => stockStore.executeInventoryTransfer(open.id), translate('Transfer completed.'), translate('Failed to complete the transfer. Please try again.'));
 }
 
 async function cancelTransfer() {
@@ -226,7 +227,7 @@ async function cancelTransfer() {
     translate('Cancel transfer'),
     translate('Keep transfer'),
   );
-  if (confirmed) await runAction(() => cancelInventoryTransfer(open.id), translate('Transfer cancelled'), translate('Failed to cancel the transfer. Please try again.'));
+  if (confirmed) await runAction(() => stockStore.cancelInventoryTransfer(open.id), translate('Transfer cancelled'), translate('Failed to cancel the transfer. Please try again.'));
 }
 </script>
 

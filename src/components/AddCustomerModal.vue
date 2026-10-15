@@ -101,8 +101,10 @@ import { emitter, translate } from '@common';
 import { IonInput, IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonSegment, IonSegmentButton, IonSegmentView, IonSegmentContent, IonSpinner, IonItem, IonLabel, IonSearchbar, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline } from "ionicons/icons";
 import { ref } from 'vue';
-import { searchShopifyCustomers, createShopifyCustomer } from '@/services/customer';
+import { useCustomerStore } from '@/store/customer';
 
+
+const customerStore = useCustomerStore();
 const queryString = ref("")
 const selectedSection = ref("search")
 const isLoading = ref(false)
@@ -149,7 +151,7 @@ async function searchCustomers() {
   
   isLoading.value = true;
   try {
-    customers.value = await searchShopifyCustomers(props.shopId, query);
+    customers.value = await customerStore.searchShopifyCustomers(props.shopId, query);
   } catch (err: any) {
     showToast(translate("Failed to search customers: {message}", { message: String(err.message || err) }, { escapeParameter: true }));
   } finally {
@@ -169,7 +171,7 @@ async function handleCreateCustomer() {
 
   emitter.emit('presentLoader', { message: 'Creating customer...' });
   try {
-    const res = await createShopifyCustomer(props.shopId, {
+    const res = await customerStore.createShopifyCustomer(props.shopId, {
       email: customerForm.value.email,
       phoneNumber: customerForm.value.phone || undefined,
       firstName: customerForm.value.firstName,

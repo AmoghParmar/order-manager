@@ -2,13 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useOrderStore } from '@/store/order';
 
-const { fetchBrokeringCount } = vi.hoisted(() => ({
-  fetchBrokeringCount: vi.fn(),
-}));
-
-vi.mock('@/services/navCounts', () => ({
-  queueCountFetchers: { brokering: fetchBrokeringCount },
-}));
+// The store's brokering count action, replaced on the store instance so primeNavCounts calls it.
+const fetchBrokeringCount = vi.fn();
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -22,6 +17,7 @@ describe('order nav-count request scope', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     fetchBrokeringCount.mockReset();
+    Object.assign(useOrderStore(), { fetchBrokeringCount });
   });
 
   it('does not let an older store count overwrite the newest badge', async () => {

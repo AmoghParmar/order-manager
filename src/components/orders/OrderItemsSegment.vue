@@ -180,7 +180,7 @@ function productRowProps(group: EnrichedItemGroup) {
   return {
     primary: primaryIdentifier(group.productId) || group.name || group.externalId,
     secondary: secondaryIdentifier(group.productId) || group.externalId,
-    badgeLabel: isKit(group) ? translate('Kit') : '',
+    badgeLabel: isKit(getProduct(group.productId)) ? translate('Kit') : '',
     features: featureLabel(group.productId),
     imageUrl: getProduct(group.productId)?.mainImageUrl,
   };

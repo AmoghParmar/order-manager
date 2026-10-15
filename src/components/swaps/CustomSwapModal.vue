@@ -125,7 +125,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList, IonListHeader, IonNote, IonRadio, IonRadioGroup, IonSearchbar, IonSegment, IonSegmentButton, IonSpinner, IonThumbnail, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline } from 'ionicons/icons';
-import { api, DxpShopifyImg, translate } from '@common';
+import { DxpShopifyImg, translate } from '@common';
 import { useProductCacheStore } from '@/store/productCache';
 import { useProductMaster } from '@/composables/useProductMaster';
 import { useStockStore } from '@/store/stock';
@@ -239,17 +239,12 @@ async function searchProducts(pageIndex = 0, append = false) {
   }
   isSearching.value = !append;
   try {
-    const resp = await api({
-      url: 'oms/productFacilities/search',
-      method: 'GET',
-      params: {
-        facilityId: props.facilityId,
-        keyword: searchKeyword.value.trim(),
-        pageIndex,
-        pageSize: PAGE_SIZE,
-      },
+    const data = await useStockStore().searchFacilityProducts({
+      facilityId: props.facilityId,
+      keyword: searchKeyword.value.trim(),
+      pageIndex,
+      pageSize: PAGE_SIZE,
     });
-    const data = resp.data ?? {};
     const products = data.products ?? [];
     searchTotalCount.value = data.totalCount ?? 0;
     searchPageIndex.value = pageIndex;

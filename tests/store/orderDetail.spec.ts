@@ -35,11 +35,8 @@ vi.mock('@common', () => ({
   }
 }));
 
-vi.mock('@/composables/useOrderDetail', () => ({
-  useOrderDetail: () => orderDetailApi
-}));
 
-vi.mock('@/services/productDb', () => ({
+vi.mock('@/db/productDb', () => ({
   getProductDb: () => ({
     products: {
       bulkPut: vi.fn(),
@@ -52,6 +49,8 @@ describe('order detail store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     orderDetailApi.getOrder.mockReset();
+    // The store's own fetch actions, replaced on the store instance so its loaders call these.
+    Object.assign(useOrderDetailStore(), orderDetailApi);
     vi.mocked(api).mockReset();
   });
 

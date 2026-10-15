@@ -295,8 +295,10 @@ import { computed, ref, onMounted, nextTick, watch } from 'vue';
 import { formatMoney } from '@/utils/format';
 import { IonBadge, IonButton, IonButtons, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonInput, IonItem, IonLabel, IonList, IonMenuButton, IonPage, IonSearchbar, IonSegment, IonSegmentButton, IonSelect, IonSelectOption, IonTextarea, IonThumbnail, IonTitle, IonToolbar, IonSpinner, modalController } from '@ionic/vue';
 import { addCircleOutline, addOutline, barcodeOutline, businessOutline, cashOutline, checkmarkDoneOutline, checkmarkOutline, cloudOfflineOutline, createOutline, globeOutline, locateOutline, saveOutline, searchOutline, shirtOutline, trashOutline } from 'ionicons/icons';
-import { api, commonUtil, DxpShopifyImg, emitter, logger, translate, useSolrSearch } from '@common';
-import { getShopifyShops } from '@/services/customer';
+import { commonUtil, DxpShopifyImg, emitter, logger, translate, useSolrSearch } from '@common';
+import { useCurrencies } from '@/composables/useCurrencies';
+import { useOrderStore } from '@/store/order';
+import { useCustomerStore } from '@/store/customer';
 import { useProductStore } from '@/store/productStore';
 import { useProductCacheStore } from '@/store/productCache';
 import { useProductMaster } from '@/composables/useProductMaster';
@@ -306,6 +308,10 @@ import AddProductModal from '@/components/AddProductModal.vue';
 import AddCustomLineModal from '@/components/AddCustomLineModal.vue';
 import { useSeedData } from '@common/db';
 
+
+const customerStore = useCustomerStore();
+const orderStore = useOrderStore();
+const { fetchCurrencies: fetchCurrencyList } = useCurrencies();
 const seed = useSeedData();
 
 const currencies = ref([]) as any;
@@ -414,7 +420,7 @@ onMounted(async () => {
   fetchCurrencies();
   try {
     const productStoreId = useProductStore().getCurrentProductStore.productStoreId
-    shopsList.value = await getShopifyShops({
+    shopsList.value = await customerStore.getShopifyShops({
       productStoreId
     });
   } catch (err: any) {
@@ -715,11 +721,7 @@ async function submitOrder() {
   emitter.emit('presentLoader', { message: 'Submitting Shopify Order...' });
 
   try {
-    const response = await api({
-      url: 'oms/orders/shopify',
-      method: 'post',
-      data: payload
-    });
+    const response = await orderStore.createShopifyOrder(payload);
 
     emitter.emit('dismissLoader');
 
@@ -768,12 +770,7 @@ async function openCustomerModal() {
 
 async function fetchCurrencies() {
   try {
-    const resp = await api({
-      url: "admin/uoms",
-      method: "get",
-      params: { uomTypeEnumId: 'UT_CURRENCY_MEASURE', pageSize: 250 }
-    });
-    currencies.value = resp.data;
+    currencies.value = await fetchCurrencyList();
   } catch(err) {
     logger.error("Failed to fetch currencies", err)
   }

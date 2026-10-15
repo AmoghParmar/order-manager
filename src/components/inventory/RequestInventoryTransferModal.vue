@@ -167,10 +167,8 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useOrder } from "@/composables/useOrder";
 import { fetchDistancesFromFacility } from "@/composables/useOrderDistances";
 import { useProductIdentity } from "@/composables/useProductIdentity";
-import {
-  fetchFacilitySalesVelocity, fetchFacilityStock, requestInventoryTransfers
-} from "@/services/inventoryTransfers";
 import { useOrderDetailStore } from "@/store/orderDetail";
+import { useStockStore } from "@/store/stock";
 import { showToast } from "@/utils";
 import { formatNumber } from "@/utils/format";
 import { useSeedData } from "@common/db";
@@ -193,6 +191,7 @@ const FACILITY_GROUPS = [
 const groupOf = (facility: any) => FACILITY_GROUPS.find((group) => group.includes(facility));
 
 const orderDetailStore = useOrderDetailStore();
+const stockStore = useStockStore();
 const seed = useSeedData();
 const { enrichedOrder } = useOrder();
 const { getProduct, primaryIdentifier, secondaryIdentifier, featureLabel } = useProductIdentity();
@@ -281,8 +280,8 @@ async function load() {
   if(productId) {
     const facilityIds = [...facilities.value.map((facility) => facility.facilityId), props.destinationFacilityId];
     const [stockResult, velocityResult] = await Promise.allSettled([
-      fetchFacilityStock(productId, facilityIds),
-      fetchFacilitySalesVelocity(productId),
+      stockStore.fetchFacilityStock(productId, facilityIds),
+      stockStore.fetchFacilitySalesVelocity(productId),
     ]);
     if(stockResult.status === "fulfilled") {stock.value = stockResult.value;} else {logger.error("Failed to load stock for the transfer", stockResult.reason);}
     if(velocityResult.status === "fulfilled") {velocity.value = velocityResult.value;} else {logger.error("Failed to load sales velocity for the transfer", velocityResult.reason);}
@@ -320,7 +319,7 @@ async function submit() {
   if(!item.value || !source.value || submitting.value) {return;}
   submitting.value = true;
   try {
-    const inventoryTransferIds = await requestInventoryTransfers({
+    const inventoryTransferIds = await stockStore.requestInventoryTransfers({
       requestReferencePrefix: `ORDER_MANAGER-${props.orderId}-${Date.now()}`,
       transfers: [{
         productId: item.value.productId,

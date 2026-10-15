@@ -1,7 +1,5 @@
-import { api } from '@common';
-
 // Shared brokering-queue facility vocabulary. Both the Brokering queue page and
-// the nav-count priming use these helpers so the badge count can never drift
+// the nav-count priming (the order store's fetchBrokeringFacilityIds) use these helpers so the badge count can never drift
 // from the facility set the page actually queries.
 
 export const ALL_FACILITY_OPTION_ID = 'All';
@@ -38,21 +36,4 @@ export function buildBrokeringFacilityOptions(facilities: any[]): { id: string; 
   return Array.from(map.entries())
     .map(([id, name]) => ({ id, name }))
     .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-export async function fetchBrokeringFacilities(): Promise<any[]> {
-  try {
-    const resp = await api({ url: 'admin/facilities', method: 'GET', params: { parentTypeId: 'VIRTUAL_FACILITY' } });
-    return Array.isArray(resp.data) ? resp.data : [];
-  } catch {
-    return [];
-  }
-}
-
-/** The default ("All") facility id set the brokering queue searches — every
- * virtual facility except the archive and unfillable parking, or the fallback
- * parking ids when none are configured. */
-export async function fetchBrokeringFacilityIds(): Promise<string[]> {
-  const ids = buildBrokeringFacilityOptions(await fetchBrokeringFacilities()).map((option) => option.id);
-  return ids.length ? ids : [...FALLBACK_BROKERING_FACILITY_IDS];
 }

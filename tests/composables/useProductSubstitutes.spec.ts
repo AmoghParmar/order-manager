@@ -1,12 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '@common';
-import {
-  createSubstituteAssociation,
-  expireSubstituteAssociation,
-  fetchActiveSubstitutes,
-} from '@/services/productAssociations';
+import { useProductSubstitutes } from '@/composables/useProductSubstitutes';
 
 vi.mock('@common', () => ({ api: vi.fn() }));
+
+const { createSubstituteAssociation, expireSubstituteAssociation, fetchActiveSubstitutes } = useProductSubstitutes();
 
 describe('product substitute associations', () => {
   beforeEach(() => vi.mocked(api).mockReset());

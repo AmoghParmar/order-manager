@@ -485,7 +485,7 @@ import RelationshipHistoryModal from '@/components/RelationshipHistoryModal.vue'
 import HoldTaskCard from '@/components/tasks/HoldTaskCard.vue';
 import { useCustomerDetail } from '@/composables/useCustomerDetail';
 import router from '@/router';
-import { deleteCustomerDetails, indexCustomer } from '@/services/customer';
+import { useCustomerStore } from '@/store/customer';
 import { useSeedData } from '@common/db';
 import { useProductMaster } from '@/composables/useProductMaster';
 import { useProductCacheStore } from '@/store/productCache';
@@ -505,6 +505,7 @@ const props = defineProps<{
 
 const selectedSegment = ref('dashboard');
 const userStore = useUserStore();
+const customerStore = useCustomerStore();
 const productMaster = useProductMaster();
 const productCache = useProductCacheStore();
 const recentOrdersQuery = ref('');
@@ -672,8 +673,8 @@ async function onDeleteCustomer() {
           void (async () => {
             deleting.value = true;
             try {
-              await deleteCustomerDetails(props.customerId);
-              await indexCustomer(props.customerId);
+              await customerStore.deleteCustomerDetails(props.customerId);
+              await customerStore.indexCustomer(props.customerId);
               await commonUtil.showToast(translate('Customer data has been anonymized.'));
               router.replace('/customers');
             } catch {

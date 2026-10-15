@@ -52,9 +52,10 @@ import { IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, Ion
 import { closeOutline, saveOutline } from 'ionicons/icons';
 import { ref } from 'vue';
 import { commonUtil, translate } from '@common';
-import { createOrderIdentificationType } from '@/services/orderIdentification';
+import { useOrderIdentificationTypes } from '@/composables/useOrderIdentificationTypes';
 import { showToast, requiredLabel } from '@/utils';
 
+const { createOrderIdentificationType } = useOrderIdentificationTypes();
 const saving = ref(false);
 
 const formData = ref({ enumId: '', enumName: '', description: '' });

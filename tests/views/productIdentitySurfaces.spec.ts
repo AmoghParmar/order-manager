@@ -43,12 +43,12 @@ describe('product identity surfaces honour the preference', () => {
   });
 
   it('caches every field the preference can point at, and heals records that predate them', () => {
-    const master = read('src/composables/useProductMaster.ts');
+    const master = read('src/utils/productDocs.ts');
     ['groupId', 'groupName', 'primaryProductCategoryName', 'title', 'goodIdentifications'].forEach((field) => {
       expect(master).toContain(field);
     });
     expect(master).toContain('CACHED_IDENTITY_KEYS.every((key) => key in product)');
-    expect(read('src/services/productDb.ts')).toContain('primaryProductCategoryName: string;');
+    expect(read('src/db/productDb.ts')).toContain('primaryProductCategoryName: string;');
   });
 
   it('substitute picker keeps identity data through normalization', () => {

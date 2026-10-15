@@ -19,7 +19,7 @@ describe('Packed orders scan layout', () => {
     expect(packedOrdersSource).toContain("const bucket = 'packed'");
     expect(packedOrdersSource).toContain('toggleCurrentPageSelection($event.detail.checked)');
     expect(packedOrdersSource).toContain('setOrderSelection(order.orderId, $event)');
-    expect(packedOrdersSource).toContain('store.runBulkAction(bucket, action.id)');
-    expect(packedOrdersSource).toContain('orderStore.loadMoreWorkflowOrders(bucket, filters.value)');
+    expect(packedOrdersSource).toContain('store.runBulkAction(bucket, action.id, await facilityTypeRows())');
+    expect(packedOrdersSource).toContain('orderStore.loadMoreWorkflowOrders(bucket, filters.value, await facilityTypeRows())');
   });
 });

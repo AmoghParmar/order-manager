@@ -112,8 +112,9 @@ import {
 import { addOutline, checkmarkDoneOutline, closeOutline, createOutline, trashOutline } from 'ionicons/icons';
 import { computed, reactive, ref } from 'vue';
 import { DateTime } from 'luxon';
-import { api, commonUtil, translate } from '@common';
+import { commonUtil, translate } from '@common';
 import { useSeedData } from '@common/db';
+import { useOrderDetailStore } from '@/store/orderDetail';
 import { useUserStore } from '@/store/user';
 import { confirmAction, showToast } from '@/utils';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -148,6 +149,7 @@ function isSystemSourced(identification: Identification) {
 }
 
 const userStore = useUserStore();
+const orderDetailStore = useOrderDetailStore();
 // A user with Actions.APP_ORDER_IDENTIFICATION_UPDATE (ORDERMGR_ADMIN) can edit/remove any
 // identification, including system/imported ones; everyone else can only edit/remove the
 // identifications that aren't system-sourced.
@@ -204,11 +206,7 @@ async function addIdentification() {
   adding.value = true;
   try {
     const fromDate = DateTime.now().toMillis();
-    const resp = await api({
-      url: `oms/orders/${props.orderId}/identifications`,
-      method: 'POST',
-      data: { orderIdentificationTypeId: addForm.orderIdentificationTypeId, idValue: addForm.idValue.trim(), fromDate }
-    });
+    const resp = await orderDetailStore.addOrderIdentification(props.orderId, addForm.orderIdentificationTypeId, addForm.idValue.trim(), fromDate);
     if (commonUtil.hasError(resp)) throw resp.data;
 
     localIdentifications.value.push({
@@ -247,27 +245,10 @@ async function saveEdit(identification: Identification) {
     // Updating a value means expiring the old identification row, then creating a fresh
     // one — there's no in-place value update on this entity.
     const now = DateTime.now().toMillis();
-    const expireResp = await api({
-      url: `oms/orders/${props.orderId}/identifications`,
-      method: 'PUT',
-      data: {
-        orderIdentificationTypeId: identification.orderIdentificationTypeId,
-        orderId: props.orderId,
-        fromDate: identification.fromDate,
-        thruDate: now
-      }
-    });
+    const expireResp = await orderDetailStore.expireOrderIdentification(props.orderId, identification, now);
     if (commonUtil.hasError(expireResp)) throw expireResp.data;
 
-    const createResp = await api({
-      url: `oms/orders/${props.orderId}/identifications`,
-      method: 'POST',
-      data: {
-        orderIdentificationTypeId: identification.orderIdentificationTypeId,
-        idValue: editValue.value.trim(),
-        fromDate: now
-      }
-    });
+    const createResp = await orderDetailStore.addOrderIdentification(props.orderId, identification.orderIdentificationTypeId, editValue.value.trim(), now);
     if (commonUtil.hasError(createResp)) throw createResp.data;
 
     identification.idValue = editValue.value.trim();
@@ -289,16 +270,7 @@ async function removeIdentification(identification: Identification) {
   const key = rowKey(identification);
   removingKey.value = key;
   try {
-    const resp = await api({
-      url: `oms/orders/${props.orderId}/identifications`,
-      method: 'PUT',
-      data: {
-        orderIdentificationTypeId: identification.orderIdentificationTypeId,
-        orderId: props.orderId,
-        fromDate: identification.fromDate,
-        thruDate: DateTime.now().toMillis()
-      }
-    });
+    const resp = await orderDetailStore.expireOrderIdentification(props.orderId, identification, DateTime.now().toMillis());
     if (commonUtil.hasError(resp)) throw resp.data;
 
     localIdentifications.value = localIdentifications.value.filter((entry) => rowKey(entry) !== key);

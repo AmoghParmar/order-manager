@@ -1,9 +1,16 @@
-import { translate } from "@common";
+import { api, translate } from "@common";
 import { defineStore } from "pinia";
-import { getPartyNames } from "@/services/customer";
-import { fetchOrderRowEnrichment } from "@/services/order";
-import { getReturn, listReturns, toReturnSummary } from "@/services/returns";
-import type { ReturnDetail, ReturnListQuery, ReturnSummary, ReturnsQueryState } from "@/types/returns";
+import { useCustomerStore } from "@/store/customer";
+import { useOrderStore } from "@/store/order";
+import {
+  assertSuccessfulPayload,
+  mapReturnDetail,
+  normalizeReturnList,
+  RETURN_DETAIL_UNAVAILABLE,
+  returnListParams,
+  toReturnSummary
+} from "@/utils/returns";
+import type { ReturnDetail, ReturnListQuery, ReturnListResult, ReturnSummary, ReturnsQueryState } from "@/types/returns";
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -34,8 +41,9 @@ async function loadReturnNameEnrichment(items: ReturnSummary[], additionalOrderI
   ].filter((orderId): orderId is string => Boolean(orderId)))];
   const partyIds = [...new Set(items.map((item) => item.fromPartyId).filter((partyId): partyId is string => Boolean(partyId)))];
   const [ordersById, parties] = await Promise.all([
-    fetchOrderRowEnrichment(orderIds).catch(() => ({})),
-    getPartyNames(partyIds).catch(() => [])
+    // Only the order names are read, so the rows need no facility types.
+    useOrderStore().fetchOrderRowEnrichment(orderIds, []).catch(() => ({})),
+    useCustomerStore().getPartyNames(partyIds).catch(() => [])
   ]);
 
   return {
@@ -102,6 +110,30 @@ export const useReturnsStore = defineStore("returns", {
     isExactReturnSearch: (state) => state.query.searchField === "RETURN_ID" && Boolean(normalizedExactId(state.query.searchTerm))
   },
   actions: {
+    async listReturns(query: ReturnListQuery = {}): Promise<ReturnListResult> {
+      const response = await api({ url: "oms/returns", method: "get", params: returnListParams(query) });
+      assertSuccessfulPayload(response.data);
+
+      return normalizeReturnList(response.data);
+    },
+    async getReturn(returnId: string): Promise<ReturnDetail> {
+      const normalizedReturnId = returnId.trim();
+      if(!normalizedReturnId) {throw new Error("Return ID is required");}
+      let response;
+      try {
+        response = await api({ url: `sob/returns/${encodeURIComponent(normalizedReturnId)}`, method: "get" });
+      } catch (error: any) {
+        const status = error?.response?.status;
+        if(status === 404 || status === 405) {throw new Error(RETURN_DETAIL_UNAVAILABLE, { cause: error });}
+
+        throw error;
+      }
+      assertSuccessfulPayload(response.data);
+      const detail = mapReturnDetail(response.data);
+      if(!detail.returnId) {throw new Error(`Return ${normalizedReturnId} was not found`);}
+
+      return detail;
+    },
     async search() {
       const requestId = ++this.requestSequence;
       this.loading = true;
@@ -110,7 +142,7 @@ export const useReturnsStore = defineStore("returns", {
       try {
         const term = normalizedExactId(this.query.searchTerm);
         if(this.query.searchField === "RETURN_ID" && term) {
-          const detail = await getReturn(term);
+          const detail = await this.getReturn(term);
           if(requestId !== this.requestSequence) {return;}
           const summaries = matchesFilters(detail, this.query) ? [toReturnSummary(detail)] : [];
           const enrichedSummaries = await enrichReturnSummaries(summaries);
@@ -121,7 +153,7 @@ export const useReturnsStore = defineStore("returns", {
 
           return;
         }
-        const result = await listReturns(this.buildListQuery(0));
+        const result = await this.listReturns(this.buildListQuery(0));
         if(requestId !== this.requestSequence) {return;}
         const enrichedSummaries = await enrichReturnSummaries(result.items);
         if(requestId !== this.requestSequence) {return;}
@@ -159,7 +191,7 @@ export const useReturnsStore = defineStore("returns", {
       this.loading = true;
       this.error = "";
       try {
-        const result = await listReturns(this.buildListQuery(nextPage));
+        const result = await this.listReturns(this.buildListQuery(nextPage));
         if(requestId !== this.requestSequence) {return;}
         const enrichedItems = await enrichReturnSummaries(result.items);
         if(requestId !== this.requestSequence) {return;}
@@ -181,7 +213,7 @@ export const useReturnsStore = defineStore("returns", {
       this.detailError = "";
       this.current = undefined;
       try {
-        const detail = await getReturn(returnId);
+        const detail = await this.getReturn(returnId);
         this.current = await enrichReturnDetail(detail);
       } catch (error: any) {
         this.detailError = error?.message || translate("Failed to load return");

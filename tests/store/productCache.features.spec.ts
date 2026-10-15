@@ -3,8 +3,9 @@ import { resolve } from 'path';
 import { describe, expect, it } from 'vitest';
 
 describe('product master selectable features', () => {
-  const source = readFileSync(resolve(process.cwd(), 'src/composables/useProductMaster.ts'), 'utf8');
-  const db = readFileSync(resolve(process.cwd(), 'src/services/productDb.ts'), 'utf8');
+  const source = readFileSync(resolve(process.cwd(), 'src/utils/productDocs.ts'), 'utf8');
+  const cache = readFileSync(resolve(process.cwd(), 'src/store/productCache.ts'), 'utf8');
+  const db = readFileSync(resolve(process.cwd(), 'src/db/productDb.ts'), 'utf8');
 
   it('asks Solr for productFeatures and caches the field', () => {
     expect(source).toContain('goodIdentifications mainImageUrl productFeatures');
@@ -18,7 +19,7 @@ describe('product master selectable features', () => {
     // the check now spans every cached identity field, productFeatures included
     expect(source).toContain('CACHED_IDENTITY_KEYS.every((key) => key in product)');
     expect(source).toContain('"productFeatures",');
-    expect(source).toContain('.filter((id) => !isFullyCached(cache.getProduct(id)));');
-    expect(source).toContain('if (isFullyCached(existing) && !opts?.refresh)');
+    expect(cache).toContain('.filter((id) => !isFullyCached(this.getProduct(id)));');
+    expect(cache).toContain('if (isFullyCached(existing) && !opts?.refresh)');
   });
 });

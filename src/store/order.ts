@@ -1,22 +1,56 @@
-import { api, logger, translate } from '@common';
+import { api, commonUtil, logger, translate, useSolrSearch } from '@common';
 import { defineStore } from 'pinia';
 import {
-  searchOrders as searchOrderService,
-  fetchOrderRowEnrichment,
-  type OrderSearchParams
-} from '@/services/order';
-import { toStringValue, toNumberValue } from '@/services/OrderService';
+  buildActivePhysicalFacilityOrderVolumePayload,
+  buildOrderLookupPayload,
+  buildOrderRowEnrichmentPayload,
+  buildUnfillableOrderDateTrendPayload,
+  buildUnfillableProductCandidatesPayload,
+  buildUnfillableShipGroupsForProductPayload,
+  buildUnfillableTrendSpanPayload,
+  buildVirtualLocationCountsPayload,
+  EMPTY_UNFILLABLE_TREND,
+  mergeSearchOrderEnrichment,
+  normalizeActivePhysicalFacilityOrderVolume,
+  normalizeOrderRowEnrichment,
+  normalizeOrderSolrResponse,
+  normalizeUnfillableProductCandidates,
+  normalizeUnfillableShipGroups,
+  normalizeUnfillableTrend,
+  normalizeVirtualLocationCountResponse,
+  UNFILLABLE_TREND_MAX_BUCKETS,
+  unfillableTrendWindow,
+  type ActiveFacilityOrderVolume,
+  type OrderSearchParams,
+  type UnfillableProductCandidate,
+  type UnfillableShipGroup,
+  type UnfillableTrend,
+  type VirtualLocationCountParams,
+  type VirtualLocationOrderCount,
+  type WorkflowOrderBucket,
+  type WorkflowOrderTotals
+} from '@/utils/orderSearch';
+import { toStringValue, toNumberValue, type OrderSearchResult } from '@/utils/orderDocs';
 import type { Customer, Order, ReturnRecord, Shipment } from '@/types/order';
 import type { WorkflowOrder, WorkflowFilters } from '@/types/customerService';
 import { DEFAULT_WORKFLOW_ORDER_SORT, WORKFLOW_ORDER_SORT_ORDER_BY } from '@/types/customerService';
 import type { OrderRowEnrichment } from '@/types/orderRow';
 import { useProductStore } from './productStore';
-import { queueCountFetchers } from '@/services/navCounts';
+import { buildBrokeringFacilityOptions, FALLBACK_BROKERING_FACILITY_IDS } from '@/utils/brokeringFacilities';
 
 // Oldest first by default: Find orders is worked down, so the operator should land on
 // the orders that have been waiting longest rather than on the freshest arrivals.
 export const DEFAULT_ORDER_SEARCH_SORT = 'orderDate asc';
 
+// Brokering is the one queue badge the Funnel's existing fetches cannot reproduce:
+// its dashboard virtual-location counts are per-facility, but the /brokering page
+// counts DISTINCT orders across the whole awaiting-brokering facility set (an order
+// spanning two parking facilities is one row on the page, two in the per-facility
+// sums). So we count it the same way the page does — one grouped solr query. Every
+// other badge is published as a byproduct of the Funnel's own dashboard fetches
+// (open/inflight/packed from the brokered workload; unfillable + the hold-task
+// purposes from the customer-service store).
+const BROKERING_STATUSES = ['ORDER_CREATED', 'ORDER_APPROVED'];
 
 async function fetchWorkflowPage(
   bucket: 'open' | 'inflight' | 'packed',
@@ -193,10 +227,14 @@ export const useOrderStore = defineStore('orders', {
     async primeNavCounts(productStoreId?: string) {
       const requestId = ++this.navCountRequestGeneration;
       const storeId = productStoreId && productStoreId !== 'All' ? productStoreId : undefined;
+      // Nav-badge key → count fetcher for badges not covered by a Funnel dashboard fetch.
+      const queueCountFetchers: Record<string, () => Promise<number>> = {
+        brokering: () => this.fetchBrokeringCount(storeId)
+      };
       const results = await Promise.all(
         Object.entries(queueCountFetchers).map(async ([key, fetchCount]) => {
           try {
-            return { key, total: await fetchCount(storeId) };
+            return { key, total: await fetchCount() };
           } catch (error: any) {
             return { key, error };
           }
@@ -211,18 +249,136 @@ export const useOrderStore = defineStore('orders', {
         }
       });
     },
-    async runSearch() {
+    /** Creates an order in Shopify; the response carries `shopifyOrderId` and `shopifyOrderName`. */
+    async createShopifyOrder(payload: Record<string, any>): Promise<any> {
+      return api({
+        url: 'oms/orders/shopify',
+        method: 'post',
+        data: payload
+      });
+    },
+    /** Every virtual facility (parking locations and the like). */
+    async fetchVirtualFacilities(): Promise<any[]> {
+      const resp = await api({ url: 'admin/facilities', method: 'GET', params: { parentTypeId: 'VIRTUAL_FACILITY' } });
+      return Array.isArray(resp.data) ? resp.data : [];
+    },
+    /** The virtual facilities, the brokering queue's facility vocabulary; none when the read fails. */
+    async fetchBrokeringFacilities(): Promise<any[]> {
+      return this.fetchVirtualFacilities().catch(() => []);
+    },
+    /** The default ("All") facility id set the brokering queue searches — every
+     * virtual facility except the archive and unfillable parking, or the fallback
+     * parking ids when none are configured. */
+    async fetchBrokeringFacilityIds(): Promise<string[]> {
+      const ids = buildBrokeringFacilityOptions(await this.fetchBrokeringFacilities()).map((option) => option.id);
+      return ids.length ? ids : [...FALLBACK_BROKERING_FACILITY_IDS];
+    },
+    async fetchBrokeringCount(productStoreId?: string): Promise<number> {
+      // Solr `total` reflects only the query filters (status/facility/store), not the
+      // allocation enrichment, so a single-row page yields the /brokering page's exact
+      // distinct-order count. Facility types only shape the rows, so none are needed.
+      const result = await this.queryOrders({
+        status: BROKERING_STATUSES,
+        facilityIds: await this.fetchBrokeringFacilityIds(),
+        productStoreId,
+        pageSize: 1,
+        pageIndex: 0
+      }, []);
+      return result.total ?? 0;
+    },
+    /**
+     * One Solr page of orders. `facilityTypes` are the caller's facility type rows: the rows
+     * are stamped with each facility's parent type, which tells virtual locations from physical.
+     */
+    async queryOrders(params: OrderSearchParams, facilityTypes: any[]): Promise<OrderSearchResult> {
+      const response = await useSolrSearch().runSolrQuery(buildOrderLookupPayload(params));
+      if (commonUtil.hasError(response)) return Promise.reject(response.data);
+
+      const result = normalizeOrderSolrResponse(response.data, params.allocationSummary, facilityTypes);
+      if (params.allocationSummary?.mode !== 'queue-first' || !result.orders.length) return result;
+
+      const enrichment = await this.fetchOrderRowEnrichment(result.orders.map((order) => order.id), facilityTypes);
+      return {
+        ...result,
+        orders: result.orders.map((order) => mergeSearchOrderEnrichment(order, enrichment[order.id], params.allocationSummary!))
+      };
+    },
+    /** `facilityTypes` are the caller's facility type rows, as for queryOrders. */
+    async fetchOrderRowEnrichment(orderIds: readonly string[], facilityTypes: any[]): Promise<Record<string, OrderRowEnrichment>> {
+      const uniqueOrderIds = [...new Set(orderIds.filter(Boolean))];
+      if (!uniqueOrderIds.length) return {};
+      const response = await useSolrSearch().runSolrQuery(buildOrderRowEnrichmentPayload(uniqueOrderIds));
+      if (commonUtil.hasError(response)) return Promise.reject(response.data);
+      return normalizeOrderRowEnrichment(response.data, facilityTypes);
+    },
+    async fetchWorkflowOrderTotals(productStoreId?: string): Promise<WorkflowOrderTotals> {
+      const buckets: WorkflowOrderBucket[] = ['open', 'inflight', 'packed'];
+      const totals = await Promise.all(buckets.map(async (bucket) => {
+        const resp = await api({
+          url: `oms/orders/salesOrders/${bucket}`,
+          method: 'get',
+          params: {
+            pageSize: 1,
+            pageIndex: 0,
+            ...(productStoreId ? { productStoreId } : {})
+          }
+        });
+
+        return [bucket, Number(resp.data?.ordersCount ?? 0)] as const;
+      }));
+
+      return Object.fromEntries(totals) as unknown as WorkflowOrderTotals;
+    },
+    async fetchActivePhysicalFacilityOrderVolume(params: { productStoreId?: string } = {}): Promise<ActiveFacilityOrderVolume[]> {
+      const response = await useSolrSearch().runSolrQuery(buildActivePhysicalFacilityOrderVolumePayload(params));
+      if (commonUtil.hasError(response)) return Promise.reject(response.data);
+      return normalizeActivePhysicalFacilityOrderVolume(response.data);
+    },
+    async fetchVirtualLocationOrderCounts(params: VirtualLocationCountParams): Promise<VirtualLocationOrderCount[]> {
+      if (!params.facilityIds.length) return [];
+      const response = await useSolrSearch().runSolrQuery(buildVirtualLocationCountsPayload(params));
+      if (commonUtil.hasError(response)) return Promise.reject(response.data);
+      return normalizeVirtualLocationCountResponse(response.data);
+    },
+    async fetchUnfillableProductCandidates(productStoreId?: string, limit = 50): Promise<UnfillableProductCandidate[]> {
+      const response = await useSolrSearch().runSolrQuery(buildUnfillableProductCandidatesPayload(productStoreId, limit));
+      if (commonUtil.hasError(response)) return Promise.reject(response.data);
+      return normalizeUnfillableProductCandidates(response.data);
+    },
+    async fetchUnfillableTrend(productStoreId?: string, timeZone?: string, maxBuckets = UNFILLABLE_TREND_MAX_BUCKETS): Promise<UnfillableTrend> {
+      const solr = useSolrSearch();
+      const zone = timeZone || undefined;
+
+      const spanResponse = await solr.runSolrQuery(buildUnfillableTrendSpanPayload(productStoreId));
+      if (commonUtil.hasError(spanResponse)) return Promise.reject(spanResponse.data);
+
+      const window = unfillableTrendWindow(spanResponse.data, zone, maxBuckets);
+      if (!window) return EMPTY_UNFILLABLE_TREND;
+
+      const response = await solr.runSolrQuery(
+        buildUnfillableOrderDateTrendPayload(productStoreId, window.start, window.end, window.gapDays)
+      );
+      if (commonUtil.hasError(response)) return Promise.reject(response.data);
+      return normalizeUnfillableTrend(response.data, window.gapDays, zone);
+    },
+    async fetchUnfillableShipGroupsForProduct(productStoreId: string, productId: string): Promise<UnfillableShipGroup[]> {
+      const response = await useSolrSearch().runSolrQuery(buildUnfillableShipGroupsForProductPayload(productStoreId, productId));
+      if (commonUtil.hasError(response)) return Promise.reject(response.data);
+      return normalizeUnfillableShipGroups(response.data);
+    },
+    /** `facilityTypes` are the caller's facility type rows, as for queryOrders. */
+    async runSearch(facilityTypes: any[]) {
       this.pageIndex = 0;
-      const result = await this.fetchSearchPage(0);
+      const result = await this.fetchSearchPage(0, facilityTypes);
       this.searchResults = result.orders;
       this.searchTotal = result.total;
       this.cacheOrders(result.orders);
     },
-    async appendNextPage() {
+    async appendNextPage(facilityTypes: any[]) {
       if (this.loading || !this.hasMore) return;
 
       const nextPageIndex = this.pageIndex + 1;
-      const result = await this.fetchSearchPage(nextPageIndex);
+      const result = await this.fetchSearchPage(nextPageIndex, facilityTypes);
       this.pageIndex = nextPageIndex;
       this.searchResults = [...this.searchResults, ...result.orders];
       this.searchTotal = result.total;
@@ -233,12 +389,12 @@ export const useOrderStore = defineStore('orders', {
         this.cache[order.id] = order;
       });
     },
-    async fetchSearchPage(pageIndex: number) {
+    async fetchSearchPage(pageIndex: number, facilityTypes: any[]) {
       this.loading = true;
       this.error = '';
 
       try {
-        return await searchOrderService(this.toSearchParams(pageIndex));
+        return await this.queryOrders(this.toSearchParams(pageIndex), facilityTypes);
       } catch (error: any) {
         this.error = error?.message || translate('Failed to search orders');
         return Promise.reject(error);
@@ -263,12 +419,6 @@ export const useOrderStore = defineStore('orders', {
         pageIndex,
       };
     },
-    async loadWorkflowData() {
-      if (!this.searchResults.length) await this.runSearch();
-    },
-    async searchOrders() {
-      await this.runSearch();
-    },
     async loadCustomerOrders(customerId: string) {
       return this.getCustomerOrders(customerId);
     },
@@ -281,14 +431,15 @@ export const useOrderStore = defineStore('orders', {
     async loadReturn(returnId: string) {
       return this.getReturn(returnId);
     },
-    async loadMoreWorkflowOrders(bucket: 'open' | 'inflight' | 'packed', filters: WorkflowFilters) {
+    /** `facilityTypes` are the caller's facility type rows, as for queryOrders. */
+    async loadMoreWorkflowOrders(bucket: 'open' | 'inflight' | 'packed', filters: WorkflowFilters, facilityTypes: any[]) {
       if (this.workflowOrdersLoading[bucket]) return;
       if (this.workflowOrders[bucket].length >= this.workflowOrdersTotal[bucket]) return;
       this.workflowOrdersLoading[bucket] = true;
       try {
         const nextPage = this.workflowOrdersPageIndex[bucket] + 1;
         const { orders, total } = await fetchWorkflowPage(bucket, filters, nextPage);
-        await this.enrichWorkflowOrderPage(bucket, orders);
+        await this.enrichWorkflowOrderPage(bucket, orders, facilityTypes);
         this.workflowOrders[bucket] = [...this.workflowOrders[bucket], ...orders];
         this.workflowOrdersTotal[bucket] = total;
         this.workflowOrdersPageIndex[bucket] = nextPage;
@@ -298,7 +449,8 @@ export const useOrderStore = defineStore('orders', {
         this.workflowOrdersLoading[bucket] = false;
       }
     },
-    async fetchWorkflowOrders(bucket: 'open' | 'inflight' | 'packed', filters: WorkflowFilters) {
+    /** `facilityTypes` are the caller's facility type rows, as for queryOrders. */
+    async fetchWorkflowOrders(bucket: 'open' | 'inflight' | 'packed', filters: WorkflowFilters, facilityTypes: any[]) {
       if (this.workflowOrdersLoading[bucket]) return;
       this.workflowOrdersLoading[bucket] = true;
       this.workflowOrdersError[bucket] = '';
@@ -308,7 +460,7 @@ export const useOrderStore = defineStore('orders', {
       this.workflowOrderEnrichment[bucket] = {};
       try {
         const { orders, total } = await fetchWorkflowPage(bucket, filters, 0);
-        await this.enrichWorkflowOrderPage(bucket, orders);
+        await this.enrichWorkflowOrderPage(bucket, orders, facilityTypes);
         this.workflowOrders[bucket] = orders;
         this.workflowOrdersTotal[bucket] = total;
         this.workflowOrdersPageIndex[bucket] = 0;
@@ -320,11 +472,11 @@ export const useOrderStore = defineStore('orders', {
         this.workflowOrdersLoading[bucket] = false;
       }
     },
-    async enrichWorkflowOrderPage(bucket: 'open' | 'inflight' | 'packed', orders: WorkflowOrder[]) {
+    async enrichWorkflowOrderPage(bucket: 'open' | 'inflight' | 'packed', orders: WorkflowOrder[], facilityTypes: any[]) {
       const orderIds = [...new Set(orders.map((order) => order.orderId).filter(Boolean))];
       if (!orderIds.length) return;
       try {
-        const enrichment = await fetchOrderRowEnrichment(orderIds);
+        const enrichment = await this.fetchOrderRowEnrichment(orderIds, facilityTypes);
         this.workflowOrderEnrichment[bucket] = {
           ...this.workflowOrderEnrichment[bucket],
           ...enrichment

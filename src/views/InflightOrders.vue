@@ -130,13 +130,19 @@ import OrderRow from '@/components/orders/OrderRow.vue';
 import OrderSortPopover from '@/components/orders/OrderSortPopover.vue';
 
 const seed = useSeedData();
+
+/** Facility type rows for the order rows' virtual-location checks; none while they cannot be read. */
+function facilityTypeRows() {
+  return seed.getFacilityTypes().catch(() => []);
+}
 import { useOrder } from '@/composables/useOrder';
-import { api, translate } from '@common';
+import { translate } from '@common';
+import { usePhysicalFacilityOptions } from '@/composables/usePhysicalFacilityOptions';
 import router from '@/router';
 import { showToast } from '@/utils';
 
 const bucket = 'inflight';
-const VIRTUAL_FACILITY_TYPE_ID = 'VIRTUAL_FACILITY';
+const { fetchPhysicalFacilities } = usePhysicalFacilityOptions();
 const store = useCustomerServiceStore();
 const orderStore = useOrderStore();
 const ionRouter = useIonRouter();
@@ -199,23 +205,12 @@ function applyRouteFilters() {
 watch(() => [router.currentRoute.value.query.facilityId, router.currentRoute.value.query.dateFrom], applyRouteFilters, { immediate: true });
 
 function loadWorkflowOrders() {
-  orderStore.fetchWorkflowOrders(bucket, filters.value);
+  facilityTypeRows().then((rows) => orderStore.fetchWorkflowOrders(bucket, filters.value, rows));
 }
 
 async function loadPhysicalFacilities() {
   try {
-    const resp = await api({
-      url: 'oms/facilities',
-      method: 'GET',
-      params: {
-        pageSize: 1000,
-        facilityTypeId: VIRTUAL_FACILITY_TYPE_ID,
-        facilityTypeId_not: 'Y',
-        parentTypeId: VIRTUAL_FACILITY_TYPE_ID,
-        parentTypeId_not: 'Y'
-      }
-    });
-    const facilities = responseList(resp.data);
+    const facilities = await fetchPhysicalFacilities();
     physicalFacilities.value = facilities
       .map((facility: any) => ({
         id: facility.facilityId || facility.id,
@@ -227,12 +222,9 @@ async function loadPhysicalFacilities() {
   }
 }
 
-function responseList(data: any) {
-  return Array.isArray(data) ? data : data?.entityValueList || data?.docs || data?.list || data?.items || [];
-}
 
 async function loadMore(event: any) {
-  await orderStore.loadMoreWorkflowOrders(bucket, filters.value);
+  await orderStore.loadMoreWorkflowOrders(bucket, filters.value, await facilityTypeRows());
   event.target.complete();
 }
 
@@ -348,7 +340,7 @@ async function runAction(action: BulkActionDefinition) {
   }
 
   const count = selectedIds.value.size;
-  store.runBulkAction(bucket, action.id);
+  facilityTypeRows().then((rows) => store.runBulkAction(bucket, action.id, rows));
   await showToast(translate('{action}: {count} orders', { action: translate(action.label), count }));
 }
 

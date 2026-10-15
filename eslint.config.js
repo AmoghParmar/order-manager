@@ -5,17 +5,18 @@ export default [
   ...dbConfig,
   {
     // An app-local Dexie store outside the app database, so the data-access rules do not apply.
-    files: ["src/services/productDb.ts"],
+    files: ["src/db/productDb.ts"],
     rules: {
       "@typescript-eslint/no-restricted-imports": "off",
       "no-restricted-syntax": "off"
     }
   },
   {
-    // TODO: move the api() calls in these pages into composables / stores, then remove this override.
-    files: ["src/**/*.vue"],
+    // The Pinia mirror over that app-local product Dexie store (not the app database), so it may
+    // import it.
+    files: ["src/store/productCache.ts"],
     rules: {
-      "no-restricted-imports": "off"
+      "@typescript-eslint/no-restricted-imports": "off"
     }
   }
 ]

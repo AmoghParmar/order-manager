@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { api, logger } from '@common';
-import {
-  fetchUnfillableTrend,
-  fetchVirtualLocationOrderCounts,
-  getActivePhysicalFacilityOrderVolume,
-  searchOrders
-} from '@/services/order';
 import { useCustomerServiceStore } from '@/store/customerService';
 import { useOrderStore } from '@/store/order';
 import { DateTime } from 'luxon';
@@ -28,31 +22,24 @@ vi.mock('@common', () => ({
   translate: (value: string) => value,
 }));
 
-vi.mock('@/services/order', () => ({
-  EMPTY_UNFILLABLE_TREND: { points: [], days: [], totalOrders: 0 },
+// The order store's Solr fetch actions the dashboard cards call.
+const orderApi = vi.hoisted(() => ({
+  queryOrders: vi.fn(),
   fetchUnfillableTrend: vi.fn(),
   fetchVirtualLocationOrderCounts: vi.fn(),
-  getActivePhysicalFacilityOrderVolume: vi.fn(),
-  searchOrders: vi.fn(),
-  UNFILLABLE_QUEUE_ORDER_STATUSES: ['ORDER_CREATED', 'ORDER_APPROVED', 'ORDER_HOLD'],
+  fetchActivePhysicalFacilityOrderVolume: vi.fn(),
 }));
-
-vi.mock('@/services/fulfillmentSync', () => ({
-  getPickProfileGroups: vi.fn(),
-}));
+const searchOrders = orderApi.queryOrders;
+const fetchUnfillableTrend = orderApi.fetchUnfillableTrend;
+const fetchVirtualLocationOrderCounts = orderApi.fetchVirtualLocationOrderCounts;
+const getActivePhysicalFacilityOrderVolume = orderApi.fetchActivePhysicalFacilityOrderVolume;
 
 vi.mock('@/store/order', () => ({
   useOrderStore: vi.fn(() => ({
+    ...orderApi,
     workflowOrders: { open: [], inflight: [], packed: [] },
     workflowOrdersTotal: { open: 0, inflight: 0, packed: 0 },
   })),
-}));
-
-vi.mock('@/db/orderManagerDb', () => ({
-  orderManagerDb: {
-    tables: new Proxy({}, { get: (_target, table) => table }),
-    entity: () => ({ all: async () => [], get: async () => undefined }),
-  },
 }));
 
 vi.mock('@/store/orderDetail', () => ({
@@ -363,6 +350,7 @@ describe('customer service hold task counts', () => {
     vi.mocked(api).mockReset();
     vi.mocked(api).mockResolvedValue({ headers: {}, data: [] });
     vi.mocked(useOrderStore).mockReset().mockReturnValue({
+      ...orderApi,
       workflowOrders: { open: [], inflight: [], packed: [] },
       workflowOrdersTotal: { open: 0, inflight: 0, packed: 0 },
     } as any);
@@ -434,7 +422,7 @@ describe('customer service hold task counts', () => {
 
   it('rolls every purpose without a dedicated queue page into the Hold badge', async () => {
     const setNavCount = vi.fn();
-    vi.mocked(useOrderStore).mockReturnValue({ setNavCount } as any);
+    vi.mocked(useOrderStore).mockReturnValue({ ...orderApi, setNavCount } as any);
     vi.mocked(api).mockResolvedValueOnce({
       data: {
         holdTasksTotalCount: '21',

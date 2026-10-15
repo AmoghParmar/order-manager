@@ -134,3 +134,10 @@ export interface FulfillmentProgress {
   packedShipGroupsCount: number;
   shippedShipGroupsCount: number;
 }
+
+export interface SortRule {
+  /** The sort field: a PP_SORT_PARAM_TYPE enum's enumCode. */
+  id: string;
+  sequenceNum: number;
+  conditionSeqId: string;
+}

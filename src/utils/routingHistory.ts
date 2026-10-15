@@ -1,6 +1,31 @@
-import { type LocationStock, type ProductFacilityPair, pairKey } from "@/services/routingHistory";
 import { toMillis } from "@/utils/format";
 import { isIssuanceRow, summariseIssuance } from "@/utils/inventoryIssuance";
+
+export type ProductFacilityPair = { productId: string; facilityId: string };
+export type LocationStock = { atp: number; qoh: number };
+
+export const pairKey = (productId: string, facilityId: string) => `${productId}|${facilityId}`;
+
+function numericValue(value: unknown) {
+  const parsed = Number(value ?? 0);
+
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/** Available to promise and on hand per wanted product and facility, summed over its inventory log rows. */
+export function sumLocationStock(rows: any[], pairs: ProductFacilityPair[]): Record<string, LocationStock> {
+  const wanted = new Set(pairs.map((pair) => pairKey(pair.productId, pair.facilityId)));
+  const stock: Record<string, LocationStock> = {};
+  rows.forEach((row: any) => {
+    const key = pairKey(row.productId, row.facilityId);
+    if(!wanted.has(key)) {return;}
+    const entry = stock[key] || (stock[key] = { atp: 0, qoh: 0 });
+    entry.atp += numericValue(row.availableToPromiseTotal);
+    entry.qoh += numericValue(row.quantityOnHandTotal);
+  });
+
+  return stock;
+}
 
 /**
  * The routing history of an order's items, with the stock each change saw.

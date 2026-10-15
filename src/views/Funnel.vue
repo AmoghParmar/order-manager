@@ -631,7 +631,7 @@ import { DIMENSION_LABELS, facilityProgressAccessibleName } from '@/utils/funnel
 const seed = useSeedData();
 import { useRouter, type RouteLocationRaw } from 'vue-router';
 import HoldTaskCountList from '@/components/tasks/HoldTaskCountList.vue';
-import { fetchWorkflowOrderTotals, type WorkflowOrderTotals } from '@/services/order';
+import type { WorkflowOrderTotals } from '@/utils/orderSearch';
 import { DateTime } from 'luxon';
 import { formatDate, formatNumber, formatRelative } from '@/utils/format';
 
@@ -951,7 +951,7 @@ function fetchStoreDashboardData(productStoreId: string) {
 
 async function fetchBrokeredWorkload(productStoreId: string) {
   await brokeredWorkloadRequestScope.run(
-    () => fetchWorkflowOrderTotals(productStoreId),
+    () => orderStore.fetchWorkflowOrderTotals(productStoreId),
     {
       onStart: () => {
         brokeredWorkloadLoading.value = true;
