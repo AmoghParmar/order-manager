@@ -51,11 +51,9 @@ vi.mock('@common/db', () => ({
     paymentMethodDescription: (value: string) => value,
     statusDescription: (value: string) => value,
   }),
-}));
-
-vi.mock('@/composables/useProductMaster', () => ({
   useProductMaster: () => ({ getProduct: () => ({}) }),
 }));
+
 
 vi.mock('@/store/productStore', () => ({
   useProductStore: () => ({

@@ -23,7 +23,7 @@ import { IonContent, IonItem, IonLabel, IonList, IonListHeader, modalController,
 import { commonUtil, translate } from "@common";
 import ProductInventoryModal from "@/components/inventory/ProductInventoryModal.vue";
 import CustomSwapModal from "@/components/swaps/CustomSwapModal.vue";
-import { useProductMaster } from "@/composables/useProductMaster";
+import { useProductMaster } from "@common/db";
 import { useProductStore } from "@/store/productStore";
 
 const props = defineProps(["item", "task"]);

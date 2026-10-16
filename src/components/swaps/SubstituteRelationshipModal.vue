@@ -49,7 +49,7 @@
         </ion-thumbnail>
         <ion-label>
           {{ productLabel(product) }}
-          <p>{{ productMaster.secondaryId(product, [product.sku, product.productId]) }}</p>
+          <p>{{ secondaryId(product, [product.sku, product.productId]) }}</p>
         </ion-label>
         <ion-checkbox slot="end" :checked="selectedIds.has(product.productId)" />
       </ion-item>
@@ -104,7 +104,8 @@ import { DxpShopifyImg, translate } from '@common';
 import { useSolrSearch } from '@common/composables/useSolrSearch';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ErrorState from '@/components/common/ErrorState.vue';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
+import { useProductIdentity } from '@/composables/useProductIdentity';
 import { useProductSubstitutes } from '@/composables/useProductSubstitutes';
 import type { SubstituteAssociation } from '@/utils/productAssociations';
 import { isSameProduct, type ProductIdentity } from '@/utils/productIdentity';
@@ -132,6 +133,7 @@ const props = defineProps<{
 }>();
 const { searchProducts } = useSolrSearch();
 const productMaster = useProductMaster();
+const { primaryId, secondaryId } = useProductIdentity();
 const { createSubstituteAssociation, expireSubstituteAssociation, fetchActiveSubstitutes } = useProductSubstitutes();
 
 const queryString = ref('');
@@ -152,7 +154,7 @@ const dirty = computed(() => {
 });
 
 function productLabel(product: SelectableProduct) {
-  return productMaster.primaryId(product, [
+  return primaryId(product, [
     product.productName,
     product.parentProductName,
     product.internalName,

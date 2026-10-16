@@ -110,7 +110,7 @@ import TaskQueueEmptyState from '@/components/tasks/TaskQueueEmptyState.vue';
 import FraudTaskCard from '@/components/tasks/FraudTaskCard.vue';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useSeedData } from '@common/db';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import { useOrderTaskRouteState } from '@/composables/useOrderTaskRouteState';
 import { buildTaskQueueRequest, hasTaskFilters } from '@/utils/orderTaskFilters';
 import { countTaskTargets, orderTaskTarget, runGroupedTaskMutation, selectedTaskCardsById } from '@/utils/orderTaskBulk';

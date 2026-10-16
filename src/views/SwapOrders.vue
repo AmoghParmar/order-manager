@@ -131,7 +131,7 @@ import TaskQueueEmptyState from '@/components/tasks/TaskQueueEmptyState.vue';
 import SubstituteRelationshipModal from '@/components/swaps/SubstituteRelationshipModal.vue';
 import SwapSetupPanel, { type SwapSetupCandidate } from '@/components/swaps/SwapSetupPanel.vue';
 import RoutingGroupModal from '@/components/fulfillment/RoutingGroupModal.vue';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import { useProductStore } from '@/store/productStore';
 import { useUserStore } from '@/store/user';
 import { HIDE_SHOPIFY_UNSYNCED_ACTIONS } from '@/config/featureFlags';

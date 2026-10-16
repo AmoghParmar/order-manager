@@ -5,7 +5,7 @@ import { summarizeBrokeredFacilities } from '@/utils/orderSearch';
 import { useCustomerStore } from '@/store/customer';
 import { useOrderStore } from '@/store/order';
 import { isVirtualFacilityId, useOrderDetailStore } from '@/store/orderDetail';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import type { WorkflowBucket, WorkflowOrder } from '@/types/customerService';
 import type {
   EnrichedItemGroup,

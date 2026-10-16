@@ -41,7 +41,7 @@ import { closeOutline } from 'ionicons/icons';
 import { computed, ref, onMounted } from 'vue';
 import { logger, translate } from '@common';
 import { useSeedData } from '@common/db';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import { useStockStore } from '@/store/stock';
 
 const seed = useSeedData();

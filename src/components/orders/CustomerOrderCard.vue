@@ -58,7 +58,7 @@ import {
   IonProgressBar,
   IonThumbnail
 } from '@ionic/vue';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import type { CustomerOrderCardData } from '@/types/customer';
 
 defineProps<{

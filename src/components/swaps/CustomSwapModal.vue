@@ -47,13 +47,13 @@
           :disabled="!hasSubstituteStock(product.productId)"
           @click="selectSubstituteProduct(product.productId)"
         >
-          <ion-radio slot="start" :value="product.productId" :aria-label="productMaster.primaryId(getProduct(product.productId) || product, [product.productName])" />
+          <ion-radio slot="start" :value="product.productId" :aria-label="primaryId(getProduct(product.productId) || product, [product.productName])" />
           <ion-thumbnail slot="start">
             <DxpShopifyImg :src="getProduct(product.productId)?.mainImageUrl || product.mainImageUrl" size="small" />
           </ion-thumbnail>
           <ion-label>
-            {{ productMaster.primaryId(getProduct(product.productId) || product, [product.productName]) }}
-            <p>{{ productMaster.secondaryId(getProduct(product.productId) || product, [product.internalName]) }}</p>
+            {{ primaryId(getProduct(product.productId) || product, [product.productName]) }}
+            <p>{{ secondaryId(getProduct(product.productId) || product, [product.internalName]) }}</p>
             <p>{{ formatMoney(product.price, currency) }}</p>
           </ion-label>
           <ion-note class="facility-label ion-no-padding" slot="end">{{ facilityStockLabel(getSubstituteStock(product.productId)?.computedAtp) }}</ion-note>
@@ -91,13 +91,13 @@
             :disabled="!hasSearchStock(product)"
             @click="selectSearchProduct(product)"
           >
-            <ion-radio slot="start" :value="product.productId" :aria-label="productMaster.primaryId(getProduct(product.productId) || product, [product.parentProductName, product.productName])" />
+            <ion-radio slot="start" :value="product.productId" :aria-label="primaryId(getProduct(product.productId) || product, [product.parentProductName, product.productName])" />
             <ion-thumbnail slot="start">
               <DxpShopifyImg :src="product.mainImageUrl" size="small" />
             </ion-thumbnail>
             <ion-label>
-              {{ productMaster.primaryId(getProduct(product.productId) || product, [product.parentProductName, product.productName]) }}
-              <p>{{ productMaster.secondaryId(getProduct(product.productId) || product, [product.productName, product.internalName, product.sku]) }}</p>
+              {{ primaryId(getProduct(product.productId) || product, [product.parentProductName, product.productName]) }}
+              <p>{{ secondaryId(getProduct(product.productId) || product, [product.productName, product.internalName, product.sku]) }}</p>
             </ion-label>
             <ion-note class="facility-label ion-no-padding" slot="end">{{ facilityStockLabel(product.inventoryConfig?.computedLastInventoryCount) }}</ion-note>
           </ion-item>
@@ -126,7 +126,8 @@ import { computed, onMounted, ref } from 'vue';
 import { IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList, IonListHeader, IonNote, IonRadio, IonRadioGroup, IonSearchbar, IonSegment, IonSegmentButton, IonSpinner, IonThumbnail, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline } from 'ionicons/icons';
 import { DxpShopifyImg, translate } from '@common';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
+import { useProductIdentity } from '@/composables/useProductIdentity';
 import { useStockStore } from '@/store/stock';
 import { useSeedData } from '@common/db';
 import { formatMoney } from '@/utils/format';
@@ -177,6 +178,7 @@ const isSearchScrollable = computed(() =>
 const facilityLabel = computed(() => seed.facilityName(props.facilityId ?? ''));
 
 const productMaster = useProductMaster();
+const { primaryId, secondaryId } = useProductIdentity();
 
 function getProduct(productId: string) {
   return productMaster.getProduct(productId);

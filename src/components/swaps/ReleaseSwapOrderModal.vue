@@ -127,7 +127,7 @@ import {
 } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
 import { commonUtil, DxpShopifyImg, translate } from '@common';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import { useProductStore } from '@/store/productStore';
 import { formatMoney } from '@/utils/format';
 

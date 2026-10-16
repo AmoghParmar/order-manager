@@ -194,7 +194,7 @@ import OrderSummaryHeader from '@/components/orders/OrderSummaryHeader.vue';
 import { useOrder } from '@/composables/useOrder';
 import { useOrderActions } from '@/composables/useOrderActions';
 import { useOrderDistances } from '@/composables/useOrderDistances';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import { pairKey } from '@/utils/routingHistory';
 import { useCustomerStore } from '@/store/customer';
 import { useOrderDetailStore } from '@/store/orderDetail';

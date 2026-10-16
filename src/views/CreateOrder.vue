@@ -300,7 +300,7 @@ import { useCurrencies } from '@/composables/useCurrencies';
 import { useOrderStore } from '@/store/order';
 import { useCustomerStore } from '@/store/customer';
 import { useProductStore } from '@/store/productStore';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
 import { mapDocToProduct, type ProductRow } from '@common/db';
 import AddressModal from '@/components/AddressModal.vue';
 import AddCustomerModal from '@/components/AddCustomerModal.vue';
