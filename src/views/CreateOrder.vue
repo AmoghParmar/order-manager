@@ -301,7 +301,7 @@ import { useOrderStore } from '@/store/order';
 import { useCustomerStore } from '@/store/customer';
 import { useProductStore } from '@/store/productStore';
 import { useProductMaster } from '@/composables/useProductMaster';
-import { mapDocToProduct, type CachedProduct } from '@/utils/productDocs';
+import { mapDocToProduct, type ProductRow } from '@common/db';
 import AddressModal from '@/components/AddressModal.vue';
 import AddCustomerModal from '@/components/AddCustomerModal.vue';
 import AddProductModal from '@/components/AddProductModal.vue';
@@ -354,13 +354,13 @@ const facilities = computed(() => {
 const productMaster = useProductMaster();
 // Products this screen found through search, shown from the search answer until the product master
 // has them. getProductIdentificationValue throws on undefined, hence the empty fallback.
-const searchedProducts = ref(new Map<string, CachedProduct>());
+const searchedProducts = ref(new Map<string, ProductRow>());
 const rememberSearched = (docs: any[]) => {
   const next = new Map(searchedProducts.value);
   docs.forEach((doc) => doc?.productId && next.set(doc.productId, mapDocToProduct(doc)));
   searchedProducts.value = next;
 };
-const getProduct = (productId: string) => productMaster.getProduct(productId) || searchedProducts.value.get(productId) || ({} as Partial<CachedProduct>);
+const getProduct = (productId: string) => productMaster.getProduct(productId) || searchedProducts.value.get(productId) || ({} as Partial<ProductRow>);
 
 const scanInput = ref("") as any;
 const searchInput = ref("") as any;

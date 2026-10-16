@@ -224,7 +224,7 @@ import { IonAvatar, IonBadge, IonButton, IonButtons, IonCard, IonCardContent, Io
 import { checkmarkCircle, closeCircle, closeOutline, openOutline, saveOutline, syncOutline } from 'ionicons/icons';
 import { computed, onBeforeMount, ref } from 'vue';
 import { commonUtil, cookieHelper, i18n, translate } from '@common';
-import { catalogFrom, useDbStatus } from '@common/db';
+import { useDbStatus } from '@common/db';
 import { useAuth } from '@common/composables/useAuth';
 import { useUserStore } from '@/store/user';
 import { useProductStore } from '@/store/productStore';
@@ -361,9 +361,7 @@ const {
   domains, refreshing, totalRows, oldestSyncedAt, lastSyncedAt, refreshDomain, refreshAll,
 } = useDbStatus(
   orderManagerDb.client(),
-  // What the worker registers, seed domains and Order Manager's own, read from the same list. Imported
-  // on demand to keep the domain code out of startup.
-  async () => catalogFrom((await import('@/workers/appSyncDomains')).appSyncDomains),
+  orderManagerDb.statusCatalog,
   {
     resyncDomain,
     resyncAll: resyncReferenceData,

@@ -1,99 +1,25 @@
-import { computed, effectScope, getCurrentScope, onScopeDispose, type EffectScope, type Ref } from "vue";
-import { commonUtil, logger, useLiveEntity, useSolrSearch } from "@common";
-import { onSessionCleared } from "@common/core/sessionScope";
-import { orderManagerDb } from "@/db/orderManagerDb";
+import { commonUtil, logger, useSolrSearch } from "@common";
+import {
+  buildProductQuery,
+  mapDocToProduct,
+  PRODUCT_BATCH_SIZE,
+  useProductMaster as useFrameworkProductMaster,
+  type ProductRow
+} from "@common/db";
 import { refreshAfterMutation } from "@/db/appDbSync";
 import { useProductStore } from "@/store/productStore";
-import { buildProductQuery, mapDocToProduct, PRODUCT_BATCH_SIZE, PRODUCT_STALE_MS, type CachedProduct } from "@/utils/productDocs";
-
-export type { CachedProduct };
 
 /**
  * Product master — rich product data (name, SKU, image, identifiers) for rows that carry only a
- * productId. The app db's `products` table holds it (filled from Solr by the worker's `product`
- * domain, kept across logout); this composable reads it live and asks for what it lacks.
- *
- * `getProduct(id)` is safe to call from a template on every render: it answers from the table and
- * queues the id, and the queued ids go to the worker in one batch. The worker fetches only the ones
- * missing or older than PRODUCT_STALE_MS, and the live read shows them once stored.
+ * productId. The framework's `useProductMaster` reads the app db's `products` table and asks the
+ * worker for what it lacks; this adds Order Manager's naming (the Settings product identifier) and
+ * an unstored Solr lookup for pickers.
  */
-
-/** One live read of the table, shared by every mounted user and closed when the last unmounts. */
-let reader: { scope: EffectScope; byId: Ref<Map<string, CachedProduct>> } | null = null;
-let readers = 0;
-
-function openReader() {
-  if (!reader) {
-    const scope = effectScope(true);
-    const byId = scope.run(() => {
-      const { records } = useLiveEntity<CachedProduct>(orderManagerDb.tables.products);
-      return computed(() => new Map(records.value.map((product) => [product.productId, product])));
-    })!;
-    reader = { scope, byId };
-  }
-  readers += 1;
-}
-
-function closeReader() {
-  readers -= 1;
-  if (readers > 0 || !reader) return;
-  reader.scope.stop();
-  reader = null;
-  readers = 0;
-}
-
-/**
- * When each id was last sent to the worker. The worker decides what is stale; this only keeps a
- * re-rendering screen from asking again for an id it asked for within PRODUCT_STALE_MS.
- */
-const askedAt = new Map<string, number>();
-const queued = new Set<string>();
-
-onSessionCleared(() => {
-  askedAt.clear();
-  queued.clear();
-});
-
-/** Ask the worker for the products a screen shows. Resolves once they are stored; never rejects. */
-async function prefetch(productIds: Array<string | null | undefined>): Promise<void> {
-  const now = Date.now();
-  const due = [...new Set(productIds.filter(Boolean) as string[])]
-    .filter((productId) => now - (askedAt.get(productId) ?? -Infinity) >= PRODUCT_STALE_MS);
-  if (!due.length) return;
-
-  due.forEach((productId) => askedAt.set(productId, now));
-  try {
-    await refreshAfterMutation("product", { productIds: due });
-  } catch (error) {
-    // Let the next render ask again rather than wait out PRODUCT_STALE_MS.
-    due.forEach((productId) => askedAt.delete(productId));
-    logger.error("Failed to fetch products", error);
-  }
-}
-
-function queue(productId: string) {
-  if (askedAt.has(productId) && Date.now() - askedAt.get(productId)! < PRODUCT_STALE_MS) return;
-  if (!queued.size) {
-    queueMicrotask(() => {
-      const ids = [...queued];
-      queued.clear();
-      void prefetch(ids);
-    });
-  }
-  queued.add(productId);
-}
-
-/** The stored product, or undefined until it is fetched (or when Solr has none). */
-function getProduct(productId?: string | null): CachedProduct | undefined {
-  if (!productId) return undefined;
-  queue(productId);
-  return reader?.byId.value.get(productId);
-}
 
 /** Fetch products from Solr without storing them, for a picker that shows search results as-is. */
-async function getByIds(productIds: string[]): Promise<CachedProduct[]> {
+async function getByIds(productIds: string[]): Promise<ProductRow[]> {
   const ids = [...new Set(productIds.filter(Boolean))];
-  const products: CachedProduct[] = [];
+  const products: ProductRow[] = [];
   for (let index = 0; index < ids.length; index += PRODUCT_BATCH_SIZE) {
     try {
       const resp = await useSolrSearch().runSolrQuery(buildProductQuery(ids.slice(index, index + PRODUCT_BATCH_SIZE)));
@@ -116,7 +42,7 @@ async function getByIds(productIds: string[]): Promise<CachedProduct[]> {
  * by internalName or parentProductName gets that everywhere, not only in the views that
  * happened to be written against it.
  *
- * `product` is whatever identity-bearing object the row has: a CachedProduct, a denormalized
+ * `product` is whatever identity-bearing object the row has: a ProductRow, a denormalized
  * order/return/swap item, or nothing yet. commonUtil.getProductIdentificationValue throws on
  * undefined, so this normalizes first and callers never guard it themselves.
  *
@@ -139,11 +65,6 @@ function secondaryId(product: any, fallbacks: Array<string | null | undefined> =
 }
 
 export function useProductMaster() {
-  // In a component (or effect scope), hold the shared live read open until it unmounts. Outside one,
-  // getProduct answers from a read another component holds, if any.
-  if (getCurrentScope()) {
-    openReader();
-    onScopeDispose(closeReader);
-  }
+  const { getProduct, prefetch } = useFrameworkProductMaster({ refreshAfterMutation });
   return { getProduct, getByIds, prefetch, primaryId, secondaryId };
 }

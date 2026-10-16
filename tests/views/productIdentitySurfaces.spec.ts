@@ -43,8 +43,9 @@ describe('product identity surfaces honour the preference', () => {
   });
 
   it('fetches and stores every field the preference can point at', () => {
-    const master = read('src/utils/productDocs.ts');
-    const schema = read('src/db/orderManagerSchema.ts');
+    // The framework's product master: its Solr fields and the `products` seed entity.
+    const master = read('../../common/db/seed/productMaster.ts');
+    const schema = read('../../common/db/seed/seedSchema.ts');
     ['groupId', 'groupName', 'primaryProductCategoryName', 'title', 'goodIdentifications', 'productFeatures'].forEach((field) => {
       expect(master).toContain(field);
       expect(schema).toContain(`${field}:`);

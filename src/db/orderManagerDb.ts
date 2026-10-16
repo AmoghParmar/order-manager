@@ -19,15 +19,13 @@
  */
 
 import { defineAppDb } from "@common/db/schema/defineAppDb";
-import { mergeSchemas } from "@common/db/schema/defineSchema";
 import { commonSchema } from "@common/db/seed/seedSchema";
 import type { BaseDB } from "@common/db/storage/baseDb";
-import { orderManagerSchema } from "./orderManagerSchema";
 
 /**
- * The whole common seed schema plus Order Manager's own tables (`orderManagerSchema.ts`). Deep
- * imports, not the `@common/db` barrel: the barrel re-exports modules that import `vue`, and the
- * sync worker imports this file.
+ * Order Manager takes the whole common schema (seed reference data and the `products` master) and
+ * declares no tables of its own. Deep imports, not the `@common/db` barrel: the barrel re-exports
+ * modules that import `vue`, and the sync worker imports this file.
  */
 export const orderManagerDb = defineAppDb({
   suffix: "OrderManagerDB",
@@ -36,9 +34,9 @@ export const orderManagerDb = defineAppDb({
   // v3: the common seed tables gained fields (store time zones, enumName, facility fields, geo
   //     wellKnownText). New fields leave the store strings unchanged, so only a version change makes
   //     an existing database drop its old rows and re-sync them.
-  // v4: products, the product master that replaced the app-local `${oms}-CommonDB` Dexie store.
+  // v4: products (the framework's product master), replacing the app-local `${oms}-CommonDB` Dexie store.
   version: 4,
-  schema: mergeSchemas(commonSchema, orderManagerSchema),
+  schema: commonSchema,
 });
 
 /** Kept as named functions so existing call sites are unchanged. */
