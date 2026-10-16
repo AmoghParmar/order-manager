@@ -22,8 +22,8 @@
         <ion-label>{{ translate('Items') }}</ion-label>
       </ion-list-header>
       <ion-item v-for="(item, itemIndex) in order.items" :key="itemIndex">
-        <ion-thumbnail slot="start" v-image-preview="{ mainImageUrl: (productCache as any).getProduct(item.productId)?.mainImageUrl, productName: item.name }" :key="`${(productCache as any).getProduct(item.productId)?.mainImageUrl} ${item.name}`">
-          <DxpShopifyImg :src="(productCache as any).getProduct(item.productId)?.mainImageUrl" size="small" />
+        <ion-thumbnail slot="start" v-image-preview="{ mainImageUrl: productMaster.getProduct(item.productId)?.mainImageUrl, productName: item.name }" :key="`${productMaster.getProduct(item.productId)?.mainImageUrl} ${item.name}`">
+          <DxpShopifyImg :src="productMaster.getProduct(item.productId)?.mainImageUrl" size="small" />
         </ion-thumbnail>
         <ion-label>
           {{ item.name }}
@@ -58,14 +58,14 @@ import {
   IonProgressBar,
   IonThumbnail
 } from '@ionic/vue';
-import { useProductCacheStore } from '@/store/productCache';
+import { useProductMaster } from '@common/db';
 import type { CustomerOrderCardData } from '@/types/customer';
 
 defineProps<{
   order: CustomerOrderCardData;
 }>();
 
-const productCache = useProductCacheStore();
+const productMaster = useProductMaster();
 </script>
 
 <style scoped>

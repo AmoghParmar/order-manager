@@ -36,15 +36,6 @@ vi.mock('@common', () => ({
 }));
 
 
-vi.mock('@/db/productDb', () => ({
-  getProductDb: () => ({
-    products: {
-      bulkPut: vi.fn(),
-      toArray: vi.fn()
-    }
-  })
-}));
-
 describe('order detail store', () => {
   beforeEach(() => {
     setActivePinia(createPinia());

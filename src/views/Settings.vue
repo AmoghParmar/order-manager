@@ -147,7 +147,7 @@
                   {{ domainSyncLabel(domain) }}
                 </p>
               </ion-label>
-              <ion-button slot="end" fill="clear" :disabled="!!refreshing" @click="refreshDomain(domain.name)" :aria-label="translate('Refresh {label}', { label: translate(domain.label) })" :title="translate('Refresh {label}', { label: translate(domain.label) })">
+              <ion-button v-if="domain.syncClass !== 'C'" slot="end" fill="clear" :disabled="!!refreshing" @click="refreshDomain(domain.name)" :aria-label="translate('Refresh {label}', { label: translate(domain.label) })" :title="translate('Refresh {label}', { label: translate(domain.label) })">
                 <ion-spinner v-if="refreshing === domain.name" name="dots" slot="icon-only" />
                 <ion-icon v-else slot="icon-only" :icon="syncOutline" />
               </ion-button>
@@ -382,6 +382,8 @@ const syncSubtitle = computed(() => {
 function domainSyncLabel(domain: { count: number; syncedAt?: number | null; syncClass?: string }) {
   if (domain.syncedAt) return translate("{count} records, synced {time}", { count: domain.count, time: formatSyncTime(domain.syncedAt) });
   if (domain.syncClass === "A") return translate("{count} records, live while in use", { count: domain.count });
+  // Class C runs no pass of its own: rows arrive when a screen shows them (products).
+  if (domain.syncClass === "C") return translate("{count} records, fetched when shown", { count: domain.count });
   return translate("{count} records, not synced yet", { count: domain.count });
 }
 

@@ -201,11 +201,11 @@
                   <!-- The row is an accordion header, so opening the preview must not also toggle it. -->
                   <ion-thumbnail
                     v-if="item.productId"
-                    v-image-preview="{ mainImageUrl: (productCache as any).getProduct(item.productId)?.mainImageUrl, productName: itemLabel(item) }"
-                    :key="`${(productCache as any).getProduct(item.productId)?.mainImageUrl} ${itemLabel(item)}`"
+                    v-image-preview="{ mainImageUrl: productMaster.getProduct(item.productId)?.mainImageUrl, productName: itemLabel(item) }"
+                    :key="`${productMaster.getProduct(item.productId)?.mainImageUrl} ${itemLabel(item)}`"
                     @click.stop
                   >
-                    <DxpShopifyImg :src="(productCache as any).getProduct(item.productId)?.mainImageUrl" size="small" />
+                    <DxpShopifyImg :src="productMaster.getProduct(item.productId)?.mainImageUrl" size="small" />
                   </ion-thumbnail>
                   <ion-label class="ion-text-wrap">
                     {{ itemLabel(item) }}
@@ -427,9 +427,9 @@ import { computed, watch } from "vue";
 import Actions from "@/authorization/actions";
 import EmptyState from "@/components/common/EmptyState.vue";
 import ErrorState from "@/components/common/ErrorState.vue";
-import { useProductMaster } from "@/composables/useProductMaster";
+import { useProductMaster } from "@common/db";
+import { useProductIdentity } from "@/composables/useProductIdentity";
 import { useOrderDetailStore } from "@/store/orderDetail";
-import { useProductCacheStore } from "@/store/productCache";
 import { useReturnsStore } from "@/store/returns";
 import { useSeedData } from '@common/db';
 import { useUserStore } from "@/store/user";
@@ -444,8 +444,8 @@ const props = defineProps<{
 }>();
 
 const returnsStore = useReturnsStore();
-const productCache = useProductCacheStore();
 const productMaster = useProductMaster();
+const { primaryId, secondaryId } = useProductIdentity();
 const orderDetailStore = useOrderDetailStore();
 const userStore = useUserStore();
 const { current: returnRecord, detailLoading, detailError } = storeToRefs(returnsStore);
@@ -660,7 +660,7 @@ function itemAmount(item: ReturnItemDetail) {
 }
 
 function itemLabel(item: ReturnItemDetail) {
-  return productMaster.primaryId(productCache.getProduct(item.productId) || item, [
+  return primaryId(productMaster.getProduct(item.productId) || item, [
     item.productName,
     item.description,
     item.sku,
@@ -672,7 +672,7 @@ function itemLabel(item: ReturnItemDetail) {
 // A returned line can predate the product cache, and a custom line has no catalog product at
 // all, so the item's own fields stay as fallbacks behind the operator's chosen identifier.
 function itemSecondaryLabel(item: ReturnItemDetail) {
-  return productMaster.secondaryId(productCache.getProduct(item.productId) || item, [
+  return secondaryId(productMaster.getProduct(item.productId) || item, [
     item.sku,
     item.productId
   ]);

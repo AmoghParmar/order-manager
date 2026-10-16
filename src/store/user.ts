@@ -4,7 +4,6 @@ import { api, commonUtil, cookieHelper, logger, translate } from "@common";
 import { useAuth } from "@common/composables/useAuth";
 import { showToast } from "@/utils";
 import { useOrderDetailStore } from "./orderDetail";
-import { useProductCacheStore } from "./productCache";
 import { useProductStore } from "@/store/productStore";
 import { startAppDbSync, stopAppDbSync } from "@/db/appDbSync";
 
@@ -202,7 +201,6 @@ export const useUserStore = defineStore("user", {
     async postLogout() {
       await stopAppDbSync();
       useOrderDetailStore().reset();
-      useProductCacheStore().reset();
       this.$reset();
     }
   },

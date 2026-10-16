@@ -38,17 +38,18 @@
 <script setup lang="ts">
 import { IonButton, IonButtons, IonContent, IonHeader, IonIcon, IonItem, IonLabel, IonList, IonListHeader, IonSpinner, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { logger, translate } from '@common';
 import { useSeedData } from '@common/db';
-import { useProductCacheStore } from '@/store/productCache';
+import { useProductMaster } from '@common/db';
 import { useStockStore } from '@/store/stock';
 
 const seed = useSeedData();
 
 const props = defineProps<{ productId: string }>();
 
-const product = useProductCacheStore().getProduct(props.productId);
+const { getProduct } = useProductMaster();
+const product = computed(() => getProduct(props.productId));
 
 const isLoading = ref(false);
 const facilityStock = ref<any[]>([]);

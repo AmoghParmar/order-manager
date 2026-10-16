@@ -23,7 +23,7 @@ import { commonSchema } from "@common/db/seed/seedSchema";
 import type { BaseDB } from "@common/db/storage/baseDb";
 
 /**
- * Order Manager reads only HotWax seed reference data, so it takes the whole common schema and
+ * Order Manager takes the whole common schema (seed reference data and the `products` master) and
  * declares no tables of its own. Deep imports, not the `@common/db` barrel: the barrel re-exports
  * modules that import `vue`, and the sync worker imports this file.
  */
@@ -34,7 +34,8 @@ export const orderManagerDb = defineAppDb({
   // v3: the common seed tables gained fields (store time zones, enumName, facility fields, geo
   //     wellKnownText). New fields leave the store strings unchanged, so only a version change makes
   //     an existing database drop its old rows and re-sync them.
-  version: 3,
+  // v4: products (the framework's product master), replacing the app-local `${oms}-CommonDB` Dexie store.
+  version: 4,
   schema: commonSchema,
 });
 

@@ -5,7 +5,7 @@ import { summarizeBrokeredFacilities } from '@/utils/orderSearch';
 import { useCustomerStore } from '@/store/customer';
 import { useOrderStore } from '@/store/order';
 import { isVirtualFacilityId, useOrderDetailStore } from '@/store/orderDetail';
-import { useProductCacheStore } from '@/store/productCache';
+import { useProductMaster } from '@common/db';
 import type { WorkflowBucket, WorkflowOrder } from '@/types/customerService';
 import type {
   EnrichedItemGroup,
@@ -61,7 +61,7 @@ const TRANSFER_SOURCE_LABELS: Record<string, string> = {
 export function useOrder() {
   const orderStore = useOrderStore();
   const orderDetailStore = useOrderDetailStore();
-  const productCache = useProductCacheStore();
+  const { getProduct } = useProductMaster();
   const seed = useSeedData();
 
   /** A workflow bucket's order row: the stored row and its Solr enrichment, with its shipment method's label. */
@@ -155,7 +155,7 @@ export function useOrder() {
   function adjustmentsByExternalId(orderId: string): Record<string, GroupAdjustment[]> {
     const current = orderDetailStore.orderById(orderId);
     const index: Record<string, Record<string, GroupAdjustment>> = {};
-    const seqIdToExtId = orderDetailStore.itemExternalIdBySeqIdByOrderId(orderId);
+    const seqIdToExtId = orderDetailStore.itemExternalIdBySeqIdByOrderId(orderId, (productId) => getProduct(productId)?.sku);
     const seenAdjustments = new Set<string>();
 
     const recordAdj = (seqId: string, adj: any) => {
@@ -325,7 +325,7 @@ export function useOrder() {
     const units = rawItems.reduce((sum: number, item: any) => sum + Number(item.quantity || 0), 0);
 
     const items: EnrichedOrderItem[] = rawItems.map((item: any) => {
-      const product = productCache.getProduct(item.productId);
+      const product = getProduct(item.productId);
       const sku = product?.sku || item.productId;
       const statusId = item.statusId || '';
       const status = seed.statusDescription(statusId);

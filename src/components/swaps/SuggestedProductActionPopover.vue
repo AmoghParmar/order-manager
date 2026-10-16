@@ -23,17 +23,16 @@ import { IonContent, IonItem, IonLabel, IonList, IonListHeader, modalController,
 import { commonUtil, translate } from "@common";
 import ProductInventoryModal from "@/components/inventory/ProductInventoryModal.vue";
 import CustomSwapModal from "@/components/swaps/CustomSwapModal.vue";
-import { useProductCacheStore } from "@/store/productCache";
+import { useProductMaster } from "@common/db";
 import { useProductStore } from "@/store/productStore";
 
 const props = defineProps(["item", "task"]);
+const { getProduct } = useProductMaster();
 
 const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);
 
 const popoverTitle = computed(() => {
-  const product = props.item?.productId
-    ? useProductCacheStore().getProduct(props.item.productId)
-    : undefined;
+  const product = getProduct(props.item?.productId);
 
   return commonUtil.getProductIdentificationValue(productIdentificationPref.value.primaryId, product || {})
     || props.item?.productId
@@ -48,7 +47,7 @@ function firstText(...values: any[]): string {
 }
 
 function defaultCustomSwapSearchTerm(item: any): string {
-  const product = item?.productId ? useProductCacheStore().getProduct(item.productId) : undefined;
+  const product = getProduct(item?.productId);
 
   return firstText(
     product?.parentProductName,

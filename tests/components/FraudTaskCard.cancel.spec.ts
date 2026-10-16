@@ -51,11 +51,9 @@ vi.mock('@common/db', () => ({
     paymentMethodDescription: (value: string) => value,
     statusDescription: (value: string) => value,
   }),
+  useProductMaster: () => ({ getProduct: () => ({}) }),
 }));
 
-vi.mock('@/store/productCache', () => ({
-  useProductCacheStore: () => ({ getProduct: () => ({}) }),
-}));
 
 vi.mock('@/store/productStore', () => ({
   useProductStore: () => ({

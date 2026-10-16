@@ -96,7 +96,7 @@ import { showToast, sentimentCounts } from '@/utils';
 import RiskAssessmentModal from '@/components/orders/RiskAssessmentModal.vue';
 import { useOrderTaskStore } from '@/store/orderTask';
 import { useSeedData } from '@common/db';
-import { useProductCacheStore } from '@/store/productCache';
+import { useProductMaster } from '@common/db';
 import { useProductStore } from '@/store/productStore';
 import { HIDE_SHOPIFY_UNSYNCED_ACTIONS } from '@/config/featureFlags';
 import TaskCardShell from '@/components/tasks/TaskCardShell.vue';
@@ -138,8 +138,10 @@ async function openRiskDetails() {
 }
 
 
+const productMaster = useProductMaster();
+
 function getProduct(productId: string) {
-  return useProductCacheStore().getProduct(productId);
+  return productMaster.getProduct(productId);
 }
 
 function productImageUrl(productId: string): string {

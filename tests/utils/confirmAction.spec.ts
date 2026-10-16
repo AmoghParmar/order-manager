@@ -7,7 +7,6 @@ vi.mock('@ionic/vue', () => ({
   toastController: { create: vi.fn() },
 }));
 vi.mock('@common', () => ({ translate: (value: string) => value }));
-vi.mock('@/store/productCache', () => ({ useProductCacheStore: () => ({}) }));
 
 import { confirmAction } from '@/utils';
 

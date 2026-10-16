@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductIdentity } from '@/composables/useProductIdentity';
 import { useProductStore } from '@/store/productStore';
 
 // The real getProductIdentificationValue reads the named field off the product and throws on
@@ -23,8 +23,12 @@ vi.mock('@common', () => ({
   }
 }));
 
+vi.mock('@common/db', () => ({ useProductMaster: () => ({ getProduct: () => undefined }) }));
+
 describe('product identity honours the operator preference', () => {
-  const { primaryId, secondaryId } = useProductMaster();
+  // Called per assertion: useProductIdentity reads the product store, which needs the test's Pinia.
+  const primaryId = (...args: Parameters<ReturnType<typeof useProductIdentity>['primaryId']>) => useProductIdentity().primaryId(...args);
+  const secondaryId = (...args: Parameters<ReturnType<typeof useProductIdentity>['secondaryId']>) => useProductIdentity().secondaryId(...args);
 
   // The pref lives at settings.productIdentifier.productIdentificationPref; the getter the
   // helper reads is a view onto it, so the test sets the state the app actually persists.

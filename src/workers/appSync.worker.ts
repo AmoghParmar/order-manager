@@ -7,8 +7,13 @@
 import { commonDomains } from "@common/db/seed/seedDomains";
 import { exposeWorkerHarness } from "@common/db/sync/pollingWorkerHarness";
 import { registerDomains } from "@common/db/sync/syncRegistry";
-import { getOrderManagerDb } from "@/db/orderManagerDb";
+import { getOrderManagerDb, setOmsInstanceResolver } from "@/db/orderManagerDb";
 
 registerDomains(Object.values(commonDomains));
 
-exposeWorkerHarness((omsInstance) => getOrderManagerDb(omsInstance));
+exposeWorkerHarness((omsInstance) => {
+  // The worker is its own JS realm: the framework product domain writes through the registered app
+  // db's entity, which resolves the instance here.
+  setOmsInstanceResolver(() => omsInstance);
+  return getOrderManagerDb(omsInstance);
+});

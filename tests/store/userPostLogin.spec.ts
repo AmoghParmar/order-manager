@@ -13,7 +13,6 @@ vi.mock('@common', () => ({
 vi.mock('@common/composables/useAuth', () => ({ useAuth: () => ({}) }));
 vi.mock('@/utils', () => ({ showToast: vi.fn() }));
 vi.mock('@/store/orderDetail', () => ({ useOrderDetailStore: () => ({ reset: vi.fn() }) }));
-vi.mock('@/store/productCache', () => ({ useProductCacheStore: () => ({ reset: vi.fn() }) }));
 vi.mock('@/store/productStore', () => ({
   useProductStore: () => ({
     fetchProductStores: async () => { calls.push('productStores'); },

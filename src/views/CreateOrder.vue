@@ -300,8 +300,8 @@ import { useCurrencies } from '@/composables/useCurrencies';
 import { useOrderStore } from '@/store/order';
 import { useCustomerStore } from '@/store/customer';
 import { useProductStore } from '@/store/productStore';
-import { useProductCacheStore } from '@/store/productCache';
-import { useProductMaster } from '@/composables/useProductMaster';
+import { useProductMaster } from '@common/db';
+import { mapDocToProduct, type ProductRow } from '@common/db';
 import AddressModal from '@/components/AddressModal.vue';
 import AddCustomerModal from '@/components/AddCustomerModal.vue';
 import AddProductModal from '@/components/AddProductModal.vue';
@@ -351,7 +351,16 @@ const facilities = computed(() => {
   return storeFacilities.filter((facility: any) => allowedFacilityIds.includes(facility.facilityId));
 });
 
-const getProduct = (productId: string) => useProductCacheStore().getProduct(productId);
+const productMaster = useProductMaster();
+// Products this screen found through search, shown from the search answer until the product master
+// has them. getProductIdentificationValue throws on undefined, hence the empty fallback.
+const searchedProducts = ref(new Map<string, ProductRow>());
+const rememberSearched = (docs: any[]) => {
+  const next = new Map(searchedProducts.value);
+  docs.forEach((doc) => doc?.productId && next.set(doc.productId, mapDocToProduct(doc)));
+  searchedProducts.value = next;
+};
+const getProduct = (productId: string) => productMaster.getProduct(productId) || searchedProducts.value.get(productId) || ({} as Partial<ProductRow>);
 
 const scanInput = ref("") as any;
 const searchInput = ref("") as any;
@@ -453,7 +462,7 @@ async function findProduct(value: string) {
     if (resp.total) {
       productSearchCount.value = resp.total;
       const item = resp.products[0];
-      useProductMaster().upsertFromApi([item]);
+      rememberSearched([item]);
       searchedProduct.value = item;
       isSearchingProduct.value = false;
       return item;
@@ -573,6 +582,7 @@ async function openCustomLineModal() {
 
 // Line Items management
 function addLineItem(item: any) {
+  rememberSearched([item]);
   orderForm.value.lineItems.push({
     productId: item.productId,
     sku: item.sku,

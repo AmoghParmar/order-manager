@@ -57,7 +57,6 @@ import { checkmarkCircle, closeOutline } from "ionicons/icons";
 import { computed, onMounted, ref } from 'vue';
 import { translate, logger, commonUtil, useSolrSearch } from "@common";
 import { useProductStore } from '@/store/productStore';
-import { useProductMaster } from '@/composables/useProductMaster';
 import { DxpShopifyImg } from '@common';
 
 const props = defineProps(["query", "addProductToQueue", "isProductInOrder", "pendingProductIds"]);
@@ -116,7 +115,6 @@ async function getProducts(vSize?: any, vIndex?: any) {
 
     if (resp.total) {
       const productsList = resp.products;
-      useProductMaster().upsertFromApi(productsList);
       if (viewIndex) {
         products.value = products.value.concat(productsList);
       } else {

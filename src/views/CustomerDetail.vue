@@ -487,8 +487,8 @@ import { useCustomerDetail } from '@/composables/useCustomerDetail';
 import router from '@/router';
 import { useCustomerStore } from '@/store/customer';
 import { useSeedData } from '@common/db';
-import { useProductMaster } from '@/composables/useProductMaster';
-import { useProductCacheStore } from '@/store/productCache';
+import { useProductMaster } from '@common/db';
+import { useProductIdentity } from '@/composables/useProductIdentity';
 import { useUserStore } from '@/store/user';
 import Actions from '@/authorization/actions';
 import type { CustomerOrderCardData, CustomerOrderSummary, CustomerTaskSummary } from '@/types/customer';
@@ -507,7 +507,7 @@ const selectedSegment = ref('dashboard');
 const userStore = useUserStore();
 const customerStore = useCustomerStore();
 const productMaster = useProductMaster();
-const productCache = useProductCacheStore();
+const { primaryId, secondaryId } = useProductIdentity();
 const recentOrdersQuery = ref('');
 const allOrdersQuery = ref('');
 const deleting = ref(false);
@@ -577,8 +577,8 @@ function mapOrder(order: CustomerOrderSummary): CustomerOrderCardData {
     isUnfillable: order.isUnfillable,
     items: (order.items || []).map((item) => ({
       productId: item.productId || '',
-      name: productMaster.primaryId(productCache.getProduct(item.productId) || item, [item.name, item.sku, translate('Item')]),
-      secondary: productMaster.secondaryId(productCache.getProduct(item.productId) || item, [item.sku]),
+      name: primaryId(productMaster.getProduct(item.productId) || item, [item.name, item.sku, translate('Item')]),
+      secondary: secondaryId(productMaster.getProduct(item.productId) || item, [item.sku]),
       imageUrl: item.imageUrl || ''
     }))
   };

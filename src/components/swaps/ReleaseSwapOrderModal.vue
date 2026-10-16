@@ -127,7 +127,7 @@ import {
 } from '@ionic/vue';
 import { closeOutline } from 'ionicons/icons';
 import { commonUtil, DxpShopifyImg, translate } from '@common';
-import { useProductCacheStore } from '@/store/productCache';
+import { useProductMaster } from '@common/db';
 import { useProductStore } from '@/store/productStore';
 import { formatMoney } from '@/utils/format';
 
@@ -149,8 +149,10 @@ withDefaults(defineProps<{
 
 const productIdentificationPref = computed(() => useProductStore().getProductIdentificationPref);
 
+const productMaster = useProductMaster();
+
 function getProduct(productId: string) {
-  return useProductCacheStore().getProduct(productId);
+  return productMaster.getProduct(productId);
 }
 
 function productImageUrl(productId: string): string {
