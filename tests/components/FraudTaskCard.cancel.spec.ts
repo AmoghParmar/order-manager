@@ -53,8 +53,8 @@ vi.mock('@common/db', () => ({
   }),
 }));
 
-vi.mock('@/store/productCache', () => ({
-  useProductCacheStore: () => ({ getProduct: () => ({}) }),
+vi.mock('@/composables/useProductMaster', () => ({
+  useProductMaster: () => ({ getProduct: () => ({}) }),
 }));
 
 vi.mock('@/store/productStore', () => ({

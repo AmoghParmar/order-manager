@@ -15,10 +15,8 @@ vi.mock('@/store/productStore', () => ({
   })),
 }));
 
-vi.mock('@/store/productCache', () => ({
-  useProductCacheStore: vi.fn(() => ({
-    prefetch: vi.fn(),
-  })),
+vi.mock('@/db/appDbSync', () => ({
+  refreshAfterMutation: vi.fn(async () => 0),
 }));
 
 vi.mock('@/store/stock', () => ({

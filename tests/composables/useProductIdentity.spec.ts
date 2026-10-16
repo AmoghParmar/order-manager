@@ -8,7 +8,7 @@ const { products } = vi.hoisted(() => ({
 vi.mock('@common', () => ({
   commonUtil: { getProductIdentificationValue: (prefId: string, product: any) => product[prefId] },
 }));
-vi.mock('@/store/productCache', () => ({ useProductCacheStore: () => ({ getProduct: (productId: string) => products[productId] }) }));
+vi.mock('@/composables/useProductMaster', () => ({ useProductMaster: () => ({ getProduct: (productId: string) => products[productId] }) }));
 vi.mock('@/store/productStore', () => ({
   useProductStore: () => ({ getProductIdentificationPref: { primaryId: 'sku', secondaryId: 'productName' } }),
 }));

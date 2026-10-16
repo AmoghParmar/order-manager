@@ -126,7 +126,6 @@ import { computed, onMounted, ref } from 'vue';
 import { IonButton, IonButtons, IonContent, IonFab, IonFabButton, IonHeader, IonIcon, IonInfiniteScroll, IonInfiniteScrollContent, IonItem, IonLabel, IonList, IonListHeader, IonNote, IonRadio, IonRadioGroup, IonSearchbar, IonSegment, IonSegmentButton, IonSpinner, IonThumbnail, IonTitle, IonToolbar, modalController } from '@ionic/vue';
 import { closeOutline, saveOutline } from 'ionicons/icons';
 import { DxpShopifyImg, translate } from '@common';
-import { useProductCacheStore } from '@/store/productCache';
 import { useProductMaster } from '@/composables/useProductMaster';
 import { useStockStore } from '@/store/stock';
 import { useSeedData } from '@common/db';
@@ -180,7 +179,7 @@ const facilityLabel = computed(() => seed.facilityName(props.facilityId ?? ''));
 const productMaster = useProductMaster();
 
 function getProduct(productId: string) {
-  return useProductCacheStore().getProduct(productId);
+  return productMaster.getProduct(productId);
 }
 
 function getSubstituteStock(productId: string) {
@@ -252,8 +251,7 @@ async function searchProducts(pageIndex = 0, append = false) {
 
     const productIds = products.map((p: any) => p.productId).filter(Boolean);
     if (productIds.length) {
-      useProductMaster().init();
-      await useProductMaster().prefetch(productIds);
+      await productMaster.prefetch(productIds);
     }
   } catch {
     if (!append) searchResults.value = [];
@@ -289,8 +287,7 @@ onMounted(async () => {
   await Promise.all([
     productIds.length
       ? (async () => {
-          useProductMaster().init();
-          await useProductMaster().prefetch(productIds);
+          await productMaster.prefetch(productIds);
         })()
       : Promise.resolve()
   ]);

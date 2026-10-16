@@ -120,6 +120,7 @@ const seed = useSeedData();
 import { defaultOrderTaskFilters, taskSortOptions, type TaskFilterOption } from '@/types/orderTaskFilters';
 
 const orderTaskStore = useOrderTaskStore();
+const productMaster = useProductMaster();
 
 const filters = ref(defaultOrderTaskFilters());
 useOrderTaskRouteState(filters, 'fraud');
@@ -227,8 +228,7 @@ const fetchFraudTasks = async (pageSize?: any, pageIndex?: any) => {
     .filter(Boolean);
 
   if (productIds.length) {
-    useProductMaster().init();
-    await useProductMaster().prefetch(productIds);
+    await productMaster.prefetch(productIds);
   }
 };
 

@@ -30,25 +30,25 @@ describe('product identity surfaces honour the preference', () => {
 
   it('customer order history reads the preference', () => {
     const source = read('src/views/CustomerDetail.vue');
-    expect(source).toContain('productMaster.primaryId(productCache.getProduct(item.productId) || item, [item.name, item.sku');
-    expect(source).toContain('productMaster.secondaryId(productCache.getProduct(item.productId) || item, [item.sku])');
+    expect(source).toContain('productMaster.primaryId(productMaster.getProduct(item.productId) || item, [item.name, item.sku');
+    expect(source).toContain('productMaster.secondaryId(productMaster.getProduct(item.productId) || item, [item.sku])');
     expect(source).not.toContain("name: item.name || item.sku || 'Item',");
   });
 
   it('return items read the preference', () => {
     const source = read('src/views/ReturnDetail.vue');
-    expect(source).toContain('return productMaster.primaryId(productCache.getProduct(item.productId) || item, [');
+    expect(source).toContain('return productMaster.primaryId(productMaster.getProduct(item.productId) || item, [');
     expect(source).toContain('function itemSecondaryLabel(item: ReturnItemDetail)');
     expect(source).not.toContain('return item.productName || item.description || item.sku || item.productId || translate("Return item");');
   });
 
-  it('caches every field the preference can point at, and heals records that predate them', () => {
+  it('fetches and stores every field the preference can point at', () => {
     const master = read('src/utils/productDocs.ts');
-    ['groupId', 'groupName', 'primaryProductCategoryName', 'title', 'goodIdentifications'].forEach((field) => {
+    const schema = read('src/db/orderManagerSchema.ts');
+    ['groupId', 'groupName', 'primaryProductCategoryName', 'title', 'goodIdentifications', 'productFeatures'].forEach((field) => {
       expect(master).toContain(field);
+      expect(schema).toContain(`${field}:`);
     });
-    expect(master).toContain('CACHED_IDENTITY_KEYS.every((key) => key in product)');
-    expect(read('src/db/productDb.ts')).toContain('primaryProductCategoryName: string;');
   });
 
   it('substitute picker keeps identity data through normalization', () => {

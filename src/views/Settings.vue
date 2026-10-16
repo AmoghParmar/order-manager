@@ -147,7 +147,7 @@
                   {{ domainSyncLabel(domain) }}
                 </p>
               </ion-label>
-              <ion-button slot="end" fill="clear" :disabled="!!refreshing" @click="refreshDomain(domain.name)" :aria-label="translate('Refresh {label}', { label: translate(domain.label) })" :title="translate('Refresh {label}', { label: translate(domain.label) })">
+              <ion-button v-if="domain.syncClass !== 'C'" slot="end" fill="clear" :disabled="!!refreshing" @click="refreshDomain(domain.name)" :aria-label="translate('Refresh {label}', { label: translate(domain.label) })" :title="translate('Refresh {label}', { label: translate(domain.label) })">
                 <ion-spinner v-if="refreshing === domain.name" name="dots" slot="icon-only" />
                 <ion-icon v-else slot="icon-only" :icon="syncOutline" />
               </ion-button>
@@ -224,7 +224,7 @@ import { IonAvatar, IonBadge, IonButton, IonButtons, IonCard, IonCardContent, Io
 import { checkmarkCircle, closeCircle, closeOutline, openOutline, saveOutline, syncOutline } from 'ionicons/icons';
 import { computed, onBeforeMount, ref } from 'vue';
 import { commonUtil, cookieHelper, i18n, translate } from '@common';
-import { useDbStatus } from '@common/db';
+import { catalogFrom, useDbStatus } from '@common/db';
 import { useAuth } from '@common/composables/useAuth';
 import { useUserStore } from '@/store/user';
 import { useProductStore } from '@/store/productStore';
@@ -361,7 +361,9 @@ const {
   domains, refreshing, totalRows, oldestSyncedAt, lastSyncedAt, refreshDomain, refreshAll,
 } = useDbStatus(
   orderManagerDb.client(),
-  orderManagerDb.statusCatalog,
+  // What the worker registers, seed domains and Order Manager's own, read from the same list. Imported
+  // on demand to keep the domain code out of startup.
+  async () => catalogFrom((await import('@/workers/appSyncDomains')).appSyncDomains),
   {
     resyncDomain,
     resyncAll: resyncReferenceData,
@@ -382,6 +384,8 @@ const syncSubtitle = computed(() => {
 function domainSyncLabel(domain: { count: number; syncedAt?: number | null; syncClass?: string }) {
   if (domain.syncedAt) return translate("{count} records, synced {time}", { count: domain.count, time: formatSyncTime(domain.syncedAt) });
   if (domain.syncClass === "A") return translate("{count} records, live while in use", { count: domain.count });
+  // Class C runs no pass of its own: rows arrive when a screen shows them (products).
+  if (domain.syncClass === "C") return translate("{count} records, fetched when shown", { count: domain.count });
   return translate("{count} records, not synced yet", { count: domain.count });
 }
 

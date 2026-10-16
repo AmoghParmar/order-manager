@@ -1,4 +1,34 @@
-import type { CachedProduct, ProductIdentification } from "@/db/productDb";
+// Imported by the sync worker's product domain as well as the app: keep it free of `@common`,
+// stores and anything else that pulls in `vue`.
+
+export interface ProductIdentification {
+  type: string;
+  value: string;
+}
+
+/** A row of the app db's `products` table (see db/orderManagerSchema.ts). */
+export interface CachedProduct {
+  productId: string;
+  productName: string;
+  sku: string;
+  parentProductName: string;
+  internalName: string;
+  mainImageUrl: string;
+  productFeatures: string[];
+  groupId: string;
+  groupName: string;
+  primaryProductCategoryName: string;
+  title: string;
+  goodIdentifications: ProductIdentification[];
+  /** When the product domain stored it, in epoch millis. */
+  syncedAt?: number;
+}
+
+/** A product row older than this is refetched the next time a screen shows it. */
+export const PRODUCT_STALE_MS = 24 * 60 * 60 * 1000;
+
+/** Product ids per Solr query. */
+export const PRODUCT_BATCH_SIZE = 200;
 
 // Every field Settings > Product identifier can point at: the static options from
 // productStore.prepareProductIdentifierOptions plus goodIdentifications, which carries the
@@ -38,8 +68,7 @@ export function mapDocToProduct(doc: any): CachedProduct {
     groupName: doc.groupName || "",
     primaryProductCategoryName: doc.primaryProductCategoryName || "",
     title: doc.title || "",
-    goodIdentifications,
-    updatedAt: Date.now()
+    goodIdentifications
   };
 }
 
@@ -56,22 +85,4 @@ export function buildProductQuery(productIds: string[]) {
       filter: ["docType:PRODUCT", `productId:(${productIds.map(escapeSolrValue).join(" OR ")})`]
     }
   };
-}
-
-/**
- * A product persisted before a field joined PRODUCT_FIELDS has no such key at all, and the
- * never-refetch rule would strand it incomplete forever. Treat a missing key as a miss so it
- * heals exactly once; an empty value is a real answer and stays cached. Add a key here
- * whenever PRODUCT_FIELDS grows.
- */
-const CACHED_IDENTITY_KEYS = [
-  "productFeatures",
-  "groupId",
-  "groupName",
-  "primaryProductCategoryName",
-  "title"
-] as const;
-
-export function isFullyCached(product?: CachedProduct): boolean {
-  return !!product && CACHED_IDENTITY_KEYS.every((key) => key in product);
 }

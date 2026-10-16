@@ -224,6 +224,7 @@ const canViewReturns = computed(() => userStore.hasPermission(Actions.APP_ORDER_
 const canRequestInventoryTransfer = computed(() => userStore.hasPermission(Actions.APP_INVENTORY_TRANSFER_CREATE));
 
 const { enrichedOrder, orderEvents: orderEventsFor } = useOrder();
+const productMaster = useProductMaster();
 const order = computed(() => enrichedOrder(props.orderId));
 const loading = computed(() => orderDetailStore.loadingById(props.orderId));
 const error = computed(() => orderDetailStore.errorById(props.orderId));
@@ -237,9 +238,8 @@ async function loadOrder(orderId: string, force = false) {
   await orderDetailStore.loadOrderAggregate(orderId, force);
   const partyId = orderDetailStore.customerPartyIdByOrderId(orderId);
   if (partyId) await customerStore.loadCustomerProfile(partyId, force);
-  // Rich product data (name/SKU/image): fetch only uncached products, never refetch.
-  useProductMaster().init();
-  await useProductMaster().prefetch(orderDetailStore.allItemsByOrderId(orderId).map((item: any) => item.productId));
+  // Rich product data (name/SKU/image): the worker fetches only products missing or stale.
+  await productMaster.prefetch(orderDetailStore.allItemsByOrderId(orderId).map((item: any) => item.productId));
   // Shipping methods and carriers are not order-specific; fetched once.
   await Promise.all([orderDetailStore.fetchShippingMethods(), orderDetailStore.fetchCarrierParties()]);
 }

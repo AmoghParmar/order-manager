@@ -31,7 +31,7 @@ const { seed } = vi.hoisted(() => {
   return { seed };
 });
 vi.mock('@common/db', async (importOriginal) => ({ ...(await importOriginal<any>()), useSeedData: () => seed }));
-vi.mock('@/store/productCache', () => ({ useProductCacheStore: () => ({ getProduct: () => undefined }) }));
+vi.mock('@/composables/useProductMaster', () => ({ useProductMaster: () => ({ getProduct: () => undefined }) }));
 vi.mock('@/store/order', () => ({ useOrderStore: () => ({}) }));
 
 const enrichOrder = (raw: any, auxData: EnrichmentAuxiliaryData) => useOrder().enrichOrder(raw, auxData);

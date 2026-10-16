@@ -1195,6 +1195,7 @@
   "{count} open": "{count} abierto | {count} abiertos",
   "{count} positive": "{count} positivo | {count} positivos",
   "{count} qty": "{count} ud. | {count} uds.",
+  "{count} records, fetched when shown": "{count} registro, se obtiene al mostrarse | {count} registros, se obtienen al mostrarse",
   "{count} records, live while in use": "{count} registro, en vivo mientras se usa | {count} registros, en vivo mientras se usan",
   "{count} records, not synced yet": "{count} registro, aún sin sincronizar | {count} registros, aún sin sincronizar",
   "{count} records, synced {time}": "{count} registro, sincronizado el {time} | {count} registros, sincronizados el {time}",

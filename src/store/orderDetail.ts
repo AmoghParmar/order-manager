@@ -1,7 +1,6 @@
 import { defineStore } from "pinia";
 import { api, commonUtil, logger, translate, useSolrSearch } from "@common";
 import { FACILITY_CHANGE_PAGE_SIZE, UNFILLABLE_REASON_ID, UNFILLABLE_SAMPLE_SIZE, responseRows, type IssuanceLine } from "@/utils/orderDetailQueries";
-import { useProductCacheStore } from "./productCache";
 import { useUserStore } from "./user";
 import Actions from "@/authorization/actions";
 import { escapeSolrValue } from "@/utils/orderSearch";
@@ -226,16 +225,15 @@ export const useOrderDetailStore = defineStore("orderDetail", {
       );
     },
 
-    /** Maps orderItemSeqId to its orderItemExternalId. */
-    itemExternalIdBySeqIdByOrderId(): (orderId: string) => Record<string, string> {
-      return (orderId: string) => {
+    /** Maps orderItemSeqId to its orderItemExternalId. `skuOf` is the caller's product lookup. */
+    itemExternalIdBySeqIdByOrderId(): (orderId: string, skuOf?: (productId: string) => string | undefined) => Record<string, string> {
+      return (orderId: string, skuOf?: (productId: string) => string | undefined) => {
         const map: Record<string, string> = {};
-        const productCache = useProductCacheStore();
         (this.orderById(orderId)?.shipGroups || []).forEach((sg: any) => {
           (sg.items || []).forEach((item: any) => {
             const seqId = item.orderItemSeqId;
             if (!seqId) return;
-            const sku = productCache.getProduct(item.productId)?.sku || item.productId;
+            const sku = skuOf?.(item.productId) || item.productId;
             map[seqId] = item.externalId || sku || seqId;
           });
         });

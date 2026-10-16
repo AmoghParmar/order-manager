@@ -1,18 +1,17 @@
 import { computed } from 'vue';
 import { commonUtil } from '@common';
-import { useProductCacheStore } from '@/store/productCache';
+import { useProductMaster } from '@/composables/useProductMaster';
 import { useProductStore } from '@/store/productStore';
 
 /**
  * How a product reads on the order page: the operator's chosen primary/secondary identifiers
- * and the variant's feature line, resolved from the product cache.
+ * and the variant's feature line, resolved from the product master.
  */
 export function useProductIdentity() {
-  const productCache = useProductCacheStore();
+  const { getProduct } = useProductMaster();
   const productStore = useProductStore();
   const identificationPref = computed(() => productStore.getProductIdentificationPref);
 
-  const getProduct = (productId?: string) => productCache.getProduct(productId as string);
   const identification = (prefId: string, productId?: string) =>
     commonUtil.getProductIdentificationValue(prefId, getProduct(productId) || {}) || '';
   const primaryIdentifier = (productId?: string) => identification(identificationPref.value.primaryId, productId);

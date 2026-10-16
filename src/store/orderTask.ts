@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia';
-import { api } from '@common';
+import { api, logger } from '@common';
 import { useOrderStore } from '@/store/order';
 import { useProductStore } from '@/store/productStore';
-import { useProductCacheStore } from '@/store/productCache';
+import { refreshAfterMutation } from '@/db/appDbSync';
 import { useStockStore } from '@/store/stock';
 import type { TaskQueueRequestParams } from '@/types/orderTaskFilters';
 // Queue-defining task query constants live in a dependency-free module so the
@@ -110,8 +110,9 @@ async function prefetchSwapTaskAssets(tasks: any[]) {
     .flatMap((item: any) => [item.productId, item.substituteProducts?.[0]?.productId])
     .filter(Boolean);
 
+  // The worker fetches only the products the app db lacks or holds stale.
   if (productIds.length) {
-    await useProductCacheStore().prefetch(productIds);
+    await refreshAfterMutation('product', { productIds }).catch((error) => logger.error('Failed to fetch products', error));
   }
 
   const stockRequests = new Map();
@@ -139,7 +140,7 @@ async function prefetchFraudTaskAssets(tasks: any[]) {
     .filter(Boolean);
 
   if (productIds.length) {
-    await useProductCacheStore().prefetch(productIds);
+    await refreshAfterMutation('product', { productIds }).catch((error) => logger.error('Failed to fetch products', error));
   }
 }
 

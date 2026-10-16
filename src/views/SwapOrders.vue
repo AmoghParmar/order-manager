@@ -74,7 +74,7 @@
           />
           <SwapSetupPanel
             v-else-if="!swapTasks.length && isSuccess"
-            :candidates="setupCandidates"
+            :candidates="setupCandidatesWithProducts"
             :loading="setupLoading"
             :error="setupError"
             :can-manage-substitutes="canManageSubstitutes"
@@ -132,7 +132,6 @@ import SubstituteRelationshipModal from '@/components/swaps/SubstituteRelationsh
 import SwapSetupPanel, { type SwapSetupCandidate } from '@/components/swaps/SwapSetupPanel.vue';
 import RoutingGroupModal from '@/components/fulfillment/RoutingGroupModal.vue';
 import { useProductMaster } from '@/composables/useProductMaster';
-import { useProductCacheStore } from '@/store/productCache';
 import { useProductStore } from '@/store/productStore';
 import { useUserStore } from '@/store/user';
 import { HIDE_SHOPIFY_UNSYNCED_ACTIONS } from '@/config/featureFlags';
@@ -150,7 +149,6 @@ const orderTaskStore = useOrderTaskStore();
 const orderStore = useOrderStore();
 const productStore = useProductStore();
 const userStore = useUserStore();
-const productCache = useProductCacheStore();
 const productMaster = useProductMaster();
 const { fetchActiveSubstitutes } = useProductSubstitutes();
 
@@ -166,6 +164,11 @@ const selectedTasks = ref<Record<string, boolean>>({});
 const cardRefs = ref<Record<string, any>>({});
 const bulkActionRunning = ref(false);
 const setupCandidates = ref<SwapSetupCandidate[]>([]);
+// Each candidate with its product master fields, which land after the candidates do.
+const setupCandidatesWithProducts = computed(() => setupCandidates.value.map((candidate) => ({
+  ...candidate,
+  ...(productMaster.getProduct(candidate.productId) || {}),
+})));
 const setupLoading = ref(false);
 const setupError = ref('');
 const configuredProductIds = ref<string[]>([]);
@@ -312,12 +315,8 @@ async function loadSetupCandidates() {
   setupError.value = '';
   try {
     const candidates = await orderStore.fetchUnfillableProductCandidates(productStoreId);
-    productMaster.init();
     await productMaster.prefetch(candidates.map((candidate) => candidate.productId));
-    setupCandidates.value = candidates.map((candidate) => ({
-      ...candidate,
-      ...(productCache.getProduct(candidate.productId) || {}),
-    }));
+    setupCandidates.value = candidates;
 
     // Fetch active substitute associations in parallel for all candidate products
     const associationsResults = await Promise.allSettled(

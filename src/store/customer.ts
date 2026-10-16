@@ -20,7 +20,7 @@ import {
 } from '@/utils/customer';
 import { toStringValue } from '@/utils/orderDocs';
 import { useReturnsStore } from '@/store/returns';
-import { useProductCacheStore } from '@/store/productCache';
+import { refreshAfterMutation } from '@/db/appDbSync';
 import { translate } from '@common';
 import type {
   ContactSection,
@@ -665,7 +665,7 @@ export const useCustomerStore = defineStore('customerDetail', {
           total: result.lifetimeOrders
         };
         const orderProductIds = result.orders.flatMap((o) => o.items.map((item) => item.productId)).filter(Boolean);
-        if (orderProductIds.length) useProductCacheStore().prefetch(orderProductIds).catch(() => {});
+        if (orderProductIds.length) refreshAfterMutation('product', { productIds: orderProductIds }).catch(() => {});
         this.lifetimeByPartyId[partyId] = {
           orders: result.lifetimeOrders,
           value: result.lifetimeValue,

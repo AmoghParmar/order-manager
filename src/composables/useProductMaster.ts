@@ -1,41 +1,112 @@
-import { ref } from "vue";
-import { commonUtil } from "@common";
-import { useProductCacheStore, type CachedProduct } from "@/store/productCache";
+import { computed, effectScope, getCurrentScope, onScopeDispose, type EffectScope, type Ref } from "vue";
+import { commonUtil, logger, useLiveEntity, useSolrSearch } from "@common";
+import { onSessionCleared } from "@common/core/sessionScope";
+import { orderManagerDb } from "@/db/orderManagerDb";
+import { refreshAfterMutation } from "@/db/appDbSync";
 import { useProductStore } from "@/store/productStore";
+import { buildProductQuery, mapDocToProduct, PRODUCT_BATCH_SIZE, PRODUCT_STALE_MS, type CachedProduct } from "@/utils/productDocs";
+
+export type { CachedProduct };
 
 /**
- * Product master — fetch rich product data (name, SKU, image) from Solr, cached per
- * productId and NEVER refetched once cached. The order detail page is the first consumer.
+ * Product master — rich product data (name, SKU, image, identifiers) for rows that carry only a
+ * productId. The app db's `products` table holds it (filled from Solr by the worker's `product`
+ * domain, kept across logout); this composable reads it live and asks for what it lacks.
  *
- * This mirrors inventory-count/src/composables/useProductMaster.ts. Same public API; the
- * fetching and caching live in the productCache store, which stores call directly.
+ * `getProduct(id)` is safe to call from a template on every render: it answers from the table and
+ * queues the id, and the queued ids go to the worker in one batch. The worker fetches only the ones
+ * missing or older than PRODUCT_STALE_MS, and the live read shows them once stored.
  */
 
-const cacheReady = ref(false);
-const staleMs = ref(24 * 60 * 60 * 1000);
+/** One live read of the table, shared by every mounted user and closed when the last unmounts. */
+let reader: { scope: EffectScope; byId: Ref<Map<string, CachedProduct>> } | null = null;
+let readers = 0;
 
-function init(opts?: { staleMs?: number }) {
-  if (opts?.staleMs !== undefined) staleMs.value = opts.staleMs;
-  cacheReady.value = true;
+function openReader() {
+  if (!reader) {
+    const scope = effectScope(true);
+    const byId = scope.run(() => {
+      const { records } = useLiveEntity<CachedProduct>(orderManagerDb.tables.products);
+      return computed(() => new Map(records.value.map((product) => [product.productId, product])));
+    })!;
+    reader = { scope, byId };
+  }
+  readers += 1;
 }
 
-/** Fetch products from Solr in batches. Does not touch the cache. */
-function getByIds(productIds: string[]): Promise<CachedProduct[]> {
-  return useProductCacheStore().fetchByIds(productIds);
+function closeReader() {
+  readers -= 1;
+  if (readers > 0 || !reader) return;
+  reader.scope.stop();
+  reader = null;
+  readers = 0;
 }
 
-/** Fetch only the productIds not already cached, then store them. The never-refetch path. */
-function prefetch(productIds: string[]) {
-  return useProductCacheStore().prefetch(productIds);
+/**
+ * When each id was last sent to the worker. The worker decides what is stale; this only keeps a
+ * re-rendering screen from asking again for an id it asked for within PRODUCT_STALE_MS.
+ */
+const askedAt = new Map<string, number>();
+const queued = new Set<string>();
+
+onSessionCleared(() => {
+  askedAt.clear();
+  queued.clear();
+});
+
+/** Ask the worker for the products a screen shows. Resolves once they are stored; never rejects. */
+async function prefetch(productIds: Array<string | null | undefined>): Promise<void> {
+  const now = Date.now();
+  const due = [...new Set(productIds.filter(Boolean) as string[])]
+    .filter((productId) => now - (askedAt.get(productId) ?? -Infinity) >= PRODUCT_STALE_MS);
+  if (!due.length) return;
+
+  due.forEach((productId) => askedAt.set(productId, now));
+  try {
+    await refreshAfterMutation("product", { productIds: due });
+  } catch (error) {
+    // Let the next render ask again rather than wait out PRODUCT_STALE_MS.
+    due.forEach((productId) => askedAt.delete(productId));
+    logger.error("Failed to fetch products", error);
+  }
 }
 
-/** Cache-first single lookup. */
-function getById(productId: string, opts?: { refresh?: boolean }) {
-  return useProductCacheStore().getById(productId, opts);
+function queue(productId: string) {
+  if (askedAt.has(productId) && Date.now() - askedAt.get(productId)! < PRODUCT_STALE_MS) return;
+  if (!queued.size) {
+    queueMicrotask(() => {
+      const ids = [...queued];
+      queued.clear();
+      void prefetch(ids);
+    });
+  }
+  queued.add(productId);
 }
 
-function upsertFromApi(docs: any[]) {
-  useProductCacheStore().upsertDocs(docs);
+/** The stored product, or undefined until it is fetched (or when Solr has none). */
+function getProduct(productId?: string | null): CachedProduct | undefined {
+  if (!productId) return undefined;
+  queue(productId);
+  return reader?.byId.value.get(productId);
+}
+
+/** Fetch products from Solr without storing them, for a picker that shows search results as-is. */
+async function getByIds(productIds: string[]): Promise<CachedProduct[]> {
+  const ids = [...new Set(productIds.filter(Boolean))];
+  const products: CachedProduct[] = [];
+  for (let index = 0; index < ids.length; index += PRODUCT_BATCH_SIZE) {
+    try {
+      const resp = await useSolrSearch().runSolrQuery(buildProductQuery(ids.slice(index, index + PRODUCT_BATCH_SIZE)));
+      if (commonUtil.hasError(resp)) {
+        logger.error("Product Solr query returned an error", resp.data);
+        continue;
+      }
+      products.push(...(resp.data?.response?.docs || []).map(mapDocToProduct));
+    } catch (error) {
+      logger.error("Product Solr query failed", error);
+    }
+  }
+  return products;
 }
 
 /**
@@ -68,5 +139,11 @@ function secondaryId(product: any, fallbacks: Array<string | null | undefined> =
 }
 
 export function useProductMaster() {
-  return { init, getById, getByIds, prefetch, upsertFromApi, cacheReady, primaryId, secondaryId };
+  // In a component (or effect scope), hold the shared live read open until it unmounts. Outside one,
+  // getProduct answers from a read another component holds, if any.
+  if (getCurrentScope()) {
+    openReader();
+    onScopeDispose(closeReader);
+  }
+  return { getProduct, getByIds, prefetch, primaryId, secondaryId };
 }
