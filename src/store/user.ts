@@ -167,6 +167,10 @@ export const useUserStore = defineStore("user", {
       // then skip the seed and read them. This hook runs once per real login (never on a reload),
       // before anything below reads the database, and stops a sync the `isAuthenticated` watcher in
       // App.vue may already have started against the old rows.
+      //
+      // Close App.vue's sync gate first: a stale session persisted "success" from the previous login,
+      // which would let the watcher start the sync before this login's permissions are known.
+      this.fetchStatus.permissions = "pending";
       await stopAppDbSync().catch((error) => logger.error("Failed to clear the local database on login", error));
 
       try {

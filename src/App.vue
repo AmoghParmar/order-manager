@@ -63,8 +63,17 @@ onMounted(async () => {
 watch(isAuthenticated, (authenticated) => {
   if (authenticated) {
     userStore.fetchPermissions().catch(() => undefined);
-    void startAppDbSync();
   }
+}, { immediate: true });
+
+// The sync waits for the app permission as well as the session. `isAuthenticated` turns true as
+// soon as fetchUserProfile() sets the user, BEFORE fetchPermissions() can reject the login for
+// VITE_APP_PERMISSION_ID; a worker started then kept syncing for a user the app turned away.
+// `fetchStatus.permissions` is "success" only once the permission passed, is reset in postLogin, and
+// is persisted, so a reload still starts the sync (startAppDbSync is idempotent when it re-opens).
+const canSync = computed(() => isAuthenticated.value && userStore.fetchStatus.permissions === 'success');
+watch(canSync, (ready) => {
+  if (ready) void startAppDbSync();
 }, { immediate: true });
 
 onUnmounted(() => {
