@@ -190,9 +190,8 @@ export const useUserStore = defineStore("user", {
     async isOmsReachable(): Promise<boolean> {
       try {
         await api({
-          url: commonUtil.isMoqui() ? "admin/user/permissions" : "getPermissions",
+          url: "admin/user/permissions",
           method: "GET",
-          baseURL: commonUtil.getOmsURL(),
           params: { viewIndex: 0, viewSize: 1 },
           timeout: 3000,
         });
