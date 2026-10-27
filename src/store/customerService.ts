@@ -829,7 +829,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
         const list = response.data;
         return Array.isArray(list) ? list : list?.entityValueList || [];
       } catch (error) {
-        console.error('Failed to get pick profile groups from server', error);
+        logger.error('Failed to get pick profile groups from server', error);
         return [];
       }
     },

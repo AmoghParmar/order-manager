@@ -155,7 +155,7 @@ async function searchCustomers() {
   } catch (err: any) {
     const serverError = commonUtil.getErrorMessage(err);
     logger.error("Failed to search customers", err);
-    showToast(translate("Failed to search customers: {message}", { message: serverError || String(err.message || err) }, { escapeParameter: true }));
+    showToast(translate("Failed to search customers: {message}", { message: serverError }, { escapeParameter: true }));
   } finally {
     isLoading.value = false;
   }
@@ -205,7 +205,7 @@ async function handleCreateCustomer() {
     const serverError = commonUtil.getErrorMessage(err);
     emitter.emit('dismissLoader');
     logger.error("Failed to create customer", err);
-    showToast(translate("Failed to create customer: {message}", { message: serverError || String(err.message || err) }, { escapeParameter: true }));
+    showToast(translate("Failed to create customer: {message}", { message: serverError }, { escapeParameter: true }));
   }
 }
 

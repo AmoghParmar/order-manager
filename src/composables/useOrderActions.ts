@@ -230,8 +230,10 @@ export function useOrderActions({ order, loadOrder, selectedItemIds, selectedShi
       selectedShipGroupItems.value[shipGroup.id] = [];
       await showToast(translate(action.success));
       await loadOrder(orderId, true);
-    } catch {
-      await showToast(translate(action.failure));
+    } catch (err) {
+      const serverError = commonUtil.getErrorMessage(err);
+      logger.error(err);
+      await showToast(`${translate(action.failure)} ${serverError}`);
     }
   }
 
