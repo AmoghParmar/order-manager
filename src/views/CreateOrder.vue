@@ -433,7 +433,9 @@ onMounted(async () => {
       productStoreId
     });
   } catch (err: any) {
-    commonUtil.showToast(translate("Failed to load Shopify shops: {message}", { message: String(err.message || err) }, { escapeParameter: true }));
+    const serverError = commonUtil.getErrorMessage(err);
+    logger.error("Failed to load Shopify shops", err);
+    commonUtil.showToast(translate("Failed to load Shopify shops: {message}", { message: serverError || String(err.message || err) }, { escapeParameter: true }));
   }
 });
 
@@ -750,7 +752,9 @@ async function submitOrder() {
   } catch (err: any) {
     emitter.emit('dismissLoader');
     const errMsg = err?.message || translate('Error occurred while creating Shopify order.');
-    await commonUtil.showToast(err?.message ? translate('Failed to create Shopify order: {message}', { message: errMsg }, { escapeParameter: true }) : errMsg);
+    const serverError = commonUtil.getErrorMessage(err);
+    logger.error("Failed to create Shopify order", err);
+    await commonUtil.showToast(err?.message ? translate('Failed to create Shopify order: {message}', { message: serverError || errMsg }, { escapeParameter: true }) : (serverError || errMsg));
   } finally {
     isSubmitting.value = false;
   }
