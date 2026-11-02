@@ -919,7 +919,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
           method: 'DELETE'
         });
         if (resp && commonUtil.hasError(resp)) {
-          throw new Error('Failed to delete condition from server');
+          throw resp;
         }
         await this.fetchFulfillmentSyncData(facilityId);
       } catch (error) {
@@ -1131,7 +1131,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
           }
         });
         if (resp && commonUtil.hasError(resp)) {
-          throw new Error('Failed to update service job');
+          throw resp;
         }
         await this.fetchFulfillmentSyncData(facilityId);
         commonUtil.showToast(translate('Fulfillment sync schedule updated successfully.'));
@@ -1149,7 +1149,7 @@ export const useCustomerServiceStore = defineStore('customerService', {
           data: profile
         });
         if (resp && commonUtil.hasError(resp)) {
-          throw new Error('Failed to save pick profile');
+          throw resp;
         }
       } catch (error) {
         logger.error('Failed to save pick profile', error);

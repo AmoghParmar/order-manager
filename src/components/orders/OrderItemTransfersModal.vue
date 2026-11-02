@@ -201,7 +201,7 @@ async function runAction(action: () => Promise<unknown>, success: string, failur
   } catch (error) {
     logger.error(failure, error);
     const serverError = commonUtil.getErrorMessage(error);
-    await showToast(`${failure}. ${serverError}`);
+    await showToast(`${failure} ${serverError}`);
   } finally {
     working.value = false;
   }
